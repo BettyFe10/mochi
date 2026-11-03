@@ -32,7 +32,6 @@ supabase/
   cron.sql        invio dei promemoria e pulizia notturna
   functions/      la funzione che manda le notifiche
   aggiornamenti/  gli script già lanciati sul database in uso, in ordine
-native/         app SwiftUI per iPhone e Mac (prima versione, indietro rispetto alla web app)
 ```
 
 Senza chiavi in `config.js` l'app parte in modalità prova e salva tutto nel browser: basta aprire `index.html`.
