@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6.799999999999983 6.799999999999983 486.40000000000003 486.40000000000003">
+      <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe1ea"/><stop offset="1" stop-color="#ffc7d6"/></linearGradient></defs>
+      <rect x="6.799999999999983" y="6.799999999999983" width="486.40000000000003" height="486.40000000000003" rx="107.00800000000001" fill="url(#bg)"/>
+      <style>.eyes-happy,.mouth-happy{display:none}</style>
+        <ellipse class="shadow" cx="250" cy="408" rx="150" ry="20" fill="#e88aa8" opacity=".4"/>
+        <g class="body">
+          <path d="M90 300 C 90 180, 170 140, 250 140 C 330 140, 410 180, 410 300 C 410 380, 340 400, 250 400 C 160 400, 90 380, 90 300 Z" fill="#ffd3df" stroke="#f4b6c8" stroke-width="6"/>
+          <path d="M130 250 C 150 200, 200 175, 240 172" stroke="#fff" stroke-width="14" stroke-linecap="round" fill="none" opacity=".7"/>
+          <circle cx="330" cy="200" r="5" fill="#fff" opacity=".9"/><circle cx="150" cy="350" r="5" fill="#fff" opacity=".8"/><circle cx="360" cy="340" r="4" fill="#fff" opacity=".8"/>
+          <g class="hat flower" style="transform-origin:250px 150px">
+            <path d="M250 150 C 220 110, 180 112, 168 128 C 196 140, 222 150, 250 150 Z" fill="#7cc79a"/>
+            <path d="M250 150 C 282 106, 324 108, 336 126 C 306 140, 280 150, 250 150 Z" fill="#64b487"/>
+            <path d="M250 150 C 248 120, 256 100, 266 92" stroke="#4f9a6f" stroke-width="8" stroke-linecap="round" fill="none"/>
+          </g>
+          
+      <ellipse cx="164" cy="318" rx="22" ry="13" fill="#ff8fb1" opacity=".75"/>
+      <ellipse cx="336" cy="318" rx="22" ry="13" fill="#ff8fb1" opacity=".75"/>
+      <g class="eyes">
+        <g class="eye" style="transform-origin:194px 290px"><circle cx="194" cy="290" r="14" fill="#4a2f3a"/><circle cx="198" cy="285" r="5" fill="#fff"/></g>
+        <g class="eye" style="transform-origin:306px 290px"><circle cx="306" cy="290" r="14" fill="#4a2f3a"/><circle cx="310" cy="285" r="5" fill="#fff"/></g>
+      </g>
+      <g class="eyes-happy" fill="none" stroke="#4a2f3a" stroke-width="7" stroke-linecap="round">
+        <path d="M181 294 Q194 278 207 294"/>
+        <path d="M293 294 Q306 278 319 294"/>
+      </g>
+      <path class="mouth" d="M230 314 Q240 328 250 316 Q260 328 270 314"
+        fill="none" stroke="#4a2f3a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path class="mouth-happy" d="M228 312 Q250 350 272 312 Z" fill="#4a2f3a"/>
+      <path class="mouth-happy" d="M239 329 Q250 322 261 329 Q250 340 239 329 Z" fill="#ff7fa6"/>
+        </g></svg>

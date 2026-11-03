@@ -1,0 +1,11 @@
+# Chiavi personali: mai nel repository
+Config/Secrets.xcconfig
+
+# Progetto generato da XcodeGen e file di Xcode
+Mochi.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+.DS_Store

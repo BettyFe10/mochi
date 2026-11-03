@@ -1,0 +1,15 @@
+# Sistema e editor
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Dipendenze e build
+node_modules/
+_site/
+
+# Chiavi e configurazioni personali: mai nel repository
+.env
+.env.*
+config.local.js
+native/Config/Secrets.xcconfig

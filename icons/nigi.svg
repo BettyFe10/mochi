@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16.799999999999983 21.799999999999983 486.40000000000003 486.40000000000003">
+      <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd6e4"/><stop offset="1" stop-color="#ffb3cc"/></linearGradient></defs>
+      <rect x="16.799999999999983" y="21.799999999999983" width="486.40000000000003" height="486.40000000000003" rx="107.00800000000001" fill="url(#bg)"/>
+      <style>.eyes-happy,.mouth-happy{display:none}</style>
+        <ellipse class="shadow" cx="256" cy="418" rx="150" ry="22" fill="#e88aa8" opacity=".45"/>
+        <g class="body">
+          <rect x="96" y="210" width="320" height="200" rx="100" fill="#fffdf8" stroke="#f1d9df" stroke-width="6"/>
+          <circle cx="150" cy="370" r="6" fill="#f3e6e0"/><circle cx="370" cy="360" r="6" fill="#f3e6e0"/><circle cx="330" cy="392" r="5" fill="#f3e6e0"/>
+          <g class="hat">
+            <path d="M84 222 C 120 130, 392 120, 432 214 C 440 238, 410 252, 380 244 C 300 222, 210 222, 132 246 C 100 256, 74 246, 84 222 Z" fill="#ff8f74"/>
+            <path d="M150 196 C 200 168, 250 162, 300 170" stroke="#fff3ee" stroke-width="12" stroke-linecap="round" fill="none" opacity=".9"/>
+            <path d="M136 226 C 196 198, 270 192, 340 202" stroke="#fff3ee" stroke-width="10" stroke-linecap="round" fill="none" opacity=".75"/>
+            <rect x="232" y="200" width="48" height="84" rx="12" fill="#2f4a3a"/>
+            <rect x="239" y="208" width="8" height="68" rx="4" fill="#3f6150" opacity=".7"/>
+            <g class="flower" style="transform-origin:372px 132px" transform="translate(372 132)">
+              <circle cx="0" cy="-22" r="16" fill="#fff0f5"/><circle cx="21" cy="-7" r="16" fill="#fff0f5"/>
+              <circle cx="13" cy="18" r="16" fill="#fff0f5"/><circle cx="-13" cy="18" r="16" fill="#fff0f5"/>
+              <circle cx="-21" cy="-7" r="16" fill="#fff0f5"/><circle cx="0" cy="0" r="9" fill="#ff7fa6"/>
+            </g>
+          </g>
+          
+      <ellipse cx="166" cy="350" rx="22" ry="13" fill="#ff9ab8" opacity=".75"/>
+      <ellipse cx="346" cy="350" rx="22" ry="13" fill="#ff9ab8" opacity=".75"/>
+      <g class="eyes">
+        <g class="eye" style="transform-origin:196px 322px"><circle cx="196" cy="322" r="14" fill="#4a2f3a"/><circle cx="200" cy="317" r="5" fill="#fff"/></g>
+        <g class="eye" style="transform-origin:316px 322px"><circle cx="316" cy="322" r="14" fill="#4a2f3a"/><circle cx="320" cy="317" r="5" fill="#fff"/></g>
+      </g>
+      <g class="eyes-happy" fill="none" stroke="#4a2f3a" stroke-width="7" stroke-linecap="round">
+        <path d="M183 326 Q196 310 209 326"/>
+        <path d="M303 326 Q316 310 329 326"/>
+      </g>
+      <path class="mouth" d="M236 346 Q246 360 256 348 Q266 360 276 346"
+        fill="none" stroke="#4a2f3a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path class="mouth-happy" d="M234 344 Q256 382 278 344 Z" fill="#4a2f3a"/>
+      <path class="mouth-happy" d="M245 361 Q256 354 267 361 Q256 372 245 361 Z" fill="#ff7fa6"/>
+        </g></svg>

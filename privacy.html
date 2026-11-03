@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'">
+<meta name="robots" content="noindex, nofollow">
+<title>Informativa privacy</title>
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<script src="config.js"></script>
+<style>
+  :root{--bg:#fff5f8;--card:#fff;--ink:#4a2f3a;--ink2:#8a6a77;--pink:#e85d8a;--line:#f6dbe5}
+  @media (prefers-color-scheme: dark){:root{--bg:#2a1d24;--card:#3a2832;--ink:#ffe9f1;--ink2:#c9a9b7;--pink:#ff8fb1;--line:#4d3541}}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:Nunito,system-ui,sans-serif;line-height:1.6}
+  main{max-width:680px;margin:0 auto;padding:28px 16px 60px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  header img{width:56px}
+  h1,h2{font-family:Fredoka,Nunito,sans-serif;font-weight:600;margin:0}
+  h1{font-size:26px} h2{font-size:18px;margin:22px 0 6px;color:var(--pink)}
+  section{background:var(--card);border-radius:20px;padding:4px 18px 16px;margin-bottom:12px;border:1px solid var(--line)}
+  p,li{font-size:15.5px} ul{padding-left:20px;margin:6px 0}
+  .muted{color:var(--ink2);font-size:13.5px}
+  a{color:var(--pink);font-weight:800}
+  .back{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;background:var(--bg);border-bottom:1px solid var(--line)}
+  .back button{border:0;background:var(--card);color:var(--pink);font:inherit;font-weight:800;font-size:15px;padding:9px 14px;border-radius:14px;cursor:pointer;box-shadow:0 0 0 1px var(--line)}
+  .back .x{width:38px;height:38px;padding:0;border-radius:50%;font-size:17px}
+  .end{display:block;width:100%;margin-top:18px;border:0;border-radius:18px;padding:15px;font:inherit;font-weight:800;font-size:16px;color:#fff;background:linear-gradient(145deg,#ff8fb1,#e85d8a);cursor:pointer}
+</style>
+</head>
+<body>
+<nav class="back"><button type="button" class="js-back">‹ Indietro</button><button type="button" class="js-back x" aria-label="Chiudi">✕</button></nav>
+<main>
+  <header><img id="pm" src="icons/icon-mochi-192.png" alt="" style="border-radius:16px"><div><h1>Informativa privacy</h1><div class="muted">Mochi - le mie cose</div></div></header>
+
+  <section>
+    <h2>In breve</h2>
+    <p>Mochi serve solo a ricordarti le tue cose. Gli altri utenti non possono vedere i tuoi dati, che non vengono venduti, condivisi, usati per pubblicità o analizzati. Puoi scaricarli o cancellarli quando vuoi dall'app.</p>
+  </section>
+
+  <section>
+    <h2>Chi può accedere ai dati</h2>
+    <p>Nessun altro utente. Chi gestisce l'app, in quanto amministratore del database, ha un accesso tecnico necessario per la manutenzione: non lo usa per leggere i contenuti. I dati non sono cifrati con una chiave personale, quindi non scrivere nell'app password, dati bancari o informazioni sanitarie.</p>
+  </section>
+
+  <section>
+    <h2>Chi gestisce i dati</h2>
+    <p>Titolare del trattamento: <b id="tit">il gestore dell'app</b>.<br>Contatto: <span id="mail">tramite il gestore dell'app</span>.</p>
+  </section>
+
+  <section>
+    <h2>Quali dati</h2>
+    <ul>
+      <li><b>Account</b>: email, nome scelto da te, password (salvata in forma cifrata, nessuno può leggerla).</li>
+      <li><b>Contenuti</b>: cose da fare, appuntamenti e appunti che scrivi tu.</li>
+      <li><b>Notifiche</b>: se le attivi, un identificativo tecnico del dispositivo per inviarti i promemoria.</li>
+      <li><b>Com'è andata la giornata</b>: se la usi, l'umore che scegli per ogni giorno e l'eventuale nota. Li vedi solo tu.</li>
+      <li><b>Turni di lavoro</b>: se li usi, i tipi di turno con i loro orari, il ciclo e i turni che segni giorno per giorno. Li vedi solo tu.</li>
+      <li><b>Liste condivise</b>: se entri in una lista condivisa, le altre persone della lista vedono il tuo nome e tutto quello che metti nella lista (non la tua email né le tue altre voci). Se elimini l'account, le voci che hai messo nelle liste condivise restano alle altre persone.</li>
+      <li><b>Messaggi alla sviluppatrice</b>: se usi "Consiglia alla sviluppatrice", il testo che scrivi e il tipo di dispositivo (es. iPhone o Mac). Chi gestisce l'app li legge insieme al tuo nome e alla tua email, per poterti rispondere. Vengono cancellati con il tuo account.</li>
+      <li><b>Sul tuo dispositivo</b>: una copia delle tue voci e le preferenze (es. il tema), per far funzionare l'app anche offline. Nessun cookie di tracciamento.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Perché e su quale base</h2>
+    <p>Solo per fornirti il servizio che chiedi: salvare le tue voci, sincronizzarle tra i tuoi dispositivi e mandarti i promemoria. Base giuridica: esecuzione del servizio richiesto (art. 6.1.b GDPR).</p>
+  </section>
+
+  <section>
+    <h2>Dove sono conservati</h2>
+    <p>Su <b>Supabase</b> (database e autenticazione), su server nell'Unione Europea. L'app è pubblicata su GitHub Pages, che ospita solo il codice e non riceve i tuoi dati. Le notifiche passano dai servizi push di Apple, Google o del tuo browser, che ricevono solo il testo del promemoria.</p>
+  </section>
+
+  <section>
+    <h2>Per quanto tempo</h2>
+    <p>Finché hai un account. Se lo elimini, account e contenuti vengono cancellati subito e per sempre.</p>
+  </section>
+
+  <section>
+    <h2>I tuoi diritti</h2>
+    <ul>
+      <li><b>Accesso e portabilità</b>: Impostazioni → Backup → Scarica.</li>
+      <li><b>Rettifica</b>: modifichi tutto direttamente nell'app.</li>
+      <li><b>Cancellazione</b>: Impostazioni → Elimina account.</li>
+      <li>Per ogni altra richiesta scrivi al contatto indicato sopra. Puoi anche presentare reclamo al <a href="https://www.garanteprivacy.it" target="_blank" rel="noopener">Garante per la protezione dei dati personali</a>.</li>
+    </ul>
+  </section>
+
+  <p class="muted">Ultimo aggiornamento: novembre 2026 · <a href="./">Torna all'app</a></p>
+  <button type="button" class="js-back end">Torna a Mochi</button>
+</main>
+<script src="privacy.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "Mochi - le mie cose",
+  "short_name": "Mochi",
+  "description": "Cose da fare, appuntamenti e appunti, con le tue mascotte.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff5f8",
+  "theme_color": "#ffd6e4",
+  "lang": "it",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
