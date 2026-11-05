@@ -533,7 +533,8 @@ function openPancino() {
       <div class="say">${mood} ${me} · in tutto ${tot} ${tot === 1 ? "bocconcino" : "bocconcini"}</div>
     </div>
     <div class="sec"><h2>Ultimi 7 giorni</h2></div>
-    <div class="week7">${days.map(([d, n]) => `<div><i style="height:${Math.round((n / max) * 100)}%"></i><b>${n || ""}</b><span>${GIORNI[d.getDay()].slice(0, 3)}</span></div>`).join("")}</div>
+    ${days.some((d) => d[1]) ? `<div class="week7">${days.map(([d, n]) => `<div>${n ? `<i style="height:${Math.round((n / max) * 100)}%"></i>` : ""}<b>${n || ""}</b><span>${GIORNI[d.getDay()].slice(0, 3)}</span></div>`).join("")}</div>`
+      : `<p class="empty pc-vuoto">Questa settimana il pancino è ancora vuoto.<br>Spunta una cosa fatta e ${esc(MN())} riceve il primo bocconcino.</p>`}
     <div class="sec"><h2>Regali</h2><span class="count">${TRAGUARDI.filter((t) => tot >= t.n).length}/${TRAGUARDI.length}</span></div>
     <div class="regali">${TRAGUARDI.map((t) => tot >= t.n
       ? `<button class="${worn === t.id ? "on" : ""}" data-act="wear" data-v="${t.id}"><span class="e">${t.e}</span><b>${t.nome}</b><small>${worn === t.id ? "Lo indossa" : "Tocca per metterlo"}</small></button>`
@@ -728,7 +729,7 @@ function monthGrid(m, map, sel, act) {
     const its = map[s] || [];
     const dots = its.slice(0, 3).map((i) => `<i class="${i.area === "lavoro" ? "l" : ""}"></i>`).join("");
     const um = mod("umore") ? state.umori[s] : null, tu = act === "cal-sel" ? turnoDi(s) : null;
-    cells += `<button class="day ${d.getMonth() !== m.getMonth() ? "out" : ""} ${s === todayStr() ? "today" : ""} ${s === sel ? "sel" : ""} ${um ? "has-um" : ""}" ${um ? `style="--um:${UMORI[um.livello].colore}"` : ""} data-act="${act}" data-v="${s}"><span class="dn">${d.getDate()}</span><span class="dots">${dots}</span>${tu && tu.k !== "" ? `<span class="tday-s" style="--tc:${TURNO_COLORI[tu.colore - 1]}">${esc(tu.sigla)}</span>` : ""}</button>`;
+    cells += `<button class="day ${d.getMonth() !== m.getMonth() ? "out" : ""} ${s === todayStr() ? "today" : ""} ${s === sel ? "sel" : ""} ${um ? "has-um" : ""} ${tu && tu.k !== "" ? "conturno" : ""}" ${um ? `style="--um:${UMORI[um.livello].colore}"` : ""} data-act="${act}" data-v="${s}"><span class="dn">${d.getDate()}</span><span class="dots">${dots}</span>${tu && tu.k !== "" ? `<span class="tday-s" style="--tc:${TURNO_COLORI[tu.colore - 1]}">${esc(tu.sigla)}</span>` : ""}</button>`;
   }
   return `<div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div><div class="days">${cells}</div>`;
 }
@@ -913,7 +914,11 @@ function sbloccaPagina() {
   Object.assign(document.body.style, { position: "", top: "", left: "", right: "", width: "" });
   window.scrollTo(0, y);
 }
+// Tastiera: chi ha aperto la finestra (per ridargli il focus alla chiusura)
+let sheetOpener = null;
 function openSheet(html) {
+  const ae = document.activeElement;
+  if (!$("#sheet").classList.contains("on") && ae && ae !== document.body && !$("#sheet").contains(ae)) sheetOpener = ae;
   $("#sheet").innerHTML = `<div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">✕</button>${html}`;
   $("#sheet").scrollTop = 0;
   bloccaPagina(); sheetSuTastiera();
@@ -921,9 +926,13 @@ function openSheet(html) {
 }
 function closeSheet() {
   const sh = $("#sheet");
-  if (sh.contains(document.activeElement)) document.activeElement.blur();
+  const avevaFocus = sh.contains(document.activeElement);
+  if (avevaFocus) document.activeElement.blur();
   $("#scrim").classList.remove("on"); sh.classList.remove("on"); sh.inert = true; document.body.classList.remove("sheet-open"); draft = null;
   sbloccaPagina();
+  // il focus torna dove era (solo pulsanti e link: un campo di testo riaprirebbe la tastiera sul telefono)
+  const op = sheetOpener; sheetOpener = null;
+  if (avevaFocus && op && op.isConnected && !/^(INPUT|TEXTAREA|SELECT)$/.test(op.tagName) && op.getClientRects().length) op.focus({ preventScroll: true });
   if (askResolve) { const r = askResolve; askResolve = null; r(null); }
   // finestre automatiche in attesa (novità, invito alla Home): una alla volta, dopo questa
   if (sheetQueue.length) { const next = sheetQueue.shift(); setTimeout(next, 450); }
@@ -1217,7 +1226,7 @@ function openSettings() {
     ${ONLINE_MODE ? `<div class="setrow"><div><b>Il tuo nome</b><small>${esc(NOME || "Non impostato")} · ${esc(store.user?.email || "")}</small></div><button class="fbtn" data-act="set-name">Cambia</button></div>
     <div class="setrow"><div><b>Esci</b><small>Su questo dispositivo</small></div><button class="fbtn" data-act="logout">Esci</button></div>
     <div class="setrow"><div><b>Privacy</b><small>Come vengono trattati i tuoi dati</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
-    <div class="setrow"><div><b style="color:#c0394e">Elimina account</b><small>Cancella per sempre account e dati</small></div><button class="fbtn" style="color:#c0394e" data-act="delete-account">Elimina</button></div>` :
+    <div class="setrow"><div><b style="color:var(--danger)">Elimina account</b><small>Cancella per sempre account e dati</small></div><button class="fbtn" style="color:var(--danger)" data-act="delete-account">Elimina</button></div>` :
     `<div class="setrow"><div><b>Modalità prova</b><small>I dati restano solo su questo dispositivo</small></div></div>`}
     <div class="actions"><button class="btn" data-act="close">Chiudi</button></div>`);
   $("#themeSel").addEventListener("change", (e) => setTheme(e.target.value));
@@ -1419,7 +1428,7 @@ function viewListe() {
           <button class="fbtn on" data-act="l-invita" data-id="${esc(l.id)}">Invita</button>
           <button class="fbtn" data-act="l-modifica" data-id="${esc(l.id)}">Modifica</button>
           <button class="fbtn" data-act="l-esci" data-id="${esc(l.id)}">Esci</button>
-          ${l.proprietaria === me ? `<button class="fbtn" style="color:#c0394e" data-act="l-elimina" data-id="${esc(l.id)}">Elimina</button>` : ""}
+          ${l.proprietaria === me ? `<button class="fbtn" style="color:var(--danger)" data-act="l-elimina" data-id="${esc(l.id)}">Elimina</button>` : ""}
         </div>
       </div>`).join("") || `<div class="empty" style="padding:8px">Ancora nessuna lista. Creane una, ad esempio "Casa" o "Spesa" 🛒</div>`}</div>
     <div class="actions" style="margin-top:14px"><button class="btn" data-act="l-codice">Ho un codice</button><button class="btn primary" data-act="l-nuova">+ Nuova lista</button></div>`;
@@ -1786,7 +1795,7 @@ function viewRicorrenti() {
         <div class="lcard-h"><span class="e">${esc(r.emoji)}</span><div style="flex:1;min-width:0"><b>${esc(r.titolo)}</b>
           <small>${esc(descrOgni(r))} · ${esc(descrGiorni(r.giorni))}</small><small>${esc(quando(r))}</small></div>
           <button class="pin-toggle mini ${r.attiva ? "on" : ""}" data-act="ric-toggle" data-id="${esc(r.id)}" aria-label="${r.attiva ? "Metti in pausa" : "Riattiva"}"><span class="sw2"></span></button></div>
-        <div class="msg-a"><button class="fbtn" data-act="ric-modifica" data-id="${esc(r.id)}">Modifica</button><button class="fbtn" style="color:#c0394e" data-act="ric-elimina" data-id="${esc(r.id)}">Elimina</button></div>
+        <div class="msg-a"><button class="fbtn" data-act="ric-modifica" data-id="${esc(r.id)}">Modifica</button><button class="fbtn" style="color:var(--danger)" data-act="ric-elimina" data-id="${esc(r.id)}">Elimina</button></div>
       </div>`).join("") || `<div class="empty" style="padding:8px">Nessuno per ora. Inizia da uno di questi 👇</div>`}</div>
     ${ricorrenti.length < 10 ? `<div class="sec"><h2>Idee veloci</h2></div>
     <div class="filters" style="flex-wrap:wrap">${PRESET_RIC.map((p, i) => `<button class="fbtn" data-act="ric-preset" data-v="${i}">${p.emoji} ${esc(p.titolo)}</button>`).join("")}</div>` : `<p class="hint">Hai raggiunto il massimo di 10.</p>`}
@@ -2872,6 +2881,19 @@ document.addEventListener("click", async (e) => {
       break;
     }
   }
+});
+// Con una finestra aperta Tab e Maiusc+Tab girano solo dentro la finestra
+const FOCUSABILI = 'button:not([disabled]),a[href],input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab") return;
+  const box = $(".biscotto-wrap") || ($("#sheet").classList.contains("on") ? $("#sheet") : null);
+  if (!box) return;
+  const el = [...box.querySelectorAll(FOCUSABILI)].filter((x) => x.getClientRects().length && getComputedStyle(x).visibility !== "hidden" && !x.closest("[inert]"));
+  if (!el.length) return;
+  const first = el[0], last = el[el.length - 1], ae = document.activeElement;
+  if (!box.contains(ae)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+  else if (e.shiftKey && ae === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && ae === last) { e.preventDefault(); first.focus(); }
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { if ($(".biscotto-wrap")) chiudiBiscotto(); else closeSheet(); return; }

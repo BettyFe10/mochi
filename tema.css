@@ -3,7 +3,7 @@
    Condiviso da index.html e privacy.html: così la privacy segue il tema scelto nell'app.
    ========================================================= */
 :root{
-  --bg:#fff5f8; --bg2:#ffe9f0; --card:#ffffff; --ink:#4a2f3a; --ink2:#8a6a77; --line:#f6dbe5;
+  --bg:#fff5f8; --bg2:#ffe9f0; --card:#ffffff; --ink:#4a2f3a; --ink2:#775866; --line:#f6dbe5;
   --pink:#ff8fb1; --pink-d:#e85d8a; --pink-l:#ffe1eb; --salmon:#ff9e7a; --salmon-l:#ffe8de;
   --nori:#2f4a3a; --mint:#bfe8d4; --mint-d:#3f8f6a; --lav:#e5dcff; --lav-d:#7a62c9; --butter:#fff1c2;
   --acc-rgb:232,93,138; --recap1:#ffd6e4; --recap2:#ffe8de; --recap3:#fff1c2;
@@ -24,16 +24,16 @@
 }
 
 /* ---------- Temi di colore (Fragola è quello di base, definito sopra) ---------- */
-:root[data-palette="matcha"]{--pink:#7cc79a; --pink-d:#3f9a6b; --pink-l:#e3f5ea; --bg:#f4fbf6; --bg2:#e6f4ea; --line:#d6ecdd; --ink:#2f3f36; --ink2:#6b8576; --acc-rgb:63,154,107; --recap1:#d9f2e3; --recap2:#eef8e8; --recap3:#fff6d6; }
+:root[data-palette="matcha"]{--pink:#7cc79a; --pink-d:#3f9a6b; --pink-l:#e3f5ea; --bg:#f4fbf6; --bg2:#e6f4ea; --line:#d6ecdd; --ink:#2f3f36; --ink2:#587265; --acc-rgb:63,154,107; --recap1:#d9f2e3; --recap2:#eef8e8; --recap3:#fff6d6; }
 @media (prefers-color-scheme: dark){:root[data-palette="matcha"]:not([data-theme="light"]){--bg:#1c2620; --bg2:#232f28; --card:#2a382f; --line:#3a4c41; --pink-l:#2f4a3b; --ink:#e8f6ee; --ink2:#a6c2b2; }}
 :root[data-palette="matcha"][data-theme="dark"]{--bg:#1c2620; --bg2:#232f28; --card:#2a382f; --line:#3a4c41; --pink-l:#2f4a3b; --ink:#e8f6ee; --ink2:#a6c2b2; }
-:root[data-palette="lavanda"]{--pink:#b69cff; --pink-d:#7a5fd6; --pink-l:#ece6ff; --bg:#f8f5ff; --bg2:#efe9ff; --line:#e3dbfb; --ink:#3a3150; --ink2:#7d7396; --acc-rgb:122,95,214; --recap1:#e6ddff; --recap2:#f3e8ff; --recap3:#ffe8f3; --lav:#d4f0ec; --lav-d:#2f8f84;}
+:root[data-palette="lavanda"]{--pink:#b69cff; --pink-d:#7a5fd6; --pink-l:#ece6ff; --bg:#f8f5ff; --bg2:#efe9ff; --line:#e3dbfb; --ink:#3a3150; --ink2:#685e83; --acc-rgb:122,95,214; --recap1:#e6ddff; --recap2:#f3e8ff; --recap3:#ffe8f3; --lav:#d4f0ec; --lav-d:#2f8f84;}
 @media (prefers-color-scheme: dark){:root[data-palette="lavanda"]:not([data-theme="light"]){--bg:#211d2e; --bg2:#28233a; --card:#302a45; --line:#433b5c; --pink-l:#3d3460; --ink:#efeaff; --ink2:#b7add3; --lav:#24433f;}}
 :root[data-palette="lavanda"][data-theme="dark"]{--bg:#211d2e; --bg2:#28233a; --card:#302a45; --line:#433b5c; --pink-l:#3d3460; --ink:#efeaff; --ink2:#b7add3; --lav:#24433f;}
-:root[data-palette="pesca"]{--pink:#ffab7a; --pink-d:#e0703f; --pink-l:#ffe6d8; --bg:#fff7f2; --bg2:#ffeee3; --line:#f8dfd0; --ink:#4a3229; --ink2:#8c6e62; --acc-rgb:224,112,63; --recap1:#ffe0cc; --recap2:#ffefd9; --recap3:#fff5c8; }
+:root[data-palette="pesca"]{--pink:#ffab7a; --pink-d:#e0703f; --pink-l:#ffe6d8; --bg:#fff7f2; --bg2:#ffeee3; --line:#f8dfd0; --ink:#4a3229; --ink2:#775a4f; --acc-rgb:224,112,63; --recap1:#ffe0cc; --recap2:#ffefd9; --recap3:#fff5c8; }
 @media (prefers-color-scheme: dark){:root[data-palette="pesca"]:not([data-theme="light"]){--bg:#2a1f1a; --bg2:#33261f; --card:#3b2c24; --line:#523d32; --pink-l:#5a3a2a; --ink:#ffeee5; --ink2:#cdb0a3; }}
 :root[data-palette="pesca"][data-theme="dark"]{--bg:#2a1f1a; --bg2:#33261f; --card:#3b2c24; --line:#523d32; --pink-l:#5a3a2a; --ink:#ffeee5; --ink2:#cdb0a3; }
-:root[data-palette="cielo"]{--pink:#7cc0f0; --pink-d:#3a86c8; --pink-l:#e1f1fd; --bg:#f4f9ff; --bg2:#e7f2fd; --line:#d5e7f7; --ink:#263a4c; --ink2:#6a8197; --acc-rgb:58,134,200; --recap1:#d8ecfc; --recap2:#e8f4ff; --recap3:#fdf2d6; }
+:root[data-palette="cielo"]{--pink:#7cc0f0; --pink-d:#3a86c8; --pink-l:#e1f1fd; --bg:#f4f9ff; --bg2:#e7f2fd; --line:#d5e7f7; --ink:#263a4c; --ink2:#566e84; --acc-rgb:58,134,200; --recap1:#d8ecfc; --recap2:#e8f4ff; --recap3:#fdf2d6; }
 @media (prefers-color-scheme: dark){:root[data-palette="cielo"]:not([data-theme="light"]){--bg:#1a222c; --bg2:#202a36; --card:#273342; --line:#38495c; --pink-l:#24405a; --ink:#e8f3ff; --ink2:#a8bcd0; }}
 :root[data-palette="cielo"][data-theme="dark"]{--bg:#1a222c; --bg2:#202a36; --card:#273342; --line:#38495c; --pink-l:#24405a; --ink:#e8f3ff; --ink2:#a8bcd0; }
 /* ---------- Caratteri (Impostazioni > Carattere) ---------- */
@@ -54,3 +54,30 @@
 :root[data-stile="quaderno"][data-theme="dark"]{ --paper:var(--bg); --ink-a:rgba(255,236,244,.16); --ink-b:rgba(255,236,244,.3); --dot:rgba(255,236,244,.08); --edge:0 2px 0 rgba(0,0,0,.25) }
 /* il carattere scelto dall'utente vince sui titoli scritti a mano */
 :root[data-stile="quaderno"][data-font]{ --fh:var(--ft) }
+/* ---------- Regole comuni di design (vedi DESIGN.md) ----------
+   Spaziature a passi di 4, raggi secondo l'importanza, linea "da cartone" color inchiostro,
+   colori del giardino (sole, pesca, prato) accanto al colore del tema. */
+:root{
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+  --r-s:10px; --r-m:14px; --r-l:18px; --r-xl:26px;
+  --tratto:var(--ink); --tratto-m:color-mix(in srgb, var(--ink) 62%, transparent); --tratto-l:color-mix(in srgb, var(--ink) 22%, transparent);
+  --sole:#ffe58f; --pesca:#ffd0b0; --prato:#c4ecb0; --crema:#fffaf0;
+  --on-acc:#3b2530;
+  --acc-t:color-mix(in srgb, var(--pink-d) 72%, #000);
+  --lav-t:color-mix(in srgb, var(--lav-d) 75%, #000);
+  --danger:#b3263f; --danger-l:#ffe0e4;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --tratto:#120a0e; --tratto-m:color-mix(in srgb, var(--ink) 45%, transparent); --tratto-l:color-mix(in srgb, var(--ink) 18%, transparent);
+    --sole:#55401c; --pesca:#5e3b2a; --prato:#2f4d2c; --crema:var(--card);
+    --acc-t:var(--pink); --lav-t:color-mix(in srgb, var(--lav-d) 40%, #fff);
+    --danger:#ff8fa3; --danger-l:#5a2733;
+  }
+}
+:root[data-theme="dark"]{
+  --tratto:#120a0e; --tratto-m:color-mix(in srgb, var(--ink) 45%, transparent); --tratto-l:color-mix(in srgb, var(--ink) 18%, transparent);
+  --sole:#55401c; --pesca:#5e3b2a; --prato:#2f4d2c; --crema:var(--card);
+  --acc-t:var(--pink); --lav-t:color-mix(in srgb, var(--lav-d) 40%, #fff);
+  --danger:#ff8fa3; --danger-l:#5a2733;
+}

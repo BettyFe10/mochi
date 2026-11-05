@@ -30,6 +30,18 @@
   .back button{border:0;background:var(--card);color:var(--acc);font:inherit;font-weight:800;font-size:15px;padding:9px 14px;border-radius:14px;cursor:pointer;box-shadow:0 0 0 1px var(--line)}
   .back .x{width:38px;height:38px;padding:0;border-radius:50%;font-size:17px}
   .end{display:block;width:100%;margin-top:18px;border:0;border-radius:18px;padding:15px;font:inherit;font-weight:800;font-size:16px;color:#fff;background:linear-gradient(145deg,var(--pink),var(--pink-d));box-shadow:0 8px 18px rgba(var(--acc-rgb),.3);cursor:pointer}
+  /* Stile Morbido "cartone": contorno d'inchiostro, ombra netta, pulsanti pieni con testo scuro (come nell'app) */
+  :root{--acc:var(--acc-t)}
+  :root:not([data-stile="quaderno"]) body{background-image:radial-gradient(color-mix(in srgb, var(--pink) 20%, transparent) 1.4px, transparent 1.6px);background-size:24px 24px}
+  :root:not([data-stile="quaderno"]) section{border:2px solid var(--tratto);box-shadow:0 2px 0 var(--tratto);border-radius:var(--r-xl) var(--r-l) var(--r-xl) var(--r-l);padding:4px 20px 18px;margin-bottom:var(--s4)}
+  :root:not([data-stile="quaderno"]) h2{color:var(--ink)}
+  :root:not([data-stile="quaderno"]) .back{border-bottom:2px solid var(--tratto)}
+  :root:not([data-stile="quaderno"]) .back button{color:var(--ink);border:2px solid var(--tratto);box-shadow:0 2px 0 var(--tratto);min-height:44px}
+  :root:not([data-stile="quaderno"]) .back .x{width:44px;height:44px}
+  :root:not([data-stile="quaderno"]) .end{background:var(--pink);color:var(--on-acc);border:2px solid var(--tratto);box-shadow:0 3px 0 var(--tratto);min-height:52px}
+  :root:not([data-stile="quaderno"]) header img{border:2px solid var(--tratto)}
+  .back .x{width:44px;height:44px}
+  :is(button,a):focus-visible{outline:3px solid var(--acc-t);outline-offset:2px}
   /* Stile Quaderno: carta puntinata, titoli a mano, fogli con bordo a inchiostro */
   :root[data-stile="quaderno"],:root[data-stile="quaderno"] body{background-color:var(--paper);background-image:radial-gradient(circle,var(--dot) 1.1px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed}
   :root[data-stile="quaderno"] :is(h1,h2){font-family:var(--fh);font-weight:400}
