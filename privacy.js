@@ -6,7 +6,7 @@
   // solo valori conosciuti (gli stessi ammessi dall'app)
   if (["matcha", "lavanda", "pesca", "cielo"].includes(c.colore)) root.dataset.palette = c.colore;
   if (["tondo", "mano", "pastello", "leggibile", "sistema"].includes(c.font)) root.dataset.font = c.font;
-  root.dataset.stile = c.stile === "quaderno" ? "quaderno" : "morbido";
+  root.dataset.stile = ["quaderno", "cartone"].includes(c.stile) ? c.stile : "morbido";
   const th = leggi("mochi.theme", "auto");
   if (th === "light" || th === "dark") root.dataset.theme = th;
 })();

@@ -9,3 +9,6 @@ Un aggiornamento nuovo va lanciato nel SQL Editor **prima** di pubblicare la ver
 Da lanciare con la versione del 4 novembre (prima di pubblicarla, in quest'ordine):
 - `11-sottotask.sql`: liste da spuntare dentro le voci (colonna `sottotask` su `items`)
 - `12-spese.sql`: tabelle `spese` e `spese_impostazioni`
+
+Da lanciare con la versione "Serie di giorni + Concentrazione" (prima di pubblicarla):
+- `13-giorni-attivi.sql`: tabella `giorni_attivi` (le date in cui hai spuntato qualcosa, per la serie)

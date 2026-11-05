@@ -66,6 +66,8 @@
   --acc-t:color-mix(in srgb, var(--pink-d) 72%, #000);
   --lav-t:color-mix(in srgb, var(--lav-d) 75%, #000);
   --danger:#b3263f; --danger-l:#ffe0e4;
+  /* stile Morbido: colore pieno abbastanza scuro da reggere il testo bianco (4.5:1) */
+  --acc-pieno:color-mix(in srgb, var(--pink-d) 80%, #000); --acc-pieno2:color-mix(in srgb, var(--pink-d) 64%, #000);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){

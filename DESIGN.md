@@ -6,8 +6,7 @@ Niente file nuovi da pubblicare (il workflow ha un elenco fisso).
 
 ## 1. L'idea
 
-Mochi deve sembrare un cartone kawaii dei primi anni 2000, di quelli con criceti e ragazzine combinaguai:
-**contorno scuro morbido, colori pieni e allegri, tutto tondo**. Ma prima di tutto deve essere chiaro e calmo da usare ogni giorno.
+Mochi è tondo, soffice e kawaii. Lo stile predefinito (Morbido) è rosa e sfumato; chi vuole può scegliere Cartone (un cartone kawaii dei primi anni 2000: contorno scuro morbido, colori pieni e allegri) o Quaderno. In tutti e tre deve essere prima di tutto chiaro e calmo da usare ogni giorno.
 
 Principi, in ordine di importanza:
 
@@ -18,13 +17,23 @@ Principi, in ordine di importanza:
 5. **Fatto a mano, non in serie.** Le schede non sono tutte uguali: raggio e trattamento cambiano con l'importanza.
 6. **Ispirati allo spirito, mai ai personaggi.** Niente personaggi, nomi, loghi o elementi riconoscibili di cartoni esistenti.
 
-## 2. Due stili
+## 2. Tre stili
 
-- **Morbido** (predefinito): lo stile "cartone" descritto qui. Selettore: `:root:not([data-stile="quaderno"])`.
-- **Quaderno**: carta puntinata, titoli a mano, evidenziatori. Selettore: `:root[data-stile="quaderno"]`.
+In Impostazioni > Stile, in quest'ordine. L'id è il valore di `data-stile` su `<html>` e in `CUSTOM.stile`.
 
-Le regole di spazio, dimensioni del testo, area di tocco e contrasto valgono per **tutti e due** (stanno nelle regole base).
-Le regole di "look" stanno nei due blocchi in fondo a `index.html`: STILE MORBIDO "cartone" e STILE QUADERNO.
+| Stile | id | Com'è | Selettore |
+|---|---|---|---|
+| **Morbido** (predefinito) | `morbido` | l'aspetto originale di Mochi: rosa sfumato, ombre morbide colorate, pulsante principale e "+" con sfumatura e alone, righe con la striscia colorata a sinistra, finestre con lo sfondo appena sfocato | `:root[data-stile="morbido"]` |
+| **Cartone** | `cartone` | linea scura "da cartone", colori pieni del giardino (sole, pesca, prato), adesivi con ombra netta, niente sfumature né vetro | `:root[data-stile="cartone"]` |
+| **Quaderno** | `quaderno` | carta puntinata, titoli a mano, etichette di carta, evidenziatori | `:root[data-stile="quaderno"]` |
+
+Come è fatto il CSS:
+- Le **regole base** (in alto in `index.html`) sono già "morbide": spazi, dimensioni del testo, area di tocco, contrasto e focus valgono per **tutti e tre**.
+- Il blocco **STILE MORBIDO** contiene solo i ritocchi che lo tengono fedele all'originale. Lì c'è anche il colore pieno `--acc-pieno`/`--acc-pieno2`: un rosa del tema scurito, così il testo bianco sui pulsanti sfumati regge il 4.5:1.
+- Il blocco **STILE CARTONE** e quello **QUADERNO** non si toccano tra loro: ogni regola è scritta per un solo stile.
+- Regole che valgono per due stili (es. emoji invece delle icone a tratto): `:root:not([data-stile="quaderno"])`.
+- Chi aveva già scelto `morbido` vede l'originale; un valore sconosciuto torna a `morbido` (`cleanCustom`). `privacy.js` accetta gli stessi tre valori.
+- Le sezioni 6 e 7 qui sotto (linee e pulsanti a tre livelli) descrivono lo stile **Cartone**. In Morbido le schede hanno l'ombra morbida colorata (`--shadow`) e il pulsante principale la sfumatura.
 
 ## 3. Spaziature
 
@@ -87,10 +96,10 @@ Il **tema** (Fragola, Matcha, Lavanda, Pesca, Cielo) decide il colore principale
 Regole:
 - **Testo sempre almeno 4.5:1** sul suo sfondo (3:1 solo sopra i 24px). Per il testo colorato usare `--acc-t`, non `--pink-d`.
 - Sopra un colore pieno il testo è scuro (`--on-acc`), non bianco: i colori del tema sono chiari e il bianco non si leggerebbe.
-- Niente sfumature come decorazione, niente vetro (`backdrop-filter`), niente aloni colorati.
+- In Cartone niente sfumature, niente vetro (`backdrop-filter`), niente aloni colorati. In Morbido la sfumatura sta solo sul pulsante principale, sul "+" e sul recap.
 - Scuro: la linea diventa quasi nera (`#120a0e`) come un'ombra da cartone; gli adesivi usano versioni spente dei colori del giardino.
 
-## 6. Linee, raggi, ombre (stile Morbido)
+## 6. Linee, raggi, ombre (stile Cartone)
 
 Tre livelli, riconoscibili a colpo d'occhio. Il livello si sceglie per importanza, non per abitudine.
 
@@ -126,7 +135,7 @@ Una lista lunga non deve mai sembrare una pila di adesivi.
 
 ## 9. Icone ed emoji
 
-- Morbido usa le emoji (`.emo`), Quaderno le icone a tratto (`.ico.q`). Ogni voce di menu ha entrambe.
+- Morbido e Cartone usano le emoji (`.emo`), Quaderno le icone a tratto (`.ico.q`). Ogni voce di menu ha entrambe.
 - Le emoji servono da icona, non da decorazione del testo: al massimo una per frase, mai nei titoli di sezione.
 - Nel menu le emoji stanno dentro un tondino colorato con contorno (adesivo).
 
@@ -163,8 +172,7 @@ Una lista lunga non deve mai sembrare una pila di adesivi.
 
 ## 14. Cosa NON fare
 
-- Bordi grigini e ombre sfocate colorate (`0 6px 20px rgba(...)`).
-- Sfumature, vetro, aloni.
+- In Cartone: bordi grigini, ombre sfocate colorate, sfumature, vetro, aloni (in Morbido invece sono il suo carattere, ma sempre con testo leggibile).
 - Testo bianco su rosa chiaro, testo colorato con `--pink-d`.
 - Tutte le schede uguali, stesso raggio ovunque.
 - Più di un "gioco" decorativo per schermata.

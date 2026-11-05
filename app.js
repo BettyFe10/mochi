@@ -211,14 +211,16 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono) {
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
       CUSTOM = cleanCustom({ nome_app: md.nome_app, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
-        moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono });
+        moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
+        // casetta: scelta e mobili spenti dall'account, sblocchi uniti (non si perdono mai)
+        casa: md.casa ? unisciCasa(md.casa, CUSTOM.casa) : CUSTOM.casa });
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -384,6 +386,7 @@ const FONTI = [
 // Stili: cambiano l'aspetto di tutta l'app (i colori restano quelli scelti a parte)
 const STILI = [
   ["morbido", "Morbido", "Tondo e soffice, con sfumature e ombre leggere"],
+  ["cartone", "Cartone", "Linee scure e colori pieni, come un cartone animato"],
   ["quaderno", "Quaderno", "Carta puntinata, titoli a mano, etichette di carta"]
 ];
 /* Cosa vuoi usare: ogni parte dell'app si può spegnere (Impostazioni). Spegnere nasconde, non cancella i dati.
@@ -391,6 +394,9 @@ const STILI = [
 const MODULI = [
   ["turni", "💼", "Turni di lavoro", "Calendario dei turni e ore del mese", true],
   ["spese", "👛", "Spese", "Quanto spendi ogni mese, con il budget", true],
+  ["serie", "🔥", "Serie di giorni", "Quanti giorni di fila spunti qualcosa", true],
+  ["focus", "🪴", "Concentrazione", "Un timer con una piantina che cresce", true],
+  ["casa", "🏡", "La casetta", "La casa della mascotte, con i mobili in regalo", true],
   ["umore", "🌷", "Com'è andata la giornata", "Faccine nel calendario e giardino del mese", true],
   ["ricorrenti", "🔁", "Promemoria ricorrenti", "Bevi acqua, fai una pausa...", true, true],
   ["liste", "👭", "Liste condivise", "Liste da usare insieme ad altre persone", true, true],
@@ -398,12 +404,44 @@ const MODULI = [
   ["pancino", "🍣", "Il pancino", "La mascotte mangia le cose che fai e riceve regali", true],
   ["stagioni", "❄️", "Stagioni", "Neve, pioggia, sole o foglie sullo sfondo", false]
 ];
+/* La casetta: dati (i disegni e la pagina sono più sotto, sezione "LA CASETTA") */
+// [id, nome, emoji, giorni attivi per sbloccarla (0 = subito), mascotte di casa, colori per la stanza semplice [muro, pavimento]]
+const CASETTE = [
+  ["laghetto", "Laghetto", "🪷", 0, ["kame", "sakura", "nori", "marimo", "bolla", "yuzu"], ["#d9f1ef", "#ecd3ab"]],
+  ["stalla", "Prato con la stalla", "🌾", 0, ["zucchero", "daifuku", "tamago", "saltello"], ["#f7c7b6", "#f5df97"]],
+  ["bosco", "Casetta nel bosco", "🌲", 0, ["miso", "bambu", "castagna", "mochi", "nigi"], ["#e3b88a", "#cfa275"]],
+  ["spiaggia", "Spiaggia", "🏖️", 10, [], ["#e2f3fb", "#f6e3b8"]],
+  ["serra", "Serra dei fiori", "🌼", 30, [], ["#e6f5e2", "#f0bd9c"]],
+  ["nuvole", "Casetta sulle nuvole", "☁️", 60, [], ["#ebe4fd", "#f6f2ff"]]
+];
+// [id, nome, bocconcini per averlo in regalo]  (ognuno ha il suo posto fisso nella stanza)
+const MOBILI = [
+  ["tappeto", "Tappeto", 1], ["cuscino", "Cuscino", 5], ["piantina", "Piantina", 10], ["quadretto", "Quadretto", 16],
+  ["lampada", "Lampada", 23], ["libreria", "Libreria", 31], ["orologio", "Orologio", 40], ["fiori", "Vasetto di fiori", 50],
+  ["tavolino", "Tavolino con la tazza", 62], ["mensola", "Mensola con i barattoli", 75], ["cesto", "Cesto della lana", 90], ["lucine", "Lucine", 110]
+];
+const casaDi = (id) => CASETTE.find((c) => c[0] === id) || null;
+const casaHabitat = (masc) => (CASETTE.find((c) => c[4].includes(masc)) || CASETTE[2])[0];
+const CASA_VUOTA = { scelta: "auto", spenti: [], casette: [], mobili: [] };
+// Preferenze della casetta: solo id conosciuti, niente doppioni (arrivano anche dall'account: mai fidarsi)
+function cleanCasa(c) {
+  c = c && typeof c === "object" && !Array.isArray(c) ? c : {};
+  const ids = (a, ok) => [...new Set((Array.isArray(a) ? a : []).filter((x) => typeof x === "string" && ok(x)))];
+  return {
+    scelta: typeof c.scelta === "string" && (c.scelta === "auto" || casaDi(c.scelta)) ? c.scelta : "auto",
+    spenti: ids(c.spenti, (x) => MOBILI.some((m) => m[0] === x)),
+    casette: ids(c.casette, (x) => !!casaDi(x) && casaDi(x)[3] > 0),
+    mobili: ids(c.mobili, (x) => MOBILI.some((m) => m[0] === x))
+  };
+}
+// Unione: gli sblocchi non si perdono mai (dispositivo + account)
+const unisciCasa = (a, b) => { const x = cleanCasa(a), y = cleanCasa(b); return { ...x, casette: [...new Set([...x.casette, ...y.casette])], mobili: [...new Set([...x.mobili, ...y.mobili])] }; };
 // Effetto delle stagioni: "auto" segue il calendario, gli altri sono fissi
 const STAGIONI = [["auto", "🗓️", "Segue la stagione"], ["neve", "❄️", "Neve"], ["pioggia", "🌧️", "Pioggia"], ["sole", "☀️", "Sole"], ["foglie", "🍂", "Foglie"], ["petali", "🌸", "Petali"]];
 // Suoni dentro l'app (creati dal codice, nessun file): notifiche con l'app aperta, cose fatte, biscotto
 const SUONI = [["campanella", "🔔", "Campana"], ["bolla", "🫧", "Bolla"], ["xilofono", "🎵", "Xilofono"], ["gocce", "💧", "Gocce"], ["spenti", "🔕", "Spenti"]];
 const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
-  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella" };
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA };
 function cleanCustom(c) {
   c = c && typeof c === "object" ? c : {};
   const nome = typeof c.nome_app === "string" ? c.nome_app.replace(/[<>]/g, "").trim().slice(0, 24) : "";
@@ -416,7 +454,7 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
 // Il modulo è acceso? (quelli che richiedono un account sono spenti in modalità prova)
@@ -541,6 +579,7 @@ function openPancino() {
       : `<button class="lock" disabled><span class="e">${t.e}</span><b>${t.nome}</b><small>a ${t.n} bocconcini</small></button>`).join("")}
       <button class="${worn === "none" ? "on" : ""}" data-act="wear" data-v="none"><span class="e">🫧</span><b>Niente</b><small>Al naturale</small></button></div>
     <p class="hint" style="margin:10px 4px 14px">Ogni cosa che spunti è un bocconcino. ${esc(MN())} non ha mai fame e non si offende: festeggia solo quello che fai.</p>
+    ${mod("casa") ? `<button class="more" data-act="open-casa">🏡 Vai alla casetta di ${esc(MN())}</button>` : ""}
     <div class="actions"><button class="btn primary" data-act="close">Ciao ${esc(MN())} 💗</button></div>`);
 }
 // Il bocconcino vola dalla spunta alla mascotte in alto
@@ -597,7 +636,7 @@ const state = {
   items: [], liste: [], umori: {}, turni: {}, turniImp: { tipi: [], ciclo: [], ciclo_inizio: null }, tab: "oggi", todoFilter: "tutte", noteFilter: "tutte",
   calMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   calSel: todayStr(), recapMonth: null, synced: true,
-  spese: { voci: [], budget: null }, speseMese: null, stAperti: new Set()
+  spese: { voci: [], budget: null }, speseMese: null, stAperti: new Set(), giorni: new Set()
 };
 
 function setSync(ok) { state.synced = ok; const el = $("#syncDot"); if (el) el.className = "sync" + (ok ? "" : " off"); }
@@ -679,6 +718,7 @@ function viewOggi() {
     <div class="stat"><b>${ev.length}</b><span>appuntamenti</span></div>
     <div class="stat"><b>${todo.length + late.length}</b><span>da fare</span></div>
     <div class="stat"><b>${doneT.length}</b><span>fatte oggi</span></div></div>`;
+  if (mod("serie")) h += serieCard();
   { const tu = turnoDi(t); if (tu && tu.k !== "") h += rigaTurno(t, true); }
   if (mod("umore")) h += umoreCard();
   if (mod("pancino")) h += pancinoCard();
@@ -775,6 +815,8 @@ function viewMenu() {
     <div class="mgrid">
       ${voce('data-tab="appunti"', "📝", "Appunti", "Idee, liste, cose da tenere")}
       ${mod("spese") ? voce('data-tab="spese"', "👛", "Spese", (() => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; })()) : ""}
+      ${mod("casa") ? voce('data-tab="casa"', "🏡", "La casetta", (() => { const n = mobiliAvuti().length; return n ? `${n} ${n === 1 ? "mobile" : "mobili"} in regalo` : "La casa di " + esc(MN()); })()) : ""}
+      ${mod("focus") ? voce('data-tab="focus"', "🪴", "Concentrazione", (() => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; })()) : ""}
       ${mod("liste") ? voce('data-act="open-liste"', "👭", "Liste condivise", state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") : ""}
       ${mod("ricorrenti") ? voce('data-act="open-ricorrenti"', "🔁", "Ricorrenti", "Bevi acqua, fai una pausa...") : ""}
       ${mod("turni") ? voce('data-tab="turni"', "💼", "Turni di lavoro", turniAttivi() ? (() => { const o = oreMese(new Date()); return `${fmtOre(o.min)} questo mese`; })() : "Il calendario del lavoro") : ""}
@@ -879,13 +921,15 @@ function viewAppunti() {
 }
 
 // Pagine che appartengono a un modulo: se è spento si torna a Oggi
-const PAGINA_MODULO = { turni: "turni", spese: "spese", liste: "liste", ricorrenti: "ricorrenti" };
+const PAGINA_MODULO = { turni: "turni", spese: "spese", liste: "liste", ricorrenti: "ricorrenti", focus: "focus", casa: "casa" };
 function render() {
   applyCustom();
   headerUpdate();
   if (PAGINA_MODULO[state.tab] && !mod(PAGINA_MODULO[state.tab])) state.tab = "oggi";
+  // fuori dalla pagina Concentrazione non resta nessuna sessione a metà (timer, schermo acceso)
+  if (state.tab !== "focus" && focusS) focusChiudi();
   if (!mod("liste")) { if (state.todoFilter.startsWith("l:")) state.todoFilter = "tutte"; if (state.noteFilter.startsWith("l:")) state.noteFilter = "tutte"; }
-  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, menu: viewMenu }[state.tab] || viewOggi)();
+  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, menu: viewMenu }[state.tab] || viewOggi)();
   const el = $("#view");
   el.innerHTML = `<div class="view">${v}</div>`;
   document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
@@ -1174,6 +1218,7 @@ function openRecap(month) {
     ${(() => { const nb = mod("pancino") ? bocconcini().filter((i) => inM(i.done_at)).length : 0; return nb ? `<div class="bubble" style="margin:12px 0 0;text-align:center">Questo mese hai dato a ${esc(MN())} <b>${nb} ${nb === 1 ? "bocconcino" : "bocconcini"}</b> ${cibo(key)}</div>` : ""; })()}
     ${turniAttivi() ? (() => { const o = oreMese(m); return o.turni ? `<div class="bubble" style="margin:12px 0 0;text-align:center">💼 Hai lavorato <b>${fmtOre(o.min)}</b> in ${o.turni} ${o.turni === 1 ? "turno" : "turni"}</div>` : ""; })() : ""}
     ${mod("spese") ? (() => { const sp = totaleMese(m); return sp ? `<div class="bubble" style="margin:12px 0 0;text-align:center">👛 Hai speso <b>${euro(sp)}</b>${state.spese.budget ? (sp > state.spese.budget ? `, ${euro(sp - state.spese.budget)} oltre il budget` : `, dentro il budget`) : ""}</div>` : ""; })() : ""}
+    ${mod("serie") ? (() => { const n = [...state.giorni].filter((g) => g.startsWith(key)).length, mx = serie().maxPerMese[key] || 0; return n ? `<div class="bubble" style="margin:12px 0 0;text-align:center">🔥 <b>${n}</b> ${n === 1 ? "giorno attivo" : "giorni attivi"}, con una serie fino a <b>${mx}</b> ${mx === 1 ? "giorno" : "giorni"} di fila</div>` : ""; })() : ""}
     ${mod("umore") ? `<div class="sec"><h2>Il giardino del mese</h2></div>${giardinoSvg(m)}` : ""}
     ${all.length ? `<div class="sec"><h2>Lavoro e vita</h2></div>
       <div class="bar2"><i style="width:${pLav}%;background:var(--lav-d)"></i><i style="width:${100 - pLav}%;background:var(--pink)"></i></div>
@@ -1334,6 +1379,10 @@ function maybeShowInstallHint() {
 const NOVITA = {
   titolo: "Novità in Mochi!",
   punti: [
+    ["casette", "🏡", "<b>La casetta</b>: la tua mascotte ha una casa tutta sua. I mobili arrivano in regalo spuntando le cose fatte, le casette nuove si aprono con i giorni attivi. La trovi nel menu (o tieni premuta la mascotte in alto).", "casa"],
+    ["cartone", "🖍️", "Nuovo stile <b>Cartone</b>: linee scure, colori pieni e tutto tondo, come nei cartoni animati. Lo trovi in Impostazioni → Stile, accanto a Morbido e Quaderno."],
+    ["serie", "🔥", "<b>Serie di giorni</b>: in Oggi vedi quanti giorni di fila hai spuntato qualcosa. Ogni settimana c'è un giorno di riposo che non spezza la serie, e il record resta tuo.", "serie"],
+    ["focus", "🪴", "<b>Concentrazione</b>: un timer da 15, 25 o 45 minuti con una piantina che cresce mentre lavori. Lo trovi nel menu.", "focus"],
     ["spese", "👛", "<b>Spese</b>: segna quanto spendi in pochi tocchi, guarda il totale del mese per categoria e, se vuoi, un budget mensile. Le trovi nel menu.", "spese"],
     ["sottotask", "☑️", "<b>Liste da spuntare</b> dentro le cose da fare e gli appunti, perfette per la spesa: le spunti anche senza aprire la voce, e nelle liste condivise le vedete tutte."],
     ["moduli", "🧩", "<b>Cosa vuoi usare</b>: in Impostazioni puoi spegnere quello che non ti serve (turni, spese, umore...). Sparisce dall'app, ma i dati restano."],
@@ -2290,6 +2339,629 @@ async function chiediBudget() {
 }
 
 /* =========================================================
+   LA CASETTA
+   Ogni mascotte ha una casa: le casette sono poche e condivise per "habitat".
+   Le casette in più si sbloccano con i giorni attivi (serie().totali), i mobili arrivano in regalo con i bocconcini.
+   Gli sblocchi restano per sempre: si salvano in CUSTOM.casa (sincronizzato nell'account) e si ricalcolano dai numeri.
+   Per aggiungere una casetta: una riga in CASETTE (se non ha un disegno suo usa la stanza semplice con i colori della riga).
+   I disegni sono SVG fatti dal codice, nello stile delle mascotte: forme tonde, colori pastello, contorno di un tono più scuro.
+   ========================================================= */
+const bocconciniTot = () => bocconcini().length;
+const casetteAperte = () => { const tot = serie().totali; return CASETTE.filter((c) => !c[3] || tot >= c[3] || CUSTOM.casa.casette.includes(c[0])).map((c) => c[0]); };
+const mobiliAvuti = () => { const b = bocconciniTot(); return MOBILI.filter((m) => b >= m[2] || CUSTOM.casa.mobili.includes(m[0])).map((m) => m[0]); };
+function casaScelta() {
+  const s = CUSTOM.casa.scelta;
+  return s !== "auto" && casetteAperte().includes(s) ? s : casaHabitat(CUSTOM.mascotte);
+}
+
+/* ---------- Disegni ---------- */
+const CINK = "#4a2f3a";
+const el = (tag, a, dentro = "") => `<${tag} ${Object.entries(a).map(([k, v]) => `${k}="${v}"`).join(" ")}${dentro === null ? "/>" : `>${dentro}</${tag}>`}`;
+const sh = (tag, a) => el(tag, a, null);
+// foglia a goccia: base (x,y), lunghezza, angolo (gradi, 0 = in su)
+const foglia = (x, y, l, a, f = "#9ad88f", s = "#6fb874", w = .42) => sh("path", { d: `M0 0 C ${l * w} ${-l * .3}, ${l * w * .8} ${-l * .85}, 0 ${-l} C ${-l * w * .8} ${-l * .85}, ${-l * w} ${-l * .3}, 0 0 Z`, fill: f, stroke: s, "stroke-width": 2, "stroke-linejoin": "round", transform: `translate(${x} ${y}) rotate(${a})` });
+const stella = (x, y, r, f = "#ffe28a", s = "#f0c24e", sw = 1.6) => {
+  let d = ""; for (let i = 0; i < 10; i++) { const rr = i % 2 ? r * .48 : r, a = Math.PI / 5 * i - Math.PI / 2; d += `${i ? "L" : "M"}${(x + Math.cos(a) * rr).toFixed(1)} ${(y + Math.sin(a) * rr).toFixed(1)} `; }
+  return sh("path", { d: d + "Z", fill: f, stroke: s, "stroke-width": sw, "stroke-linejoin": "round" });
+};
+const fiorellino = (x, y, r, f, c = "#ffe28a") => { let p = ""; for (let i = 0; i < 5; i++) { const a = i * 72 * Math.PI / 180; p += sh("circle", { cx: (x + Math.cos(a) * r * .62).toFixed(1), cy: (y + Math.sin(a) * r * .62).toFixed(1), r: (r * .5).toFixed(1), fill: f }); } return p + sh("circle", { cx: x, cy: y, r: (r * .38).toFixed(1), fill: c }); };
+const nuvoletta = (x, y, s = 1, f = "#fff", o = 1) => `<g transform="translate(${x} ${y}) scale(${s})" opacity="${o}">${sh("path", { d: "M-22 6 Q-24 -6 -12 -6 Q-10 -16 2 -14 Q12 -20 18 -8 Q28 -8 26 4 Q26 10 18 10 L-16 10 Q-22 10 -22 6Z", fill: f, stroke: "#dfe7f2", "stroke-width": 1.6 })}</g>`;
+
+/* La finestra: cornice, vista dentro (ritagliata) e davanzale. Di sera la vista diventa cielo blu con luna e stelle. */
+function finestra(uid, forma, cornice, bordo, vista) {
+  const clip = forma === "tonda" ? sh("circle", { cx: 200, cy: 66, r: 42 }) : forma === "arco" ? sh("path", { d: "M152 108 L152 62 Q152 24 200 24 Q248 24 248 62 L248 108 Z" }) : sh("rect", { x: 152, y: 26, width: 96, height: 82, rx: 10 });
+  const sera = `<g class="cs-sera">${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#33407a" })}${sh("circle", { cx: 222, cy: 50, r: 11, fill: "#fff3c4" })}${sh("circle", { cx: 228, cy: 46, r: 10, fill: "#33407a" })}${stella(172, 44, 4, "#fff6d6", "#fff6d6", 1)}${stella(186, 76, 3, "#fff6d6", "#fff6d6", 1)}${stella(236, 86, 3.4, "#fff6d6", "#fff6d6", 1)}</g>`;
+  const telaio = forma === "tonda" ? sh("circle", { cx: 200, cy: 66, r: 42, fill: "none", stroke: cornice, "stroke-width": 9 }) + sh("circle", { cx: 200, cy: 66, r: 46.5, fill: "none", stroke: bordo, "stroke-width": 2 }) + sh("circle", { cx: 200, cy: 66, r: 37.5, fill: "none", stroke: bordo, "stroke-width": 1.6 })
+    : forma === "arco" ? sh("path", { d: "M152 108 L152 62 Q152 24 200 24 Q248 24 248 62 L248 108", fill: "none", stroke: cornice, "stroke-width": 9, "stroke-linejoin": "round" }) + sh("path", { d: "M147.5 108 L147.5 62 Q147.5 19.5 200 19.5 Q252.5 19.5 252.5 62 L252.5 108", fill: "none", stroke: bordo, "stroke-width": 2 }) + sh("path", { d: "M200 26 L200 108 M152 70 L248 70", stroke: cornice, "stroke-width": 5 })
+    : sh("rect", { x: 152, y: 26, width: 96, height: 82, rx: 10, fill: "none", stroke: cornice, "stroke-width": 9 }) + sh("rect", { x: 147.5, y: 21.5, width: 105, height: 91, rx: 13, fill: "none", stroke: bordo, "stroke-width": 2 }) + sh("path", { d: "M200 28 L200 106 M154 67 L246 67", stroke: cornice, "stroke-width": 5 });
+  return `<defs><clipPath id="cf${uid}">${clip}</clipPath></defs><g clip-path="url(#cf${uid})">${vista}${sera}</g>${telaio}
+    ${sh("rect", { x: 138, y: 106, width: 124, height: 9, rx: 4, fill: cornice, stroke: bordo, "stroke-width": 2 })}`;
+}
+// pareti, pavimento e battiscopa
+const stanza = (muro, motivoMuro, pav, motivoPav, battiscopa, bb) => `${sh("rect", { width: 400, height: 200, fill: muro })}${motivoMuro}
+  ${sh("rect", { y: 196, width: 400, height: 84, fill: pav })}${motivoPav}
+  ${sh("rect", { y: 190, width: 400, height: 9, fill: battiscopa })}${sh("path", { d: "M0 190.5 H400 M0 198.5 H400", stroke: bb, "stroke-width": 2 })}`;
+
+const DISEGNI_CASA = {
+  laghetto(u) {
+    let onde = ""; for (let y = 22; y < 190; y += 34) for (let x = (y / 34 % 2) * 26; x < 400; x += 52) onde += `M${x} ${y} q8 -6 16 0 t16 0 `;
+    let assi = ""; for (let x = 0; x <= 400; x += 50) assi += `M${x} 199 L${x - (x - 200) * .25} 280 `;
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#cdeefe" })}${nuvoletta(178, 40, .7)}
+      ${sh("path", { d: "M140 70 Q200 62 260 70 L260 114 L140 114Z", fill: "#8fd3e8", stroke: "#6bbcd6", "stroke-width": 2 })}
+      ${sh("path", { d: "M160 84 q6 -3 12 0 M214 96 q6 -3 12 0 M188 104 q5 -3 10 0", stroke: "#fff", "stroke-width": 2, fill: "none", "stroke-linecap": "round", opacity: .8 })}
+      ${sh("path", { d: "M168 92 a11 6 0 1 0 2 -9 l-6 6z", fill: "#9ad88f", stroke: "#6fb874", "stroke-width": 1.6 })}${fiorellino(166, 86, 6, "#ffb3cc")}
+      ${sh("path", { d: "M226 82 a9 5 0 1 0 2 -8 l-5 5z", fill: "#9ad88f", stroke: "#6fb874", "stroke-width": 1.6 })}
+      ${sh("ellipse", { cx: 246, cy: 74, rx: 14, ry: 8, fill: "#c9c3bd", stroke: "#a9a29b", "stroke-width": 1.6 })}`;
+    // fissi: campanelle di bambù (parete), sassi in pila e canne (pavimento), salvagente
+    const canne = [0, 1, 2, 3].map((i) => sh("rect", { x: 260 + i * 8, y: 40 + (i % 2) * 6, width: 6, height: 40 - i * 4, rx: 3, fill: "#c6e3a6", stroke: "#98c27a", "stroke-width": 1.6 })).join("");
+    const sassi = `${sh("ellipse", { cx: 102, cy: 206, rx: 24, ry: 9, fill: "#c9c3bd", stroke: "#a9a29b", "stroke-width": 2 })}${sh("ellipse", { cx: 100, cy: 192, rx: 17, ry: 8, fill: "#ddd7d1", stroke: "#a9a29b", "stroke-width": 2 })}${sh("ellipse", { cx: 102, cy: 180, rx: 10, ry: 6, fill: "#ebe6e1", stroke: "#a9a29b", "stroke-width": 2 })}
+      ${sh("path", { d: "M84 202 q6 -3 12 0", stroke: "#fff", "stroke-width": 2, fill: "none", opacity: .7 })}`;
+    const giunchi = [-12, 0, 12].map((d, i) => sh("path", { d: `M${124 + d / 3} 212 Q${122 + d} ${170} ${124 + d * 1.4} ${140 + i * 8}`, stroke: "#7cc08a", "stroke-width": 3, fill: "none", "stroke-linecap": "round" }) + sh("rect", { x: 120 + d * 1.4, y: 136 + i * 8, width: 8, height: 18, rx: 4, fill: "#b07a55", stroke: "#8e5c3c", "stroke-width": 1.5 })).join("");
+    const salvagente = `${sh("circle", { cx: 126, cy: 70, r: 15, fill: "none", stroke: "#ff9b8a", "stroke-width": 9 })}${sh("path", { d: "M126 55 v8 M126 77 v8 M111 70 h8 M133 70 h8", stroke: "#fff", "stroke-width": 9 })}${sh("circle", { cx: 126, cy: 70, r: 19.5, fill: "none", stroke: "#e07a6a", "stroke-width": 1.8 })}${sh("circle", { cx: 126, cy: 70, r: 10.5, fill: "none", stroke: "#e07a6a", "stroke-width": 1.8 })}`;
+    return { base: stanza("#d9f1ef", sh("path", { d: onde, stroke: "#c1e6e2", "stroke-width": 2.5, fill: "none", "stroke-linecap": "round" }), "#ecd3ab", sh("path", { d: assi + "M0 240 H400", stroke: "#d8b886", "stroke-width": 2, fill: "none" }), "#b9dfda", "#97cbc4"),
+      finestra: finestra(u, "tonda", "#a8d8d3", "#7fbfb8", vista), fissi: salvagente + sh("path", { d: "M256 34 H294", stroke: "#98c27a", "stroke-width": 3, "stroke-linecap": "round" }) + canne + giunchi + sassi };
+  },
+  stalla(u) {
+    let assi = ""; for (let x = 20; x < 400; x += 40) assi += `M${x} 0 V190 `;
+    let paglia = ""; for (let i = 0; i < 46; i++) { const x = (i * 83) % 400, y = 206 + (i * 37) % 70; paglia += `M${x} ${y} l${8 + (i % 3) * 3} ${i % 2 ? -3 : 3} `; }
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#cdeefe" })}${sh("circle", { cx: 230, cy: 44, r: 9, fill: "#ffe28a" })}${nuvoletta(176, 44, .6)}
+      ${sh("path", { d: "M140 84 Q176 64 210 80 Q236 68 260 78 L260 114 L140 114Z", fill: "#a8dc8e", stroke: "#86c46c", "stroke-width": 2 })}
+      ${sh("path", { d: "M140 96 H260 M140 88 H260", stroke: "#f2dcc0", "stroke-width": 3 })}${[148, 168, 188, 208, 228, 248].map((x) => sh("rect", { x, y: 82, width: 5, height: 20, rx: 2, fill: "#f7e6cf", stroke: "#d8b88f", "stroke-width": 1.2 })).join("")}
+      ${fiorellino(160, 106, 4, "#fff")}${fiorellino(238, 108, 4, "#ffb3cc")}`;
+    const fieno = `${sh("rect", { x: 74, y: 170, width: 56, height: 42, rx: 9, fill: "#f6d77c", stroke: "#dcb24e", "stroke-width": 2.5 })}${sh("path", { d: "M86 171 V211 M118 171 V211", stroke: "#c98f5a", "stroke-width": 3 })}${sh("path", { d: "M80 182 l8 -2 M96 196 l9 1 M106 178 l7 3 M80 202 l6 -2 M120 190 l5 3", stroke: "#dcb24e", "stroke-width": 2, "stroke-linecap": "round" })}
+      ${sh("path", { d: "M74 172 q4 -6 10 -2 M118 170 q6 -6 10 0", stroke: "#dcb24e", "stroke-width": 2, fill: "none" })}`;
+    const ferro = `${sh("path", { d: "M114 58 C112 82 140 82 138 58", stroke: "#b9b0bf", "stroke-width": 7, fill: "none", "stroke-linecap": "round" })}${sh("path", { d: "M114 58 C112 82 140 82 138 58", stroke: "#fff", "stroke-width": 2, fill: "none", "stroke-dasharray": "2 6", "stroke-linecap": "round" })}${sh("circle", { cx: 126, cy: 44, r: 2.4, fill: "#b07a55" })}${sh("path", { d: "M126 44 L115 56 M126 44 L137 56", stroke: "#b07a55", "stroke-width": 1.6 })}`;
+    const campanaccio = `${sh("path", { d: "M276 26 V44", stroke: "#b07a55", "stroke-width": 2.5 })}${sh("path", { d: "M266 72 L268 52 Q276 42 284 52 L286 72 Z", fill: "#ffd76a", stroke: "#dfae3c", "stroke-width": 2.2, "stroke-linejoin": "round" })}${sh("circle", { cx: 276, cy: 76, r: 3.6, fill: "#dfae3c" })}${sh("path", { d: "M268 50 Q276 46 284 50", stroke: "#ff9db5", "stroke-width": 4, fill: "none" })}`;
+    const travi = sh("path", { d: "M0 16 H400", stroke: "#e59f8b", "stroke-width": 10 }) + sh("path", { d: "M0 10 H400 M0 22 H400", stroke: "#d98a76", "stroke-width": 1.5 });
+    return { base: stanza("#f7c7b6", sh("path", { d: assi, stroke: "#eaa995", "stroke-width": 2.2 }) + travi, "#f5df97", sh("path", { d: paglia, stroke: "#dfbf62", "stroke-width": 2, "stroke-linecap": "round" }), "#eaa995", "#d98a76"),
+      finestra: finestra(u, "quadra", "#fff6ef", "#d98a76", vista), fissi: ferro + campanaccio + fieno };
+  },
+  bosco(u) {
+    let tronchi = ""; for (let y = 14; y < 190; y += 22) tronchi += `M0 ${y} H400 `;
+    let nodi = ""; for (let y = 25; y < 190; y += 44) nodi += sh("circle", { cx: 6, cy: y, r: 8, fill: "#edc9a0", stroke: "#c48d5c", "stroke-width": 2 }) + sh("circle", { cx: 394, cy: y + 22, r: 8, fill: "#edc9a0", stroke: "#c48d5c", "stroke-width": 2 });
+    let assi = ""; for (let y = 216; y < 280; y += 20) assi += `M0 ${y} H400 `; for (let x = 0; x <= 400; x += 64) assi += `M${x} 199 L${x - (x - 200) * .3} 280 `;
+    const pino = (x, y, s, f = "#6fb38a") => `<g transform="translate(${x} ${y}) scale(${s})">${sh("rect", { x: -2, y: 0, width: 4, height: 8, fill: "#a87452" })}${sh("path", { d: "M0 -34 L14 -10 H6 L16 4 H-16 L-6 -10 H-14Z", fill: f, stroke: "#4f9a6f", "stroke-width": 1.6, "stroke-linejoin": "round" })}</g>`;
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#d6efff" })}${nuvoletta(222, 40, .6)}${sh("path", { d: "M140 90 Q190 70 260 86 L260 114 L140 114Z", fill: "#bfe3a8" })}${pino(168, 92, 1.1)}${pino(196, 98, .8, "#88c79c")}${pino(232, 94, 1.2)}`;
+    const camino = `${sh("rect", { x: 106, y: 0, width: 30, height: 118, fill: "#d8cfc8", stroke: "#b5aaa1", "stroke-width": 2 })}${sh("path", { d: "M106 30 H136 M106 60 H136 M106 90 H136 M121 0 V30 M114 30 V60 M128 60 V90 M118 90 V118", stroke: "#b5aaa1", "stroke-width": 1.6 })}
+      ${sh("rect", { x: 74, y: 116, width: 72, height: 10, rx: 4, fill: "#b07a55", stroke: "#8e5c3c", "stroke-width": 2 })}
+      ${sh("path", { d: "M78 126 H142 V212 H78 Z", fill: "#d8cfc8", stroke: "#b5aaa1", "stroke-width": 2 })}${sh("path", { d: "M78 150 H90 M130 150 H142 M78 176 H88 M132 176 H142", stroke: "#b5aaa1", "stroke-width": 1.6 })}${sh("path", { d: "M92 212 V160 Q92 140 110 140 Q128 140 128 160 V212 Z", fill: "#5d4250", stroke: "#4a2f3a", "stroke-width": 2 })}
+      <g class="cs-fuoco">${sh("path", { d: "M98 210 Q96 192 104 182 Q106 194 110 188 Q110 172 118 166 Q118 184 124 194 Q126 204 120 210 Z", fill: "#ffab5c", stroke: "#f08a3c", "stroke-width": 1.6 })}${sh("path", { d: "M105 210 Q104 200 109 194 Q112 202 116 198 Q118 206 115 210Z", fill: "#ffe28a" })}</g>
+      ${sh("rect", { x: 96, y: 206, width: 28, height: 6, rx: 3, fill: "#a87452" })}`;
+    const appesi = `${sh("path", { d: "M258 30 H296", stroke: "#8e5c3c", "stroke-width": 3, "stroke-linecap": "round" })}
+      ${sh("path", { d: "M266 32 V66", stroke: "#b5aaa1", "stroke-width": 3 })}${sh("ellipse", { cx: 266, cy: 72, rx: 6, ry: 7, fill: "#d8cfc8", stroke: "#a9a29b", "stroke-width": 1.8 })}
+      ${sh("path", { d: "M282 32 V44", stroke: "#8e5c3c", "stroke-width": 2 })}${sh("circle", { cx: 282, cy: 60, r: 13, fill: "#ff9b8a", stroke: "#e07a6a", "stroke-width": 2 })}${sh("circle", { cx: 282, cy: 60, r: 7.5, fill: "#ffc4b8" })}${sh("rect", { x: 280, y: 42, width: 4, height: 6, fill: "#8e5c3c" })}`;
+    return { base: stanza("#e3b88a", sh("path", { d: tronchi, stroke: "#cf9c6a", "stroke-width": 2.5 }) + nodi, "#c08d5e", sh("path", { d: assi, stroke: "#a87a4e", "stroke-width": 2 }), "#8e6440", "#74502f"),
+      finestra: finestra(u, "quadra", "#f2d7b0", "#b88a5c", vista), fissi: camino + appesi, luce: sh("circle", { cx: 110, cy: 192, r: 46, fill: "url(#casaAlone)" }) };
+  },
+  spiaggia(u) {
+    let righe = ""; for (let x = 0; x < 400; x += 40) righe += sh("rect", { x, y: 0, width: 20, height: 190, fill: "#c6e6f7" });
+    let sabbia = ""; for (let i = 0; i < 40; i++) sabbia += sh("circle", { cx: (i * 97) % 400, cy: 206 + (i * 41) % 72, r: 1.6, fill: "#e8cf98" });
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#cdeefe" })}${sh("circle", { cx: 228, cy: 42, r: 11, fill: "#ffe28a", stroke: "#f6c94a", "stroke-width": 2 })}
+      ${sh("path", { d: "M140 72 H260 V92 H140Z", fill: "#7ccbe8" })}${sh("path", { d: "M150 80 q6 -3 12 0 M200 86 q6 -3 12 0 M232 78 q6 -3 12 0", stroke: "#fff", "stroke-width": 2, fill: "none", "stroke-linecap": "round" })}
+      ${sh("path", { d: "M140 92 Q200 86 260 92 V114 H140Z", fill: "#f6e3b8", stroke: "#e8cf98", "stroke-width": 1.6 })}
+      ${sh("path", { d: "M170 106 L174 76", stroke: "#b07a55", "stroke-width": 2 })}${sh("path", { d: "M156 80 Q174 62 192 76 Z", fill: "#ff9db5", stroke: "#e57a98", "stroke-width": 1.6 })}${sh("path", { d: "M168 68 L174 77 L180 68", fill: "#fff" })}`;
+    const castello = `${sh("path", { d: "M72 212 V188 H80 V182 H86 V188 H96 V176 H102 V170 H110 V176 H116 V188 H124 V182 H130 V188 V212 Z", fill: "#f2d49a", stroke: "#d8b46c", "stroke-width": 2.2, "stroke-linejoin": "round" })}${sh("path", { d: "M98 212 V200 Q101 194 104 200 V212", fill: "#d8b46c" })}
+      ${sh("path", { d: "M106 170 V154", stroke: "#b07a55", "stroke-width": 2 })}${sh("path", { d: "M106 154 L118 158 L106 162Z", fill: "#ff9db5" })}`;
+    const tavola = `${sh("path", { d: "M128 212 Q111 150 126 76 Q128 68 130 76 Q145 150 128 212Z", fill: "#ffd76a", stroke: "#e8b83c", "stroke-width": 2.2 })}${sh("path", { d: "M128 80 Q130 150 128 208", stroke: "#ff9db5", "stroke-width": 3.5, fill: "none" })}${sh("path", { d: "M122 110 Q120 140 122 170", stroke: "#fff", "stroke-width": 2, fill: "none", opacity: .7 })}`;
+    const stellaMare = `<g transform="rotate(12 276 56)">${stella(276, 56, 17, "#ffab8f", "#e88a6c", 2.2)}</g>${sh("circle", { cx: 272, cy: 52, r: 1.8, fill: "#fff" })}${sh("circle", { cx: 281, cy: 58, r: 1.8, fill: "#fff" })}`;
+    const conchiglia = (x, y, f) => `${sh("path", { d: `M${x - 9} ${y} Q${x} ${y - 16} ${x + 9} ${y} Q${x} ${y + 4} ${x - 9} ${y}Z`, fill: f, stroke: "#e5a6b2", "stroke-width": 1.8 })}${sh("path", { d: `M${x} ${y + 1} L${x} ${y - 9} M${x - 4} ${y + 1} L${x - 3} ${y - 7} M${x + 4} ${y + 1} L${x + 3} ${y - 7}`, stroke: "#e5a6b2", "stroke-width": 1.2 })}`;
+    return { base: stanza("#eef8fd", righe, "#f6e3b8", sabbia, "#bfe0f2", "#95c4de"),
+      finestra: finestra(u, "quadra", "#fff", "#95c4de", vista), fissi: tavola + castello + stellaMare + conchiglia(372, 272, "#ffe1e8") + conchiglia(390, 262, "#fff2d6") };
+  },
+  serra(u) {
+    let vetri = ""; for (let x = 0; x <= 400; x += 50) vetri += `M${x} 0 V190 `; vetri += "M0 64 H400 M0 128 H400";
+    let piastre = ""; for (let x = 0; x <= 400; x += 40) piastre += `M${x} 199 L${x - (x - 200) * .3} 280 `; piastre += "M0 228 H400 M0 256 H400";
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#d8f1ff" })}${sh("circle", { cx: 226, cy: 46, r: 10, fill: "#ffe28a" })}${sh("path", { d: "M140 88 Q200 78 260 88 V114 H140Z", fill: "#b7e39a" })}
+      ${[[160, 92, "#ff9db5"], [178, 100, "#ffe28a"], [198, 90, "#c9b2ff"], [218, 100, "#ff9db5"], [238, 92, "#fff"]].map(([x, y, c]) => sh("path", { d: `M${x} ${y + 12} V${y}`, stroke: "#6fb874", "stroke-width": 2 }) + fiorellino(x, y, 6, c)).join("")}`;
+    const appesa = (x, l, f) => {
+      const tralcio = (dx, lun) => { let p = sh("path", { d: `M${x + dx} ${l + 10} q${dx / 2} ${lun / 2} ${dx / 3} ${lun}`, stroke: "#6fb874", "stroke-width": 1.8, fill: "none" }); for (let k = 1; k <= 3; k++) p += foglia(x + dx + dx / 6 * k / 3, l + 10 + lun * k / 3.4, 8, dx < 0 ? 200 : 160, k % 2 ? "#9ad88f" : "#b7e39a"); return p; };
+      return `${sh("path", { d: `M${x} 0 L${x - 11} ${l} M${x} 0 L${x + 11} ${l}`, stroke: "#c9a27a", "stroke-width": 1.6 })}${tralcio(-9, 34)}${tralcio(9, 26)}
+      ${foglia(x - 4, l + 1, 14, -30)}${foglia(x + 4, l + 1, 15, 28, "#b7e39a")}${foglia(x, l, 12, 0)}
+      ${sh("path", { d: `M${x - 13} ${l} H${x + 13} L${x + 9} ${l + 15} Q${x} ${l + 19} ${x - 9} ${l + 15} Z`, fill: f, stroke: "#d37a52", "stroke-width": 2 })}${sh("path", { d: `M${x - 10} ${l + 6} H${x + 10}`, stroke: "#fff", "stroke-width": 1.6, opacity: .6 })}`;
+    };
+    const annaffiatoio = `${sh("path", { d: "M84 212 V184 Q84 176 92 176 H112 Q120 176 120 184 V212 Z", fill: "#9fd4ef", stroke: "#6fb0d6", "stroke-width": 2.2 })}${sh("path", { d: "M120 194 L136 176", stroke: "#6fb0d6", "stroke-width": 6, "stroke-linecap": "round" })}${sh("ellipse", { cx: 137, cy: 175, rx: 4, ry: 6, fill: "#6fb0d6", transform: "rotate(40 137 175)" })}
+      ${sh("path", { d: "M90 178 Q102 160 114 178", stroke: "#6fb0d6", "stroke-width": 4, fill: "none" })}${fiorellino(102, 196, 6, "#fff")}`;
+    const vasetti = `${sh("path", { d: "M74 212 L76 198 H92 L94 212Z", fill: "#ee9b72", stroke: "#d37a52", "stroke-width": 1.8 })}${foglia(84, 198, 16, -20)}${foglia(84, 198, 14, 25, "#b7e39a")}`;
+    return { base: stanza("#e6f5e2", sh("path", { d: vetri, stroke: "#fff", "stroke-width": 5 }) + sh("path", { d: vetri, stroke: "#bfe0b6", "stroke-width": 1.5 }), "#f0bd9c", sh("path", { d: piastre, stroke: "#dc9e7a", "stroke-width": 2 }), "#cfe8c6", "#a9d39d"),
+      finestra: finestra(u, "arco", "#fff", "#a9d39d", vista), fissi: appesa(126, 52, "#f6b088") + appesa(276, 40, "#ffd0b0") + annaffiatoio + vasetti };
+  },
+  nuvole(u) {
+    let stelle = ""; [[30, 40], [96, 24], [60, 150], [130, 120], [270, 140], [350, 110], [380, 36], [320, 160], [24, 100]].forEach(([x, y], i) => { stelle += stella(x, y, 4 + (i % 3), "#fff", "#e0d6fb", 1.2); });
+    let fiocchi = ""; for (let x = -10; x < 420; x += 46) fiocchi += sh("circle", { cx: x, cy: 206, r: 22, fill: "#fff", stroke: "#ddd3f6", "stroke-width": 2 });
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#cfe6ff" })}${nuvoletta(180, 80, .9)}${nuvoletta(228, 50, .7)}${sh("circle", { cx: 214, cy: 36, r: 9, fill: "#ffe28a" })}`;
+    const arcobaleno = ["#ff9db5", "#ffd76a", "#b7e39a", "#9fd4ef", "#c9b2ff"].map((c, i) => sh("path", { d: `M${76 + i * 5} 212 A${28 - i * 5} ${28 - i * 5} 0 0 1 ${132 - i * 5} 212`, stroke: c, "stroke-width": 5, fill: "none" })).join("") + nuvoletta(78, 206, .55) + nuvoletta(130, 206, .55);
+    const appese = [[116, 46, 6], [128, 70, 5], [138, 34, 4.5]].map(([x, l, r]) => sh("path", { d: `M${x} 0 V${l - r}`, stroke: "#c9b2ff", "stroke-width": 1.4 }) + stella(x, l, r * 1.6)).join("");
+    const luna = `${sh("path", { d: "M276 0 V34", stroke: "#c9b2ff", "stroke-width": 1.4 })}${sh("path", { d: "M286 40 A20 20 0 1 0 288 76 A15 15 0 1 1 286 40Z", fill: "#ffe8a3", stroke: "#f0c24e", "stroke-width": 2 })}${sh("circle", { cx: 270, cy: 60, r: 1.8, fill: CINK })}${sh("path", { d: "M268 66 q3 3 6 0", stroke: CINK, "stroke-width": 1.6, fill: "none", "stroke-linecap": "round" })}`;
+    return { base: stanza("#ebe4fd", stelle, "#f6f2ff", fiocchi, "#ddd3f6", "#c9bdf0"),
+      finestra: finestra(u, "tonda", "#fff", "#c9bdf0", vista), fissi: appese + luna + arcobaleno };
+  }
+};
+// Stanza semplice per le casette che non hanno (ancora) un disegno loro
+function casaSemplice(c, u) {
+  const [muro, pav] = c[5] || ["#f3e9e2", "#e8d3bd"];
+  return { base: stanza(muro, "", pav, "", "#ffffff", "#e6d6cb"), finestra: finestra(u, "quadra", "#fff", "#e6d6cb", sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#cdeefe" }) + nuvoletta(200, 60, .8)), fissi: "" };
+}
+
+/* I mobili: stessi posti in ogni casetta. "dietro" = contro la parete (dietro la mascotte), "davanti" = in primo piano */
+const DISEGNI_MOBILI = {
+  lucine: { box: "0 0 400 50", strato: "parete", d() {
+    let s = sh("path", { d: "M6 8 Q200 44 394 8", stroke: "#b99a8a", "stroke-width": 2, fill: "none" }), luce = "";
+    const C = ["#ffd76a", "#ff9db5", "#9fd4ef", "#b7e39a"];
+    for (let i = 1; i < 12; i++) { const t = i / 12, x = (1 - t) ** 2 * 6 + 2 * (1 - t) * t * 200 + t * t * 394, y = (1 - t) ** 2 * 8 + 2 * (1 - t) * t * 44 + t * t * 8;
+      s += sh("rect", { x: (x - 2.5).toFixed(1), y: (y - 1).toFixed(1), width: 5, height: 4, rx: 1, fill: "#b99a8a" }) + sh("ellipse", { cx: x.toFixed(1), cy: (y + 7).toFixed(1), rx: 4.2, ry: 5.6, fill: C[i % 4], stroke: "rgba(74,47,58,.25)", "stroke-width": 1.2, class: "lucina" });
+      luce += sh("circle", { cx: x.toFixed(1), cy: (y + 7).toFixed(1), r: 14, fill: "url(#casaAlone)" }); }
+    return [s, luce]; } },
+  quadretto: { box: "44 30 68 72", strato: "parete", d: () => [`${sh("path", { d: "M78 34 L62 50 M78 34 L94 50", stroke: "#c9a27a", "stroke-width": 1.6 })}${sh("circle", { cx: 78, cy: 34, r: 2.4, fill: "#c9a27a" })}
+    ${sh("rect", { x: 52, y: 48, width: 52, height: 46, rx: 6, fill: "#f7d9a8", stroke: "#d9b27a", "stroke-width": 2.5 })}${sh("rect", { x: 59, y: 55, width: 38, height: 32, rx: 3, fill: "#dff3ff" })}
+    ${sh("path", { d: "M59 80 Q70 70 80 78 Q88 72 97 78 V87 H59Z", fill: "#b7e39a" })}${sh("circle", { cx: 88, cy: 64, r: 5, fill: "#ffe28a" })}${sh("path", { d: "M70 80 V72", stroke: "#6fb874", "stroke-width": 1.6 })}${fiorellino(70, 70, 4.4, "#ff9db5")}`] },
+  orologio: { box: "290 36 64 60", strato: "parete", d: () => [`${sh("circle", { cx: 309, cy: 51, r: 7, fill: "#ffd1dc", stroke: "#f2a9bc", "stroke-width": 2 })}${sh("circle", { cx: 335, cy: 51, r: 7, fill: "#ffd1dc", stroke: "#f2a9bc", "stroke-width": 2 })}
+    ${sh("circle", { cx: 322, cy: 70, r: 21, fill: "#fff8f1", stroke: "#f2a9bc", "stroke-width": 3.5 })}${[0, 90, 180, 270].map((a) => sh("circle", { cx: (322 + Math.sin(a * Math.PI / 180) * 15).toFixed(1), cy: (70 - Math.cos(a * Math.PI / 180) * 15).toFixed(1), r: 1.8, fill: "#e5a6b2" })).join("")}
+    ${sh("path", { d: "M322 70 V58 M322 70 L331 74", stroke: CINK, "stroke-width": 2.6, "stroke-linecap": "round" })}${sh("circle", { cx: 322, cy: 70, r: 2.4, fill: CINK })}${sh("path", { d: "M310 60 q4 -6 10 -7", stroke: "#fff", "stroke-width": 2.4, fill: "none", "stroke-linecap": "round", opacity: .8 })}`] },
+  mensola: { box: "262 88 76 40", strato: "parete", d: () => [`${sh("rect", { x: 276, y: 96, width: 18, height: 20, rx: 6, fill: "#ffe2b8", stroke: "#e3b77e", "stroke-width": 2 })}${sh("rect", { x: 274, y: 92, width: 22, height: 6, rx: 2, fill: "#ff9db5", stroke: "#e57a98", "stroke-width": 1.6 })}
+    ${sh("rect", { x: 302, y: 100, width: 15, height: 16, rx: 5, fill: "#d8f0ff", stroke: "#9fc9e0", "stroke-width": 2 })}${sh("rect", { x: 300, y: 97, width: 19, height: 5, rx: 2, fill: "#9ad88f", stroke: "#6fb874", "stroke-width": 1.6 })}
+    ${sh("circle", { cx: 325, cy: 109, r: 6, fill: "#ffd1dc", stroke: "#f2a9bc", "stroke-width": 1.8 })}${sh("rect", { x: 268, y: 116, width: 66, height: 6, rx: 3, fill: "#e0bb8b", stroke: "#c4955a", "stroke-width": 2 })}${sh("path", { d: "M276 122 v6 M326 122 v6", stroke: "#c4955a", "stroke-width": 3, "stroke-linecap": "round" })}`] },
+  libreria: { box: "4 96 70 120", strato: "dietro", d() {
+    const libri = (y, cols) => { let x = 16, s = ""; cols.forEach(([c, h, w]) => { s += sh("rect", { x, y: y - h, width: w, height: h, rx: 2, fill: c, stroke: "rgba(74,47,58,.22)", "stroke-width": 1.3 }); x += w + 1.5; }); return s; };
+    return [`${sh("rect", { x: 10, y: 112, width: 58, height: 100, rx: 6, fill: "#e8c39a", stroke: "#c99b6c", "stroke-width": 2.5 })}${sh("rect", { x: 15, y: 118, width: 48, height: 88, rx: 3, fill: "#f3dcbf" })}
+      ${sh("path", { d: "M15 145 H63 M15 177 H63", stroke: "#c99b6c", "stroke-width": 2.5 })}
+      ${libri(144, [["#ff9db5", 22, 7], ["#9fd4ef", 18, 8], ["#ffe28a", 24, 6], ["#b7e39a", 20, 9]])}${libri(176, [["#c9b2ff", 24, 8], ["#ffb48f", 20, 7], ["#9fd4ef", 26, 6], ["#ff9db5", 18, 8]])}${libri(205, [["#b7e39a", 22, 9], ["#ffe28a", 18, 8]])}
+      ${sh("circle", { cx: 52, cy: 197, r: 8, fill: "#fff", stroke: "#e5a6b2", "stroke-width": 1.8 })}${sh("path", { d: "M46 104 L58 104 L56 112 L48 112Z", fill: "#ee9b72", stroke: "#d37a52", "stroke-width": 1.6 })}${foglia(52, 104, 12, -25)}${foglia(52, 104, 11, 30, "#b7e39a")}`]; } },
+  lampada: { box: "340 90 56 126", strato: "dietro", d: () => [`${sh("ellipse", { cx: 370, cy: 211, rx: 14, ry: 4.5, fill: "#d9c2a8", stroke: "#b49a7e", "stroke-width": 2 })}${sh("rect", { x: 368, y: 124, width: 4, height: 86, rx: 2, fill: "#d9c2a8" })}
+    ${sh("path", { d: "M352 128 L388 128 L380 100 Q370 94 360 100 Z", fill: "#ffe08a", stroke: "#e8bf5a", "stroke-width": 2.5, "stroke-linejoin": "round" })}${sh("path", { d: "M352 128 q4.5 5 9 0 q4.5 5 9 0 q4.5 5 9 0 q4.5 5 9 0", fill: "#ffd1dc", stroke: "#f2a9bc", "stroke-width": 1.6 })}${sh("path", { d: "M362 106 L358 122", stroke: "#fff", "stroke-width": 2.4, "stroke-linecap": "round", opacity: .8 })}`,
+    sh("circle", { cx: 370, cy: 130, r: 62, fill: "url(#casaAlone)" })] },
+  piantina: { box: "286 138 60 80", strato: "dietro", d: () => [`${[-58, -30, -4, 22, 48].map((a, i) => foglia(317, 184, 34 - Math.abs(a) * .12, a, i % 2 ? "#b7e39a" : "#9ad88f")).join("")}
+    ${sh("path", { d: "M299 188 L335 188 L331 212 Q330 215 326 215 L308 215 Q304 215 303 212 Z", fill: "#ee9b72", stroke: "#d37a52", "stroke-width": 2.2 })}${sh("rect", { x: 295, y: 182, width: 44, height: 9, rx: 4, fill: "#f6b088", stroke: "#d37a52", "stroke-width": 2.2 })}${sh("circle", { cx: 317, cy: 202, r: 3, fill: "#fff", opacity: .6 })}`] },
+  fiori: { box: "212 70 36 40", strato: "parete", d: () => [`${sh("path", { d: "M226 92 Q222 84 223 78 M232 92 V74 M238 92 Q242 84 241 80", stroke: "#6fb874", "stroke-width": 2, fill: "none" })}${fiorellino(223, 78, 7, "#ff9db5")}${fiorellino(232, 73, 7, "#ffe28a", "#ff9db5")}${fiorellino(241, 80, 6.5, "#c9b2ff")}
+    ${sh("path", { d: "M224 92 H240 Q244 100 240 106 Q232 109 224 106 Q220 100 224 92Z", fill: "#b9e3f5", stroke: "#8cc4dc", "stroke-width": 2 })}${sh("path", { d: "M226 97 q2 4 0 7", stroke: "#fff", "stroke-width": 1.8, fill: "none", opacity: .8 })}`] },
+  tappeto: { box: "98 244 204 36", strato: "tappeto", d: () => [`${sh("ellipse", { cx: 200, cy: 262, rx: 98, ry: 15, fill: "#ffd1dc", stroke: "#f2a9bc", "stroke-width": 2.5 })}${sh("ellipse", { cx: 200, cy: 262, rx: 82, ry: 10, fill: "none", stroke: "#fff", "stroke-width": 2.6, "stroke-dasharray": "7 6", opacity: .9 })}${sh("ellipse", { cx: 200, cy: 262, rx: 40, ry: 4.5, fill: "#ffe6ec" })}`] },
+  cuscino: { box: "52 228 72 40", strato: "davanti", d: () => [`${sh("ellipse", { cx: 88, cy: 258, rx: 32, ry: 9, fill: "#cdbcf7", stroke: "#a993e6", "stroke-width": 2.2 })}${sh("path", { d: "M57 252 Q57 236 88 236 Q119 236 119 252 Q119 262 88 262 Q57 262 57 252Z", fill: "#e6dbff", stroke: "#a993e6", "stroke-width": 2.5 })}${sh("circle", { cx: 88, cy: 248, r: 3.2, fill: "#a993e6" })}${sh("path", { d: "M68 244 q8 -6 16 -6", stroke: "#fff", "stroke-width": 2.6, fill: "none", "stroke-linecap": "round", opacity: .85 })}`] },
+  tavolino: { box: "314 206 62 72", strato: "davanti", d: () => [`<g transform="translate(18 10)">${sh("ellipse", { cx: 326, cy: 263, rx: 14, ry: 4, fill: "#e0bb8b", stroke: "#c4955a", "stroke-width": 2 })}${sh("rect", { x: 323, y: 234, width: 6, height: 28, rx: 2, fill: "#e0bb8b", stroke: "#c4955a", "stroke-width": 1.6 })}${sh("ellipse", { cx: 326, cy: 233, rx: 27, ry: 7.5, fill: "#f7d9a8", stroke: "#c4955a", "stroke-width": 2.2 })}
+    ${sh("path", { d: "M318 210 q-4 -6 0 -10 M326 208 q-4 -6 0 -10", stroke: "#cfc6c0", "stroke-width": 2, fill: "none", "stroke-linecap": "round", class: "cs-vapore" })}
+    ${sh("ellipse", { cx: 324, cy: 230, rx: 13, ry: 3.2, fill: "#fff", stroke: "#f2a9bc", "stroke-width": 1.6 })}${sh("path", { d: "M314 213 H334 L332 226 Q331 230 327 230 L321 230 Q317 230 316 226 Z", fill: "#fff", stroke: "#f2a9bc", "stroke-width": 2 })}${sh("path", { d: "M334 216 q7 0 6 6 q-1 4 -7 4", stroke: "#f2a9bc", "stroke-width": 2, fill: "none" })}
+    ${sh("path", { d: "M324 222 l-3 -3 a2 2 0 0 1 3 -2.6 a2 2 0 0 1 3 2.6z", fill: "#ff9db5" })}</g>`] },
+  cesto: { box: "2 226 54 52", strato: "davanti", d: () => [`${sh("circle", { cx: 20, cy: 244, r: 8.5, fill: "#ff9db5", stroke: "#e57a98", "stroke-width": 2 })}${sh("path", { d: "M14 240 q6 2 10 9 M18 237 q6 4 7 11", stroke: "#e57a98", "stroke-width": 1.4, fill: "none" })}
+    ${sh("circle", { cx: 36, cy: 242, r: 9.5, fill: "#9fd4ef", stroke: "#6fb0d6", "stroke-width": 2 })}${sh("path", { d: "M29 238 q7 1 12 10 M33 234 q8 4 8 13", stroke: "#6fb0d6", "stroke-width": 1.4, fill: "none" })}${sh("path", { d: "M40 230 L48 252 M46 228 L44 252", stroke: "#c4955a", "stroke-width": 2, "stroke-linecap": "round" })}
+    ${sh("path", { d: "M6 248 L50 248 L46 270 Q45 274 41 274 L15 274 Q11 274 10 270 Z", fill: "#e8c08a", stroke: "#c4955a", "stroke-width": 2.2 })}${sh("path", { d: "M9 256 H47 M10 264 H46 M18 249 V273 M28 249 V274 M38 249 V273", stroke: "#cf9f62", "stroke-width": 1.4 })}`] }
+};
+const STRATI = ["parete", "dietro", "tappeto", "davanti"];
+
+let casaN = 0;
+// La scena intera: stanza, finestra, oggetti fissi, mobili accesi, luci di sera, mascotte appoggiata a terra
+function scenaCasa(id, { masc = CUSTOM.mascotte, mobili = null, conMascotte = true, sagoma = false, label = "" } = {}) {
+  const c = casaDi(id) || CASETTE[0], u = "c" + (++casaN);
+  const dis = (DISEGNI_CASA[c[0]] || ((uu) => casaSemplice(c, uu)))(u);
+  if (sagoma) return `<svg class="casa-svg sagoma" viewBox="0 0 400 280" aria-hidden="true">${sh("rect", { width: 400, height: 280, rx: 18, fill: "currentColor", opacity: .08 })}${sh("rect", { y: 196, width: 400, height: 84, fill: "currentColor", opacity: .06 })}<g class="sagoma-g">${dis.finestra}${dis.fissi}</g></svg>`;
+  const accesi = (mobili || mobiliAccesi()).filter((m) => DISEGNI_MOBILI[m]);
+  const strato = (s) => accesi.filter((m) => DISEGNI_MOBILI[m].strato === s).map((m) => `<g class="mob mob-${m}">${DISEGNI_MOBILI[m].d()[0]}</g>`).join("");
+  const luci = accesi.map((m) => DISEGNI_MOBILI[m].d()[1] || "").join("") + (dis.luce || "");
+  let ms = "";
+  if (conMascotte) {
+    const vb = (MASC.list[masc] || MASC.list.mochi).viewBox;
+    ms = `<g class="casa-masc" data-act="casa-poke">${withAcc(MASC.svg(masc), masc).replace("<svg ", `<svg x="128" y="112" width="144" height="156" preserveAspectRatio="xMidYMax meet" `).replace(/viewBox="[^"]*"/, `viewBox="${vb}"`)}</g>`;
+  }
+  return `<svg class="casa-svg" viewBox="0 0 400 280" role="img" aria-label="${esc(label || c[1])}" xmlns="http://www.w3.org/2000/svg">
+    <g class="cs-stanza">${dis.base}${dis.finestra}${dis.fissi}${strato("parete")}${strato("dietro")}${strato("tappeto")}</g>
+    <g class="cs-luci">${luci}</g>${ms}<g class="cs-stanza">${strato("davanti")}</g></svg>`;
+}
+function mobiliAccesi() { const avuti = mobiliAvuti(); return MOBILI.map((m) => m[0]).filter((m) => avuti.includes(m) && !CUSTOM.casa.spenti.includes(m)); }
+// icona di un mobile da solo (per l'elenco)
+const iconaMobile = (m, chiuso) => `<svg class="mob-ico${chiuso ? " chiuso" : ""}" viewBox="${DISEGNI_MOBILI[m].box}" aria-hidden="true">${DISEGNI_MOBILI[m].d()[0]}</svg>`;
+
+/* ---------- Pagina ---------- */
+function openCasa() { if ($("#sheet").classList.contains("on")) closeSheet(); state.tab = "casa"; render(); window.scrollTo({ top: 0 }); }
+function viewCasa() {
+  const scelta = casaScelta(), c = casaDi(scelta), aperte = casetteAperte(), avuti = mobiliAvuti(), tot = serie().totali, b = bocconciniTot();
+  const accesi = mobiliAccesi();
+  const scena = `<div class="casa-scena">${scenaCasa(scelta, { label: `${c[1]}: ${MN()} è a casa${accesi.length ? `, con ${accesi.length} ${accesi.length === 1 ? "mobile" : "mobili"}` : ""}. Tocca la mascotte per salutarla` })}</div>`;
+  const nomeCibo = mod("pancino") ? ["bocconcino", "bocconcini"] : ["cosa fatta", "cose fatte"];
+  const scelte = `<div class="sec"><h2>Le casette</h2><span class="count">${aperte.length}/${CASETTE.length}</span></div>
+    <div class="casa-scelte">${CASETTE.map((x) => {
+      const ok = aperte.includes(x[0]), on = x[0] === scelta, mia = x[4].includes(CUSTOM.mascotte);
+      return ok ? `<button class="casa-scelta ${on ? "on" : ""}" data-act="casa-scegli" data-v="${x[0]}" aria-pressed="${on}">${scenaCasa(x[0], { conMascotte: false, mobili: [], label: x[1] })}<b>${x[1]}</b><small>${on ? "Qui adesso" : mia ? `La casa di ${esc(MN())}` : "Tocca per andarci"}</small></button>`
+        : `<div class="casa-scelta chiusa" role="group" aria-label="${x[1]}: si apre con ${x[3]} giorni attivi">${scenaCasa(x[0], { sagoma: true })}<span class="lucchetto" aria-hidden="true">🔒</span><b>${x[1]}</b><small>Ancora ${x[3] - tot} ${x[3] - tot === 1 ? "giorno attivo" : "giorni attivi"}</small></div>`;
+    }).join("")}</div>`;
+  const mobili = `<div class="sec"><h2>I mobili</h2><span class="count">${avuti.length}/${MOBILI.length}</span></div>
+    <div class="casa-mobili">${MOBILI.map(([id, nome, soglia]) => {
+      if (!avuti.includes(id)) return `<div class="pin-toggle mob-riga chiuso">${iconaMobile(id, true)}<span><b>${nome}</b><small>Tra ${soglia - b} ${soglia - b === 1 ? nomeCibo[0] : nomeCibo[1]}</small></span></div>`;
+      const on = !CUSTOM.casa.spenti.includes(id);
+      return `<button class="pin-toggle mob-riga ${on ? "on" : ""}" data-act="casa-mobile" data-v="${id}" aria-pressed="${on}">${iconaMobile(id)}<span><b>${nome}</b><small>${on ? "In casa" : "Messo via"}</small></span><span class="sw2"></span></button>`;
+    }).join("")}</div>
+    <p class="hint casa-hint">I mobili arrivano in regalo spuntando le cose fatte. Le casette nuove si aprono con i giorni attivi della serie.</p>`;
+  return `<div class="sec" style="margin-top:0"><h2><span class="emo">🏡 </span>La casetta di ${esc(MN())}</h2></div>
+    <div class="split casa"><div class="col-main">${scena}${scelte}</div><div class="col-side">${mobili}</div></div>`;
+}
+// Sblocchi: si calcolano dai numeri e si salvano per sempre; una festa per ogni cosa nuova (una volta sola)
+let sblocchiInCorso = false;
+async function aggiornaSblocchi() {
+  if (!mod("casa") || sblocchiInCorso) return;
+  const tot = serie().totali, b = bocconciniTot(), h = CUSTOM.casa;
+  const nuoveC = CASETTE.filter((c) => c[3] > 0 && tot >= c[3] && !h.casette.includes(c[0])).map((c) => c[0]);
+  const nuoviM = MOBILI.filter((m) => b >= m[2] && !h.mobili.includes(m[0])).map((m) => m[0]);
+  if (!nuoveC.length && !nuoviM.length) return;
+  sblocchiInCorso = true;
+  try { await saveCustom({ casa: { ...h, casette: [...h.casette, ...nuoveC], mobili: [...h.mobili, ...nuoviM] } }); } finally { sblocchiInCorso = false; }
+  if (nuoviM.length) {
+    const nomi = nuoviM.map((m) => MOBILI.find((x) => x[0] === m)[1].toLowerCase());
+    setTimeout(() => { toast(nuoviM.length === 1 ? `🎁 Un regalo per la casetta: ${nomi[0]}` : `🎁 ${nuoviM.length} mobili nuovi per la casetta`); confetti(innerWidth / 2, innerHeight * .4, 16); }, 900);
+  }
+  if (nuoveC.length) setTimeout(() => whenSheetFree(() => {
+    const x = casaDi(nuoveC[nuoveC.length - 1]);
+    openSheet(`<div class="recap casa-festa"><div class="casa-scena mini">${scenaCasa(x[0], { label: x[1] })}</div>
+      <h2 class="fred">${nuoveC.length === 1 ? `Nuova casetta: ${x[1]}!` : `${nuoveC.length} casette nuove!`}</h2>
+      <div class="say">${nuoveC.length === 1 ? `Con ${x[3]} giorni attivi si è aperta una casetta nuova.` : `Si sono aperte: ${nuoveC.map((k) => casaDi(k)[1]).join(", ")}.`} ${esc(MN())} non vede l'ora di andarci.</div></div>
+      <div class="actions"><button class="btn" data-act="close">Più tardi</button><button class="btn primary" data-act="casa-vai" data-v="${x[0]}">Andiamo!</button></div>`);
+    confetti(innerWidth / 2, innerHeight * .35, 40); suona("notifica"); cheer(2000);
+  }), 1600);
+}
+// tocco lungo sulla mascotte in alto: si va alla casetta
+(function toccoLungo() {
+  let t = 0, lungo = 0;
+  document.addEventListener("pointerdown", (e) => { if (!e.target.closest("#topMascot") || !mod("casa")) return; clearTimeout(t); t = setTimeout(() => { lungo = Date.now(); openCasa(); }, 550); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => document.addEventListener(ev, () => clearTimeout(t)));
+  document.addEventListener("click", (e) => { if (Date.now() - lungo < 600 && e.target.closest("#topMascot")) { e.stopPropagation(); e.preventDefault(); } }, true);
+  document.addEventListener("contextmenu", (e) => { if (e.target.closest("#topMascot")) e.preventDefault(); });
+})();
+
+/* =========================================================
+   SERIE DI GIORNI
+   Un giorno è "attivo" se hai spuntato almeno una cosa da fare o un appuntamento (giorno del dispositivo).
+   Regola del riposo: in ogni settimana (da lunedì a domenica) un giorno saltato non spezza la serie, il secondo sì.
+   Oggi non ancora attivo non spezza niente: c'è tempo fino a mezzanotte.
+   I giorni si salvano a parte (tabella giorni_attivi, o il dispositivo in modalità prova):
+   eliminare o togliere la spunta a una voce non cancella i giorni già fatti.
+   ========================================================= */
+const TRAGUARDI_SERIE = [3, 7, 14, 30, 50, 100, 200, 365];
+const domani = () => ymd(addDays(new Date(), 1));
+const giornoValido = (g) => validYmd(g) && g >= "2000-01-01" && g <= domani();
+const chiaveGiorni = (k) => `mochi.${k}.${store.user?.id || "local"}`;
+// Giorni attivi che si ricavano dalle voci spuntate da me (anche nelle liste condivise: conta chi ha spuntato)
+const giorniDaVoci = () => bocconcini().map((i) => ymd(new Date(i.done_at))).filter(giornoValido);
+function giorniCache() {
+  const c = ONLINE_MODE ? LS.get(chiaveGiorni("giorniCache"), []) : LS.get("mochi.giorniAttivi", []);
+  return (Array.isArray(c) ? c : []).map(str).filter(giornoValido);
+}
+const GiorniStore = {
+  // tutti i giorni salvati (a pagine da 1000: il server non ne manda di più in una volta)
+  async carica() {
+    if (!ONLINE_MODE) return giorniCache();
+    const out = [];
+    for (let da = 0; da < 12000; da += 1000) {
+      const { data, error } = await store.sb.from("giorni_attivi").select("giorno").order("giorno").range(da, da + 999);
+      if (error) throw error;
+      (data || []).forEach((r) => out.push(str(r.giorno).slice(0, 10)));
+      if (!data || data.length < 1000) break;
+    }
+    return out.filter(giornoValido);
+  },
+  // aggiunge i giorni (quelli che ci sono già restano come sono)
+  async aggiungi(giorni) {
+    if (!ONLINE_MODE) return;
+    for (let i = 0; i < giorni.length; i += 500) {
+      const righe = giorni.slice(i, i + 500).map((giorno) => ({ user_id: store.user.id, giorno }));
+      const { error } = await store.sb.from("giorni_attivi").upsert(righe, { onConflict: "user_id,giorno", ignoreDuplicates: true });
+      if (error) throw error;
+    }
+  }
+};
+function salvaGiorniLocali() {
+  const tutti = [...state.giorni].sort();
+  if (ONLINE_MODE) LS.set(chiaveGiorni("giorniCache"), tutti); else LS.set("mochi.giorniAttivi", tutti);
+}
+// Manda al server i giorni che non ha ancora; se non ci riesce (offline) li tiene da parte e riprova al prossimo caricamento
+let invioGiorni = Promise.resolve();
+const erroreDiRete = (e) => !!e?.network || /fetch|network|Failed|Load failed|timeout/i.test(String(e?.message || e || ""));
+function inviaGiorni(giorni) {
+  if (!ONLINE_MODE || !store.user) return invioGiorni;
+  invioGiorni = invioGiorni.then(async () => {
+    const k = chiaveGiorni("giorniDaInviare");
+    const tutti = [...new Set([...LS.get(k, []), ...giorni].map(str).filter(giornoValido))].sort();
+    if (!tutti.length) return;
+    try { await GiorniStore.aggiungi(tutti); LS.set(k, []); }
+    catch (e) {
+      // senza rete: si tiene tutto e si riprova più tardi
+      if (erroreDiRete(e)) { LS.set(k, tutti.slice(-2000)); return; }
+      // il server ha rifiutato il lotto (es. un giorno "nel futuro" per l'orologio sbagliato):
+      // si riprova un giorno alla volta, così i giorni buoni arrivano e quelli rifiutati si scartano
+      const resta = [];
+      for (const g of tutti) {
+        try { await GiorniStore.aggiungi([g]); }
+        catch (e2) { if (erroreDiRete(e2)) resta.push(g); else console.warn("Giorno attivo rifiutato dal server, scartato:", g, e2?.message || e2); }
+      }
+      LS.set(k, resta.slice(-2000));
+    }
+  });
+  return invioGiorni;
+}
+/* All'avvio: giorni conosciuti (cache) + giorni ricavati dalle voci già spuntate (recupero una tantum, si può rifare
+   senza danni) + quelli rimasti da inviare; poi quelli del server. Restituisce true se è cambiato qualcosa. */
+async function caricaGiorni() {
+  const prima = state.giorni;
+  const daInviare = ONLINE_MODE ? LS.get(chiaveGiorni("giorniDaInviare"), []) : [];
+  const conosciuti = new Set([...giorniCache(), ...(Array.isArray(daInviare) ? daInviare : []).map(str), ...(mod("serie") ? giorniDaVoci() : [])].filter(giornoValido));
+  state.giorni = conosciuti;
+  if (!ONLINE_MODE) { salvaGiorniLocali(); return !stessiGiorni(prima, state.giorni); }
+  if (!store.user) return false;
+  let server;
+  try { server = new Set(await GiorniStore.carica()); } catch { salvaGiorniLocali(); return !stessiGiorni(prima, state.giorni); }
+  const mancanti = [...conosciuti].filter((g) => !server.has(g));
+  state.giorni = new Set([...server, ...conosciuti]);
+  salvaGiorniLocali();
+  if (mancanti.length && mod("serie")) await inviaGiorni(mancanti);
+  return !stessiGiorni(prima, state.giorni);
+}
+const stessiGiorni = (a, b) => a.size === b.size && [...a].every((g) => b.has(g));
+// Oggi hai spuntato qualcosa: il giorno diventa attivo (una volta sola) e magari arriva un traguardo
+function giornoFatto() {
+  if (!mod("serie")) return;
+  const g = todayStr(); if (state.giorni.has(g)) return;
+  const prima = serie().attuale;
+  state.giorni = new Set([...state.giorni, g]); salvaGiorniLocali(); inviaGiorni([g]);
+  festaSerie(prima);
+}
+// Numeri di giorno senza ore: niente sorprese con l'ora legale o i fusi
+const numGiorno = (g) => Date.UTC(+g.slice(0, 4), +g.slice(5, 7) - 1, +g.slice(8, 10)) / 864e5;
+const daNumGiorno = (n) => new Date(n * 864e5).toISOString().slice(0, 10);
+const settimanaDi = (n) => Math.floor((n + 3) / 7);
+const fineSettimana = (n) => ((n + 3) % 7 + 7) % 7 >= 5; // sabato e domenica (0 = lunedì) // le settimane iniziano di lunedì (il giorno 0 era un giovedì)
+/* Calcolo della serie (funzione pura, riusabile: servirà anche per le casette).
+   Restituisce: attuale, record, totali (giorni attivi di sempre), riposiSettimana (0 o 1), settimana (7 pallini lun-dom),
+   maxPerMese ({ "2026-11": serie più lunga raggiunta in quel mese }) */
+function calcolaSerie(giorni, oggi = todayStr()) {
+  const nOggi = numGiorno(oggi), set = new Set();
+  for (const g of giorni) if (validYmd(g)) { const n = numGiorno(g); if (Number.isFinite(n) && n <= nOggi) set.add(n); }
+  const nums = [...set].sort((a, b) => a - b), sOggi = settimanaDi(nOggi), lun = sOggi * 7 - 3;
+  const r = { attuale: 0, record: 0, totali: nums.length, riposiSettimana: 0, settimana: [], maxPerMese: {} };
+  const riposi = {}, stati = {};
+  let run = 0;
+  if (nums.length) for (let n = nums[0]; n <= nOggi; n++) {
+    const w = settimanaDi(n); let st;
+    if (set.has(n)) { run++; st = "fatto"; }                                 // anche sabato e domenica, se attivi, contano
+    else if (fineSettimana(n)) st = "weekend";                               // sabato e domenica vuoti: neutri, non rompono e non usano il riposo
+    else if (n === nOggi) st = "oggi";                                      // c'è tempo fino a mezzanotte
+    else if (run > 0 && !riposi[w]) { riposi[w] = 1; st = "riposo"; }       // il giorno di riposo della settimana (solo lun-ven)
+    else { run = 0; st = "saltato"; }
+    if (run > r.record) r.record = run;
+    const mk = daNumGiorno(n).slice(0, 7); if (!(r.maxPerMese[mk] >= run)) r.maxPerMese[mk] = run;
+    if (n >= lun) stati[n] = st;
+  }
+  r.attuale = run; r.riposiSettimana = riposi[sOggi] || 0;
+  for (let i = 0; i < 7; i++) { const n = lun + i; r.settimana.push({ g: daNumGiorno(n), stato: stati[n] || (fineSettimana(n) ? "weekend" : n > nOggi ? "futuro" : n === nOggi ? "oggi" : "saltato"), oggi: n === nOggi }); }
+  return r;
+}
+// La serie di adesso (ricalcolata solo quando cambiano i giorni o la data)
+let serieMemo = { set: null, n: -1, oggi: "", r: null };
+function serie() {
+  const oggi = todayStr();
+  if (serieMemo.set !== state.giorni || serieMemo.n !== state.giorni.size || serieMemo.oggi !== oggi) serieMemo = { set: state.giorni, n: state.giorni.size, oggi, r: calcolaSerie(state.giorni, oggi) };
+  return serieMemo.r;
+}
+const LETTERE_SETT = ["L", "M", "M", "G", "V", "S", "D"];
+const NOMI_STATO = { fatto: "fatto", riposo: "giorno di riposo", oggi: "oggi, ancora da fare", saltato: "saltato", futuro: "deve ancora arrivare", weekend: "fine settimana libero" };
+const lunaSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.6a5.6 5.6 0 1 0 2.8 9.7A6.3 6.3 0 0 1 10.6 2.6z"/></svg>`;
+function pallini(s, grande = false) {
+  return `<span class="serie-sett ${grande ? "grande" : ""}">${s.settimana.map((d, i) => `<span class="sd-g ${d.oggi ? "oggi" : ""}"${grande ? ` aria-label="${GIORNI[(i + 1) % 7]}: ${NOMI_STATO[d.stato]}"` : ""}><i class="sd ${d.stato}${d.oggi ? " oggi" : ""}">${d.stato === "fatto" ? "✓" : d.stato === "riposo" ? lunaSvg : ""}</i><small>${LETTERE_SETT[i]}</small></span>`).join("")}</span>`;
+}
+function serieTesti(s) {
+  const oggiFatto = state.giorni.has(todayStr());
+  if (s.attuale > 0) return {
+    n: s.attuale, titolo: s.attuale === 1 ? "giorno di fila" : "giorni di fila",
+    sotto: !oggiFatto ? `Spunta una cosa oggi e arrivi a ${s.attuale + 1}` : s.record > s.attuale ? `Il tuo record: ${s.record} giorni` : s.attuale >= 2 ? "È il tuo record!" : "Si comincia! Domani si continua"
+  };
+  if (s.record > 0) return { n: 0, titolo: "Si ricomincia da 1", sotto: `Il record resta tuo: ${s.record} ${s.record === 1 ? "giorno" : "giorni"}` };
+  return { n: 0, titolo: "Inizia la tua serie", sotto: "Spunta una cosa fatta: è il primo giorno" };
+}
+// Adesivo in Oggi: numero, record e pallini della settimana; si tocca per i dettagli
+function serieCard() {
+  const s = serie(), t = serieTesti(s);
+  return `<button class="serie-card" data-act="serie-apri" aria-label="Serie di giorni: ${t.n} ${t.titolo}. ${t.sotto}. Tocca per i dettagli">
+    <span class="serie-top"><span class="serie-n" aria-hidden="true">${t.n}</span>
+      <span class="serie-txt" aria-hidden="true"><b>${t.titolo}</b><small>${t.sotto}</small></span><span class="serie-freccia" aria-hidden="true">›</span></span>
+    <span aria-hidden="true">${pallini(s)}</span></button>`;
+}
+function apriSerie() {
+  const s = serie(), t = serieTesti(s);
+  openSheet(`<h2><span class="mbox">${mascot(s.attuale ? "happy" : "")}</span>La tua serie</h2>
+    <div class="serie-numeri">
+      <div><b>${s.attuale}</b><span>${s.attuale === 1 ? "giorno di fila" : "giorni di fila"}</span></div>
+      <div><b>${s.record}</b><span>il tuo record</span></div>
+      <div><b>${s.totali}</b><span>${s.totali === 1 ? "giorno attivo" : "giorni attivi"} in tutto</span></div>
+    </div>
+    <p class="serie-frase">${esc(t.sotto)}</p>
+    <div class="sec"><h2>Questa settimana</h2></div>
+    ${pallini(s, true)}
+    <div class="serie-legenda"><span><i class="sd fatto">✓</i>Fatto</span><span><i class="sd riposo">${lunaSvg}</i>Riposo</span><span><i class="sd oggi"></i>Oggi</span><span><i class="sd weekend"></i>Weekend libero</span></div>
+    <p class="serie-riposo">${s.riposiSettimana ? "Il giorno di riposo di questa settimana l'hai già usato: se salti un altro giorno dal lunedì al venerdì, si ricomincia da 1." : "Il giorno di riposo di questa settimana è ancora libero."}</p>
+    <div class="sec"><h2>Come funziona</h2></div>
+    <p class="serie-spiega">Un giorno conta quando spunti almeno una cosa da fare o un appuntamento. <b>Il fine settimana non conta</b>: se ti riposi sabato e domenica la serie resta (e se fai qualcosa, vale come un giorno in più). E in settimana hai anche <b>un giorno di riposo</b>: se salti un giorno dal lunedì al venerdì, la serie non si spezza. Se ne salti due nella stessa settimana si ricomincia da 1, ma il record resta tuo. Togliere una spunta o eliminare una voce non cancella i giorni già fatti.</p>
+    <div class="sec"><h2>Traguardi</h2></div>
+    <div class="serie-trag">${TRAGUARDI_SERIE.map((n) => `<span class="${s.record >= n ? "on" : ""}">${n}</span>`).join("")}</div>
+    <div class="actions"><button class="btn primary" data-act="close">Ok</button></div>`);
+}
+// Festa ai traguardi (3, 7, 14...): una volta sola per traguardo su questo dispositivo
+function festaSerie(prima) {
+  if (!mod("serie")) return;
+  const s = serie(); if (s.attuale <= prima) return;
+  const t = TRAGUARDI_SERIE.find((n) => n === s.attuale); if (!t) return;
+  const k = "mochi.serie.feste." + (store.user?.id || "local"), viste = LS.get(k, []);
+  if (!Array.isArray(viste) || viste.includes(t)) return;
+  LS.set(k, [...viste, t]);
+  const frase = { 3: "Tre giorni di fila: sta nascendo un'abitudine.", 7: "Una settimana intera! Un passo alla volta, ogni giorno.", 14: "Due settimane di fila. Che costanza!", 30: "Un mese intero di giorni attivi. Fantastico!", 365: "Un anno intero. Non ci sono parole: solo coriandoli!" }[t] || `${t} giorni di fila: sei davvero costante.`;
+  setTimeout(() => whenSheetFree(() => {
+    openSheet(`<div class="recap"><div class="mbox">${mascot("happy")}</div>
+      <h2 class="fred">${t} giorni di fila!</h2>
+      <div class="say">${esc(frase)} ${esc(MN())} è fiera di te 💗</div></div>
+      <div class="actions"><button class="btn primary" data-act="close">Evviva!</button></div>`);
+    confetti(innerWidth / 2, innerHeight * 0.35, 40); suona("notifica"); cheer(2000);
+  }), 1400);
+}
+
+/* =========================================================
+   CONCENTRAZIONE
+   Un timer con l'app aperta: la mascotte lavora e accanto una piantina cresce in 5 stadi.
+   Il tempo si calcola dagli orari (non da un contatore): se l'app va in sottofondo e torna, il timer è giusto.
+   Lo schermo resta acceso dove si può (Screen Wake Lock). Le sessioni finite (la "serra") restano su questo dispositivo.
+   ========================================================= */
+const FOCUS_DURATE = [15, 25, 45], FOCUS_PAUSA = 5;
+const focusPrep = {
+  min: FOCUS_DURATE.includes(LS.get("mochi.focus.durata", 25)) ? LS.get("mochi.focus.durata", 25) : 25,
+  pausaDopo: LS.get("mochi.focus.pausaDopo", false) === true, voce: ""
+};
+let focusS = null, focusT = 0, wakeLock = null;
+// Sessione salvata: si controlla tutto (arriva dal dispositivo, ma meglio non fidarsi)
+function cleanFocus(o) {
+  if (!o || typeof o !== "object") return null;
+  const fase = o.fase === "pausa" ? "pausa" : o.fase === "lavoro" ? "lavoro" : null;
+  const stato = ["corre", "ferma", "finita"].includes(o.stato) ? o.stato : null;
+  const min = fase === "pausa" ? FOCUS_PAUSA : FOCUS_DURATE.includes(o.min) ? o.min : null;
+  if (!fase || !stato || !min || typeof o.id !== "string" || !RE_STID.test(o.id)) return null;
+  const ora = Date.now(), fineAt = Number(o.fineAt), resta = Number(o.resta);
+  if (!Number.isFinite(fineAt) || fineAt > ora + min * 60000 + 5000 || fineAt < ora - 2 * 864e5) return null;
+  return { id: o.id, fase, stato, min, fineAt, resta: Number.isFinite(resta) ? Math.min(Math.max(0, resta), min * 60000) : 0,
+    pausaDopo: o.pausaDopo === true, voce: typeof o.voce === "string" && RE_ID.test(o.voce) ? o.voce : "", fatta: o.fatta === true };
+}
+const salvaFocus = () => { if (focusS) LS.set("mochi.focus.sessione", focusS); else localStorage.removeItem("mochi.focus.sessione"); };
+const focusInCorso = () => !!focusS && focusS.fase === "lavoro" && focusS.stato !== "finita";
+const restaMs = () => (!focusS ? 0 : focusS.stato === "ferma" ? focusS.resta : focusS.stato === "finita" ? 0 : Math.max(0, focusS.fineAt - Date.now()));
+const fmtTempo = (ms) => { const s = Math.ceil(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+// 0 seme, 1 germoglio, 2 foglioline, 3 piantina, 4 bocciolo, 5 fiore (a sessione finita)
+const stadioPianta = () => !focusS ? 0 : focusS.fase === "pausa" || focusS.stato === "finita" ? 5 : Math.min(4, Math.floor((1 - restaMs() / (focusS.min * 60000)) * 5));
+// La serra: una piantina per ogni sessione finita { g: giorno, m: minuti, id }
+function serraCarica() {
+  const a = LS.get("mochi.focus.serra", []);
+  return (Array.isArray(a) ? a : []).filter((x) => x && validYmd(x.g) && FOCUS_DURATE.includes(x.m) && typeof x.id === "string" && RE_STID.test(x.id)).slice(-2000);
+}
+const serraDi = (g) => serraCarica().filter((x) => x.g === g);
+const fmtMinuti = (m) => (m < 60 ? `${m} ${m === 1 ? "minuto" : "minuti"}` : fmtOre(m));
+
+/* La piantina in vaso, disegnata a mano: contorno da cartone, vaso di terracotta, foglie che spuntano a ogni stadio */
+function piantaSvg(st, mini = false) {
+  const INK = "#4a2f3a", stelo = [0, 74, 62, 50, 40, 40][st];
+  const foglia = (x, y, verso, sc = 1, cls = "") => `<path class="${cls}" d="M${x} ${y} c ${verso * 6 * sc} ${-9 * sc}, ${verso * 17 * sc} ${-9 * sc}, ${verso * 20 * sc} ${-3 * sc} c ${-verso * 6 * sc} ${7 * sc}, ${-verso * 15 * sc} ${8 * sc}, ${-verso * 20 * sc} ${3 * sc} z" fill="#9ad88f" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/>`;
+  let su = "";
+  if (st === 0) su = `<ellipse class="cresce" cx="60" cy="85" rx="6.5" ry="4.5" fill="#c99560" stroke="${INK}" stroke-width="2.4"/>`;
+  else {
+    su = `<path d="M60 89 C 59 ${(89 + stelo) / 2}, 61 ${(89 + stelo) / 2}, 60 ${stelo}" stroke="#5aa86a" stroke-width="4.5" stroke-linecap="round" fill="none"/>`;
+    if (st >= 1) su += foglia(60, stelo + 3, -1, st === 1 ? .7 : 1, st === 1 ? "cresce" : "") + foglia(60, stelo + 3, 1, st === 1 ? .7 : 1, st === 1 ? "cresce" : "");
+    if (st >= 3) su += foglia(60, 74, -1, .9, st === 3 ? "cresce" : "") + foglia(60, 70, 1, .9, st === 3 ? "cresce" : "");
+    if (st === 4) su += `<g class="cresce"><ellipse cx="60" cy="33" rx="7" ry="10" style="fill:var(--pink)" stroke="${INK}" stroke-width="2.4"/><path d="M53 38 q7 6 14 0" fill="#9ad88f" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/></g>`;
+    if (st === 5) {
+      let petali = "";
+      for (let p = 0; p < 6; p++) { const a = (p / 6) * Math.PI * 2; petali += `<ellipse cx="${(60 + Math.cos(a) * 10).toFixed(1)}" cy="${(30 + Math.sin(a) * 10).toFixed(1)}" rx="8" ry="6.2" transform="rotate(${Math.round(a * 180 / Math.PI)} ${(60 + Math.cos(a) * 10).toFixed(1)} ${(30 + Math.sin(a) * 10).toFixed(1)})" style="fill:var(--pink)" stroke="${INK}" stroke-width="2.2"/>`; }
+      su += `<g class="${mini ? "" : "cresce"}">${petali}<circle cx="60" cy="30" r="6.5" fill="#ffd76a" stroke="${INK}" stroke-width="2.2"/></g>`;
+    }
+  }
+  return `<svg class="pianta${mini ? " mini" : ""}" viewBox="14 10 92 138" aria-hidden="true">
+    <g class="pianta-su">${su}</g>
+    <path d="M29 99 L91 99 L84 139 Q83 144 78 144 L42 144 Q37 144 36 139 Z" fill="#ee9b72" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="23" y="87" width="74" height="15" rx="5" fill="#f6b088" stroke="${INK}" stroke-width="3"/>
+    <ellipse cx="60" cy="88.5" rx="31" ry="3.6" fill="#7b5444"/>
+    <path d="M39 108 L37 128" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".45"/></svg>`;
+}
+const voceFocus = () => (focusS?.voce ? state.items.find((i) => i.id === focusS.voce) || null : null);
+// Pagina "Concentrazione"
+function viewFocus() {
+  const s = focusS, oggi = serraDi(todayStr());
+  const sett = (() => { const lun = addDays(new Date(), -((new Date().getDay() + 6) % 7)), da = ymd(lun); return serraCarica().filter((x) => x.g >= da && x.g <= todayStr()); })();
+  const serra = `<div class="sec"><h2>La serra</h2>${oggi.length ? `<span class="count">${oggi.length} oggi</span>` : ""}</div>
+    <div class="serra">${oggi.length ? `<div class="serra-vasi">${oggi.slice(0, 12).map(() => piantaSvg(5, true)).join("")}${oggi.length > 12 ? `<span class="serra-piu">+${oggi.length - 12}</span>` : ""}</div>` : `<p class="serra-vuota">Ogni sessione finita lascia qui una piantina fiorita.</p>`}
+      <p class="serra-sett">Questa settimana: <b>${sett.length}</b> ${sett.length === 1 ? "piantina" : "piantine"} · <b>${fmtMinuti(sett.reduce((a, x) => a + x.m, 0))}</b> di concentrazione</p></div>`;
+  const avviso = `<p class="focus-avviso">Tieni l'app aperta: se esci il timer continua, ma non ti posso avvisare quando finisce.</p>`;
+  let main;
+  if (!s) {
+    const aperte = state.items.filter((i) => i.kind === "todo" && !i.done).sort(byDue).slice(0, 60);
+    if (focusPrep.voce && !aperte.some((i) => i.id === focusPrep.voce)) focusPrep.voce = "";
+    main = `<div class="focus-scena pronta"><span class="mbox">${mascot()}</span>${piantaSvg(0)}</div>
+      <div class="field"><label id="fdLab">Quanto tempo?</label><div class="focus-durate" role="group" aria-labelledby="fdLab">${FOCUS_DURATE.map((m) => `<button class="${focusPrep.min === m ? "on" : ""}" data-act="focus-durata" data-v="${m}" aria-pressed="${focusPrep.min === m}"><b>${m}</b><small>minuti</small></button>`).join("")}</div></div>
+      <div class="field"><button class="pin-toggle ${focusPrep.pausaDopo ? "on" : ""}" data-act="focus-pausa-dopo" aria-pressed="${focusPrep.pausaDopo}"><span class="e">☕</span><span><b>Poi una pausa di ${FOCUS_PAUSA} minuti</b><small>Alla fine ti propongo di staccare un attimo</small></span><span class="sw2"></span></button></div>
+      <div class="field"><label id="fvLab">Su cosa ti concentri? <span class="facolt">(se vuoi)</span></label>
+        <select class="input" id="focusVoce" aria-labelledby="fvLab"><option value="">Niente in particolare</option>${aperte.map((i) => `<option value="${esc(i.id)}" ${focusPrep.voce === i.id ? "selected" : ""}>${esc(taglia(i.title, 70))}</option>`).join("")}</select></div>
+      <button class="btn primary focus-via" data-act="focus-inizia">Inizia ${focusPrep.min} minuti</button>${avviso}`;
+  } else {
+    const v = voceFocus(), pausa = s.fase === "pausa", fine = s.stato === "finita";
+    const titolo = fine ? (pausa ? "La pausa è finita" : `Fatto! ${s.min} minuti di concentrazione`) : pausa ? `Pausa di ${FOCUS_PAUSA} minuti` : s.stato === "ferma" ? "In pausa" : `${s.min} minuti di concentrazione`;
+    const sotto = fine ? (pausa ? "Quando vuoi, si ricomincia." : `La piantina è fiorita ed è andata nella serra.${s.pausaDopo && !pausa ? ` Ora ${FOCUS_PAUSA} minuti di pausa?` : ""}`)
+      : pausa ? "Alzati, sgranchisciti, bevi un sorso d'acqua." : v ? `Su: <b>${esc(v.title)}</b>` : `${esc(MN())} lavora con te in silenzio.`;
+    const pct = Math.round((1 - restaMs() / (s.min * 60000)) * 100);
+    const azioni = fine
+      ? `<button class="btn" data-act="focus-basta">Basta così</button>${!pausa && s.pausaDopo ? `<button class="btn primary" data-act="focus-pausa-breve">Fai una pausa</button>` : `<button class="btn primary" data-act="focus-inizia">Ricomincia</button>`}`
+      : pausa ? `<button class="btn primary" data-act="focus-basta">Salta la pausa</button>`
+      : `<button class="btn" data-act="focus-termina">Termina</button>${s.stato === "ferma" ? `<button class="btn primary" data-act="focus-riprendi">Riprendi</button>` : `<button class="btn primary" data-act="focus-ferma">Pausa</button>`}`;
+    main = `<div class="focus-scena ${fine ? "fine" : pausa ? "relax" : s.stato === "ferma" ? "ferma" : "lavora"}">
+        <span class="mbox">${mascot(fine ? "happy" : !pausa && s.stato === "corre" ? "lavora" : "")}</span><span id="focusPianta" data-s="${stadioPianta()}">${piantaSvg(stadioPianta())}</span></div>
+      <div class="focus-tempo-box"><h2 class="focus-titolo">${titolo}</h2>
+        ${fine ? "" : `<div class="focus-tempo" id="focusTempo" role="timer" aria-label="Tempo che resta">${fmtTempo(restaMs())}</div>
+        <span class="pc-bar focus-bar"><i id="focusBar" style="width:${pct}%"></i></span>`}
+        <p class="focus-sotto">${sotto}</p></div>
+      ${fine && !pausa && v ? (v.done ? `<p class="focus-voce fatta">✓ <b>${esc(v.title)}</b> è spuntata</p>` : `<div class="focus-voce"><span>Hai finito <b>${esc(v.title)}</b>?</span><button class="fbtn" data-act="focus-spunta">Sì, spuntala</button></div>`) : ""}
+      <div class="actions focus-azioni">${azioni}</div>${fine ? "" : avviso}`;
+  }
+  return `<div class="sec" style="margin-top:0"><h2><span class="emo">🪴 </span>Concentrazione</h2></div>
+    <div class="split focus"><div class="col-main">${main}</div><div class="col-side">${serra}</div></div>`;
+}
+document.addEventListener("change", (e) => { if (e.target.id === "focusVoce") focusPrep.voce = RE_ID.test(e.target.value) ? e.target.value : ""; });
+// Ogni secondo: aggiorna solo il tempo, la barra e (se serve) la piantina. La pagina non si ridisegna.
+function focusTick() {
+  if (!focusS) return;
+  if (focusS.stato === "corre" && Date.now() >= focusS.fineAt) { focusFinisce(); return; }
+  const t = $("#focusTempo"); if (t) t.textContent = fmtTempo(restaMs());
+  const b = $("#focusBar"); if (b) b.style.width = Math.round((1 - restaMs() / (focusS.min * 60000)) * 100) + "%";
+  const p = $("#focusPianta"), st = String(stadioPianta());
+  if (p && p.dataset.s !== st) { p.dataset.s = st; p.innerHTML = piantaSvg(+st); }
+}
+function focusOrologio() { clearInterval(focusT); focusT = focusS && focusS.stato === "corre" ? setInterval(focusTick, 1000) : 0; }
+// Schermo acceso durante la sessione (dove si può; altrimenti niente errori)
+async function schermoAcceso() {
+  try {
+    if (!navigator.wakeLock || document.visibilityState !== "visible" || (wakeLock && !wakeLock.released)) return;
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock?.addEventListener?.("release", () => { wakeLock = null; });
+  } catch { wakeLock = null; }
+}
+function schermoLibero() { try { wakeLock?.release?.(); } catch {} wakeLock = null; }
+function focusInizia(fase) {
+  const min = fase === "pausa" ? FOCUS_PAUSA : focusPrep.min;
+  const voce = fase === "pausa" ? focusS?.voce || "" : focusPrep.voce;
+  focusS = { id: nuovoStId(), fase, stato: "corre", min, fineAt: Date.now() + min * 60000, resta: 0, pausaDopo: focusPrep.pausaDopo, voce: RE_ID.test(voce) ? voce : "", fatta: false };
+  salvaFocus(); state.tab = "focus"; render(); window.scrollTo({ top: 0 }); focusOrologio(); schermoAcceso();
+}
+function focusFerma() { if (!focusS || focusS.stato !== "corre") return; focusS.resta = restaMs(); focusS.stato = "ferma"; salvaFocus(); focusOrologio(); schermoLibero(); render(); }
+function focusRiprendi() { if (!focusS || focusS.stato !== "ferma") return; focusS.fineAt = Date.now() + focusS.resta; focusS.stato = "corre"; salvaFocus(); render(); focusOrologio(); schermoAcceso(); }
+async function focusTermina() {
+  if (!focusInCorso()) { focusChiudi(); render(); return; }
+  const ok = await ask({ title: "Terminare adesso?", text: "La piantina non è ancora fiorita: questa sessione non andrà nella serra.", ok: "Termina" });
+  if (ok && focusS) { focusChiudi(); render(); }
+}
+// Fine sessione: piantina nella serra (una volta sola), suono, mascotte felice
+function focusFinisce() {
+  if (!focusS || focusS.stato === "finita") return;
+  const s = focusS; s.stato = "finita"; s.resta = 0;
+  if (s.fase === "lavoro") {
+    const serra = serraCarica();
+    if (!serra.some((x) => x.id === s.id)) LS.set("mochi.focus.serra", [...serra, { g: todayStr(), m: s.min, id: s.id }].slice(-2000));
+  }
+  salvaFocus(); focusOrologio(); schermoLibero();
+  if (state.tab === "focus") {
+    render(); suona("notifica"); setTimeout(() => cheer(2400), 50);
+    if (s.fase === "lavoro" && document.visibilityState === "visible") confetti(innerWidth / 2, innerHeight * 0.35, 30);
+  }
+}
+// Chiude la sessione senza salvare niente (Termina, Basta così, uscita confermata, modulo spento)
+function focusChiudi() { focusS = null; salvaFocus(); focusOrologio(); schermoLibero(); }
+// All'avvio: una sessione lasciata a metà (app chiusa o ricaricata) riprende da dove era, con il tempo giusto
+function focusRiprendiDaSalvata() {
+  focusS = cleanFocus(LS.get("mochi.focus.sessione", null));
+  if (!focusS || !mod("focus")) { focusS = null; salvaFocus(); return; }
+  state.tab = "focus";
+  if (focusS.stato === "corre" && Date.now() >= focusS.fineAt) { setTimeout(focusFinisce, 300); return; }
+  focusOrologio(); schermoAcceso();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || !focusS) return;
+  focusTick(); // se nel frattempo è finita, mostra la fine
+  if (focusS?.stato === "corre") schermoAcceso(); // lo schermo acceso si perde quando l'app va in sottofondo
+});
+
+/* =========================================================
    STAGIONI
    Un velo leggero sullo sfondo, dietro alle schede: poche particelle su un canvas che non riceve tocchi.
    Si ferma quando la pagina è nascosta e se il telefono chiede meno animazioni.
@@ -2572,7 +3244,8 @@ function maybeAskPush() {
 
 function exportData() {
   const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), voci: state.items, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni },
-    spese: { budget_mensile_cent: state.spese.budget, voci: [...state.spese.voci].sort(ordineSpese) } }, null, 2)], { type: "application/json" });
+    spese: { budget_mensile_cent: state.spese.budget, voci: [...state.spese.voci].sort(ordineSpese) },
+    giorni_attivi: [...state.giorni].sort(), concentrazione: serraCarica() }, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `mochi-backup-${todayStr()}.json`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -2679,12 +3352,27 @@ function confetti(x, y, n = 18) {
 /* =========================================================
    EVENTI
    ========================================================= */
+// Spuntare (o togliere la spunta a) una cosa da fare: dall'elenco e dalla fine di una sessione di Concentrazione
+async function spuntaVoce(it, el) {
+  const prima = bocconcini().length;
+  it.done = !it.done; it.done_at = it.done ? new Date().toISOString() : null; it.updated_at = new Date().toISOString();
+  if (it.done) { const r = el.getBoundingClientRect(); confetti(r.left + 13, r.top + 13); suona("spunta"); if (navigator.vibrate) navigator.vibrate(15); feed(el, it); setTimeout(() => cheer(), 650); checkRegalo(prima); giornoFatto(); aggiornaSblocchi(); }
+  else applyCustom();
+  setTimeout(render, it.done ? 280 : 0);
+  await store.save(it);
+}
 document.addEventListener("click", async (e) => {
   const tab = e.target.closest("[data-tab]");
   if (tab) {
     let t = tab.dataset.tab;
     if (t === "menu" && state.tab === "menu") t = state.tabPrima && state.tabPrima !== "menu" ? state.tabPrima : "oggi"; // ☰ di nuovo: si richiude
-    else if (t === "menu") state.tabPrima = state.tab;
+    // si esce dalla Concentrazione mentre il timer corre: prima si chiede
+    if (state.tab === "focus" && t !== "focus" && focusInCorso()) {
+      const esci = await ask({ title: "Interrompere la concentrazione?", text: "Se esci adesso la sessione si ferma e la piantina non va nella serra.", ok: "Esci e interrompi" });
+      if (!esci) return;
+      focusChiudi();
+    }
+    if (t === "menu") state.tabPrima = state.tab;
     state.tab = t; render(); window.scrollTo({ top: 0, behavior: "smooth" }); return;
   }
   if (e.target.id === "scrim") { closeSheet(); return; }
@@ -2697,12 +3385,7 @@ document.addEventListener("click", async (e) => {
     case "toggle": {
       e.stopPropagation();
       const it = state.items.find((x) => x.id === id); if (!it) break;
-      const prima = bocconcini().length;
-      it.done = !it.done; it.done_at = it.done ? new Date().toISOString() : null; it.updated_at = new Date().toISOString();
-      if (it.done) { const r = el.getBoundingClientRect(); confetti(r.left + 13, r.top + 13); suona("spunta"); if (navigator.vibrate) navigator.vibrate(15); feed(el, it); setTimeout(() => cheer(), 650); checkRegalo(prima); }
-      else applyCustom();
-      setTimeout(render, it.done ? 280 : 0);
-      await store.save(it); break;
+      await spuntaVoce(it, el); break;
     }
     case "close": closeSheet(); break;
     // lista da spuntare: nell'elenco e sulla bacheca (senza aprire l'editor)
@@ -2727,12 +3410,35 @@ document.addEventListener("click", async (e) => {
     case "spesa-elimina": eliminaSpesa(); break;
     case "spese-mese": { const g = state.speseMese || new Date(); state.speseMese = new Date(g.getFullYear(), g.getMonth() + (+v), 1); render(); break; }
     case "spese-budget": chiediBudget(); break;
+    // serie di giorni
+    case "serie-apri": apriSerie(); break;
+    // casetta
+    case "open-casa": openCasa(); break;
+    case "casa-vai": if (casaDi(v) && casetteAperte().includes(v)) await saveCustom({ casa: { ...CUSTOM.casa, scelta: v } }); openCasa(); break;
+    case "casa-scegli": if (casaDi(v) && casetteAperte().includes(v)) { await saveCustom({ casa: { ...CUSTOM.casa, scelta: v } }); cheer(1200); } break;
+    case "casa-mobile": if (mobiliAvuti().includes(v)) { const sp = CUSTOM.casa.spenti; await saveCustom({ casa: { ...CUSTOM.casa, spenti: sp.includes(v) ? sp.filter((x) => x !== v) : [...sp, v] } }); } break;
+    case "casa-poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); break; }
+    // concentrazione
+    case "focus-durata": if (FOCUS_DURATE.includes(+v)) { focusPrep.min = +v; LS.set("mochi.focus.durata", +v); render(); } break;
+    case "focus-pausa-dopo": focusPrep.pausaDopo = !focusPrep.pausaDopo; LS.set("mochi.focus.pausaDopo", focusPrep.pausaDopo); render(); break;
+    case "focus-inizia": focusInizia("lavoro"); break;
+    case "focus-pausa-breve": focusInizia("pausa"); break;
+    case "focus-ferma": focusFerma(); break;
+    case "focus-riprendi": focusRiprendi(); break;
+    case "focus-termina": focusTermina(); break;
+    case "focus-basta": focusChiudi(); render(); break;
+    case "focus-spunta": {
+      const it = focusS && state.items.find((x) => x.id === focusS.voce);
+      if (it && !it.done) { await spuntaVoce(it, el); toast("Spuntata! 🌸"); }
+      break;
+    }
     // impostazioni: moduli, stagioni, suoni
     case "modulo": {
       const m = MODULI.find((x) => x[0] === v); if (!m) break;
       const acceso = !mod(v);
       // I ricorrenti li manda il server: spegnendo il modulo vanno messi in pausa, altrimenti continuerebbero ad arrivare
       if (v === "ricorrenti" && ONLINE_MODE) { const r = await moduloRicorrenti(acceso); if (r === "annulla") { riapriImpostazioni(); break; } if (r === "errore") break; }
+      if (v === "focus" && !acceso) focusChiudi();
       await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: acceso } });
       riapriImpostazioni();
       if (v === "ricorrenti" && acceso && ricorrenti.some((x) => !x.attiva)) toast("I tuoi promemoria ricorrenti sono in pausa: riattivali dalla pagina Ricorrenti");
@@ -2863,7 +3569,8 @@ document.addEventListener("click", async (e) => {
     case "export": exportData(); break;
     case "logout": {
       const yes = await ask({ title: "Vuoi uscire?", text: "Su questo dispositivo dovrai rientrare con email e password.", ok: "Esci" });
-      if (yes) { await store.logout(); clearLocal(); location.reload(); }
+      // prima di uscire: i giorni attivi ancora da inviare si provano a mandare (se non partono, restano per quell'utente)
+      if (yes) { try { await Promise.race([inviaGiorni([]), new Promise((r) => setTimeout(r, 4000))]); } catch {} await store.logout(); clearLocal(); location.reload(); }
       break;
     }
     case "set-name": {
@@ -2876,7 +3583,7 @@ document.addEventListener("click", async (e) => {
       const ok = await ask({ title: "Eliminare l'account?", text: "Verranno cancellati per sempre il tuo account e tutte le tue cose.\nPer confermare scrivi ELIMINA.", input: true, placeholder: "ELIMINA", maxlength: 10, ok: "Elimina per sempre", danger: true });
       if (ok === null) break;
       if (String(ok).trim() !== "ELIMINA") { toast("Eliminazione annullata"); break; }
-      try { exportData(); await store.deleteAccount(); clearLocal(); toast(`Account eliminato. Ti ho scaricato un backup. Ciao da ${MN()} 🍣`); setTimeout(() => location.reload(), 3000); }
+      try { exportData(); await store.deleteAccount(); clearLocal(); Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniDaInviare.")).forEach((k) => localStorage.removeItem(k)); toast(`Account eliminato. Ti ho scaricato un backup. Ciao da ${MN()} 🍣`); setTimeout(() => location.reload(), 3000); }
       catch (err) { toast("Errore: " + (err.message || err)); }
       break;
     }
@@ -2917,11 +3624,16 @@ async function loadAndRender() {
   await caricaTurni();
   await caricaSpese();
   state.items = await store.list();
+  // giorni attivi: subito quelli che si conoscono, poi (in sottofondo) quelli salvati sul server
+  const giorniPronti = caricaGiorni();
   render(); maybeAutoRecap(); checkListeSconosciute();
+  giorniPronti.then(() => aggiornaSblocchi());
+  if (await giorniPronti && !$("#sheet").classList.contains("on") && state.tab !== "focus") render();
 }
 async function boot() {
   leggiInvitoDaLink();
   applyCustom();
+  focusRiprendiDaSalvata();
   const th = LS.get("mochi.theme", "auto"); if (th !== "auto") document.documentElement.dataset.theme = th;
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
@@ -2940,7 +3652,7 @@ async function boot() {
 async function startOnline() {
   showApp();
   state.liste = LS.get("mochi.liste", []); if (!Array.isArray(state.liste)) state.liste = [];
-  state.items = normalizeAll(LS.get("mochi.cache", [])); render();
+  state.items = normalizeAll(LS.get("mochi.cache", [])); state.giorni = new Set(giorniCache()); render();
   await loadAndRender();
   maybeShowInstallHint();
   maybeShowNovita();
@@ -2963,7 +3675,14 @@ async function startOnline() {
 
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
 let loginMode = "login";
-function clearLocal() { ["mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache"].forEach((k) => localStorage.removeItem(k)); }
+function clearLocal() {
+  ["mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione"].forEach((k) => localStorage.removeItem(k));
+  // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
+  Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
+  // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
+  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; LS.set("mochi.custom", c); }
+  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA });
+}
 function setLoginMode(m) {
   loginMode = m;
   $("#login").classList.remove("hidden"); $("#app").classList.add("hidden"); $("#nav").classList.add("hidden");
@@ -3029,6 +3748,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
 });
 
 // aggiorna saluto e "rimaste indietro" ogni minuto
-setInterval(() => { if (!$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden")) render(); }, 60000);
+// (la pagina Concentrazione si aggiorna da sola ogni secondo: ridisegnarla farebbe ripartire le animazioni)
+setInterval(() => { if (!$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden") && state.tab !== "focus") render(); }, 60000);
 
 boot();
