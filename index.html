@@ -766,7 +766,7 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
   :root:not([data-stile="quaderno"]) .nav{ box-shadow:none; border-right:1.5px solid var(--line) }
 }
 /* barra in basso: bordo e spessore come le schede, niente alone colorato */
-:root:not([data-stile="quaderno"]) .nav .bar{ box-shadow:0 0 0 1.5px var(--line), 0 4px 0 var(--edge-c) }
+@media (max-width:1023px){ :root:not([data-stile="quaderno"]) .nav .bar{ box-shadow:0 0 0 1.5px var(--line), 0 4px 0 var(--edge-c) } }
 
 /* titoli delle sezioni sottolineati col pennarello */
 :root:not([data-stile="quaderno"]) .sec h2{ display:inline; background:linear-gradient(176deg, transparent 52%, color-mix(in srgb, var(--pink) 38%, transparent) 52%, color-mix(in srgb, var(--pink) 30%, transparent) 90%, transparent 90%); padding:0 5px; margin-left:-5px; border-radius:3px 8px 4px 9px }
@@ -782,9 +782,10 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root:not([data-stile="quaderno"]) .bubble.detto::before{ content:""; position:absolute; top:-8px; left:26px; width:14px; height:14px; background:var(--card); border-left:1.5px solid var(--line); border-top:1.5px solid var(--line); transform:rotate(45deg); border-radius:3px 0 0 0 }
 
 /* i numerini di oggi come adesivi, un po' storti */
-:root:not([data-stile="quaderno"]) .stat:nth-child(1){ transform:rotate(-2deg) }
+@media (max-width:1023px){ :root:not([data-stile="quaderno"]) .stat:nth-child(1){ transform:rotate(-2deg) }
 :root:not([data-stile="quaderno"]) .stat:nth-child(2){ transform:rotate(1.4deg) translateY(2px) }
-:root:not([data-stile="quaderno"]) .stat:nth-child(3){ transform:rotate(-1deg) }
+:root:not([data-stile="quaderno"]) .stat:nth-child(3){ transform:rotate(-1deg) } }
+@media (min-width:1024px){ :root:not([data-stile="quaderno"]) .stat:nth-child(1){ transform:rotate(-.8deg) } :root:not([data-stile="quaderno"]) .stat:nth-child(2){ transform:rotate(.5deg) } :root:not([data-stile="quaderno"]) .stat:nth-child(3){ transform:rotate(-.4deg) } }
 
 /* un pezzetto di nastro adesivo sulle schede principali, come in un diario */
 :root:not([data-stile="quaderno"]) :is(.umore-card,.pancino,.sp-tot,.ore-mese){ position:relative; overflow:visible }

@@ -33,7 +33,7 @@ jobs:
         # Elenco esplicito: tutto il resto (app nativa, Supabase, guide) non viene pubblicato
         run: |
           mkdir -p _site
-          cp -R index.html app.js frasi.js privacy.html privacy.js config.js mascotte.js sw.js manifest.webmanifest icons vendor _site/
+          cp -R index.html app.js frasi.js tema.css privacy.html privacy.js config.js mascotte.js sw.js manifest.webmanifest icons vendor _site/
           ls -R _site | head -50
 
       - name: Inserisce le chiavi
