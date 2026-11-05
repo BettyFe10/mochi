@@ -2045,7 +2045,7 @@ function viewTurni() {
   for (let k = 0; k < 42; k++) {
     const d = addDays(start, k), s = ymd(d); if (k >= 35 && d.getMonth() !== m.getMonth()) break;
     const t = d.getMonth() === m.getMonth() ? turnoDi(s) : null;
-    celle += `<button class="tday ${d.getMonth() !== m.getMonth() ? "out" : ""} ${s === todayStr() ? "today" : ""} ${t && t.k !== "" ? "on" : ""} ${t?.manuale ? "man" : ""}" ${t && t.colore ? `style="--tc:${TURNO_COLORI[t.colore - 1]}"` : ""} data-act="turno-giorno" data-v="${s}"><span class="dn">${d.getDate()}</span>${t ? `<span class="ts">${esc(t.sigla)}</span>` : ""}</button>`;
+    celle += `<button class="tday ${d.getMonth() !== m.getMonth() ? "out" : ""} ${s === todayStr() ? "today" : ""} ${t && t.k !== "" ? "on" : ""} ${t?.manuale ? "man" : ""}" ${t && t.colore ? `style="--tc:${TURNO_COLORI[t.colore - 1]}"` : ""} data-act="turno-giorno" data-v="${s}" aria-label="${d.getDate()} ${MESI[d.getMonth()]}${t ? `: ${esc(t.nome)}${t.inizio ? ` dalle ${t.inizio}` : ""}` : ""}"><span class="dn">${d.getDate()}</span>${t ? (t.k === "" ? `<span class="tn riposo" aria-hidden="true">💤</span>` : `<span class="tn"><span class="tn-c">${esc([...t.nome].slice(0, 5).join(""))}</span><span class="tn-l">${esc(t.nome)}</span></span>${t.inizio ? `<span class="th">${t.inizio}</span>` : ""}`) : ""}</button>`;
   }
   const o = oreMese(m), cicloTxt = imp.ciclo.length && imp.ciclo_inizio
     ? `${imp.ciclo.length} giorni, dal ${parseYmd(imp.ciclo_inizio).getDate()} ${MESI[parseYmd(imp.ciclo_inizio).getMonth()]} ${parseYmd(imp.ciclo_inizio).getFullYear()}`

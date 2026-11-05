@@ -486,11 +486,18 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
 .day .tday-s{position:relative;display:block;max-width:calc(100% - 4px);height:15px;padding:0 4px;border-radius:8px;background:var(--tc);color:#3b2530;font-size:10px;font-weight:800;line-height:15px;overflow:hidden;white-space:nowrap;letter-spacing:-.2px}
 .day.conturno .dots{bottom:3px}
 .day.sel .tday-s{box-shadow:0 0 0 1.5px #fff}
-.tday{aspect-ratio:1/1;margin:2px;min-width:0;padding:0;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:700;font-size:14px;line-height:1;color:inherit;background:var(--card);position:relative;border:2px solid transparent}
+.tday{min-height:64px;margin:2px;min-width:0;padding:4px 3px 5px;border-radius:12px;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:2px;font-weight:700;font-size:14px;line-height:1;color:inherit;background:var(--card);position:relative;border:2px solid transparent;overflow:hidden;text-align:center}
+/* come nei calendari dei turni: numero piccolo in alto, poi il nome del turno e l'ora di inizio */
+.tday .dn{font-size:12px;font-weight:800;opacity:.8;text-align:left;padding-left:2px}
+.tday .tn{display:block;font-size:11.5px;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;margin-top:auto}
+.tday .tn-l{display:none}
+@media (max-width:379px){ .tday{padding:4px 1px 5px} .tday .tn{font-size:10.5px;letter-spacing:-.3px} .tday .th{font-size:10.5px;letter-spacing:-.4px} }
+.tday .tn.riposo{font-size:14px;opacity:.55;margin-bottom:auto}
+.tday .th{display:block;font-size:11px;font-weight:700;opacity:.85;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+@media (min-width:600px){ .tday{min-height:76px;padding:6px 6px 8px} .tday .dn{font-size:13px} .tday .tn{font-size:12.5px;letter-spacing:-.2px;text-overflow:ellipsis} .tday .tn-c{display:none} .tday .tn-l{display:inline} .tday .th{font-size:12.5px} }
 .tday.on{background:var(--tc);color:#4a2f3a}
 .tday.out{opacity:.25}
 .tday.today{border-color:var(--pink-d)}
-.tday .ts{font-size:10.5px;font-weight:800;opacity:.85}
 .tday.man::after{content:"";position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:#4a2f3a;opacity:.55}
 .ore-mese{background:var(--card);box-shadow:var(--shadow);border-radius:var(--r-xl);padding:var(--s4) var(--s4) var(--s5);text-align:center}
 .ore-mese>b{display:block;font-size:30px;color:var(--acc-t);font-family:var(--font-titoli,inherit)}
