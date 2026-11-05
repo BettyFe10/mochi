@@ -123,6 +123,26 @@ const REMIND_VALUES = ["none", "auto", "0", "10", "30", "60", "1440", "morning"]
 const isIso = (s) => typeof s === "string" && !isNaN(Date.parse(s));
 const str = (v) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
 const validYmd = (s) => typeof s === "string" && RE_DATE.test(s) && !!realDate(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+// Taglia un testo senza spezzare le emoji (una emoja a metà fa rifiutare tutto il salvataggio dal database)
+const taglia = (v, n) => { const a = [...str(v)]; return a.length > n ? a.slice(0, n).join("") : str(v); };
+/* Lista da spuntare dentro una voce (sottotask): al massimo 50, testo fino a 120 caratteri.
+   Formato: [{ id, t: testo, f: fatto }] - lo stesso controllato dal database (sottotask_ok). */
+const MAX_ST = 50, RE_STID = /^[A-Za-z0-9-]{1,40}$/;
+const nuovoStId = (visti) => { let id; do id = Math.random().toString(36).slice(2, 10); while (!RE_STID.test(id) || visti?.has(id)); return id; };
+function cleanSottotask(a) {
+  if (!Array.isArray(a)) return [];
+  const out = [], visti = new Set();
+  for (const x of a) {
+    if (!x || typeof x !== "object") continue;
+    const t = taglia(str(x.t).replace(/\s+/g, " ").trim(), 120);
+    if (!t) continue;
+    let id = typeof x.id === "string" && RE_STID.test(x.id) ? x.id : null;
+    if (!id || visti.has(id)) id = nuovoStId(visti);
+    visti.add(id); out.push({ id, t, f: x.f === true });
+    if (out.length >= MAX_ST) break;
+  }
+  return out;
+}
 function normalize(raw) {
   if (!raw || typeof raw !== "object") return null;
   const id = typeof raw.id === "string" && RE_ID.test(raw.id) ? raw.id : null;
@@ -145,6 +165,7 @@ function normalize(raw) {
     pinned: raw.pinned === true,
     posizione: Number.isFinite(raw.posizione) && Math.abs(raw.posizione) < 1e15 ? raw.posizione : null,
     lista_id: typeof raw.lista_id === "string" && RE_ID.test(raw.lista_id) ? raw.lista_id : null,
+    sottotask: cleanSottotask(raw.sottotask),
     user_id: typeof raw.user_id === "string" && RE_ID.test(raw.user_id) ? raw.user_id : null,
     done_by: typeof raw.done_by === "string" && RE_ID.test(raw.done_by) ? raw.done_by : null,
     created_at: isIso(raw.created_at) ? raw.created_at : new Date().toISOString(),
@@ -190,9 +211,14 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile) { CUSTOM = cleanCustom({ nome_app: md.nome_app, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile }); LS.set("mochi.custom", CUSTOM); applyCustom(); }
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono) {
+      // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
+      CUSTOM = cleanCustom({ nome_app: md.nome_app, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
+        moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono });
+      LS.set("mochi.custom", CUSTOM); applyCustom();
+    }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -246,17 +272,25 @@ const SupaStore = {
       return clean;
     } catch (e) { setSync(false); return normalizeAll(cached); }
   },
+  // noSub: il database non ha ancora la colonna "sottotask" (aggiornamento 11 non lanciato): si salva senza, così il resto funziona
+  noSub: false,
   clean(it) {
     const { id, kind, title, body, area, due_date, due_time, remind, remind_at, reminded, done, done_at, color, pinned, created_at, updated_at, lista_id, posizione } = it;
-    return { id, kind, title, body, area, due_date, due_time, remind, remind_at, reminded, done, done_at, color, pinned, created_at, updated_at, lista_id: lista_id || null, posizione: Number.isFinite(posizione) ? posizione : null };
+    const row = { id, kind, title, body, area, due_date, due_time, remind, remind_at, reminded, done, done_at, color, pinned, created_at, updated_at, lista_id: lista_id || null, posizione: Number.isFinite(posizione) ? posizione : null };
+    if (!this.noSub) { const st = cleanSottotask(it.sottotask); row.sottotask = st.length ? st : null; }
+    return row;
   },
+  // solo l'errore "colonna mancante" (non le altre, es. il controllo items_sottotask_ok che rifiuta un dato sbagliato)
+  manca(error) { const m = String(error?.message || ""); if (!this.noSub && /sottotask/i.test(m) && /schema cache|column .*does not exist|could not find/i.test(m)) { this.noSub = true; return true; } return false; },
   queue(op) { const q = LS.get("mochi.outbox", []); q.push(op); LS.set("mochi.outbox", q); },
   async flush() {
     const q = LS.get("mochi.outbox", []); if (!q.length) return;
     const rest = [];
     for (const op of q) {
       try {
-        const r = op.t === "save" ? await this.sb.from("items").upsert(op.it) : await this.sb.from("items").delete().eq("id", op.id);
+        if (op.t === "save" && this.noSub) delete op.it.sottotask;
+        let r = op.t === "save" ? await this.sb.from("items").upsert(op.it) : await this.sb.from("items").delete().eq("id", op.id);
+        if (r.error && op.t === "save" && this.manca(r.error)) { delete op.it.sottotask; r = await this.sb.from("items").upsert(op.it); }
         if (r.error) throw r.error;
       } catch { rest.push(op); }
     }
@@ -267,6 +301,7 @@ const SupaStore = {
     LS.set("mochi.cache", state.items);
     const { error } = await this.sb.from("items").upsert(row).then((r) => r, (e) => ({ error: { network: true, message: String(e) } }));
     if (!error) { setSync(true); return; }
+    if (this.manca(error)) return this.save(it);
     // errore di rete: riprova più tardi. Errore del server (limite, dato non valido): non insistere
     if (error.network || /fetch|network|Failed/i.test(error.message || "")) { this.queue({ t: "save", it: row }); setSync(false); }
     else {
@@ -351,7 +386,24 @@ const STILI = [
   ["morbido", "Morbido", "Tondo e soffice, con sfumature e ombre leggere"],
   ["quaderno", "Quaderno", "Carta puntinata, titoli a mano, etichette di carta"]
 ];
-const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido" };
+/* Cosa vuoi usare: ogni parte dell'app si può spegnere (Impostazioni). Spegnere nasconde, non cancella i dati.
+   [id, emoji, nome, descrizione, acceso all'inizio, solo con account] */
+const MODULI = [
+  ["turni", "💼", "Turni di lavoro", "Calendario dei turni e ore del mese", true],
+  ["spese", "👛", "Spese", "Quanto spendi ogni mese, con il budget", true],
+  ["umore", "🌷", "Com'è andata la giornata", "Faccine nel calendario e giardino del mese", true],
+  ["ricorrenti", "🔁", "Promemoria ricorrenti", "Bevi acqua, fai una pausa...", true, true],
+  ["liste", "👭", "Liste condivise", "Liste da usare insieme ad altre persone", true, true],
+  ["biscotto", "🥠", "Biscotto della fortuna", "Una frase da aprire ogni mattina", true],
+  ["pancino", "🍣", "Il pancino", "La mascotte mangia le cose che fai e riceve regali", true],
+  ["stagioni", "❄️", "Stagioni", "Neve, pioggia, sole o foglie sullo sfondo", false]
+];
+// Effetto delle stagioni: "auto" segue il calendario, gli altri sono fissi
+const STAGIONI = [["auto", "🗓️", "Segue la stagione"], ["neve", "❄️", "Neve"], ["pioggia", "🌧️", "Pioggia"], ["sole", "☀️", "Sole"], ["foglie", "🍂", "Foglie"], ["petali", "🌸", "Petali"]];
+// Suoni dentro l'app (creati dal codice, nessun file): notifiche con l'app aperta, cose fatte, biscotto
+const SUONI = [["campanella", "🔔", "Campana"], ["bolla", "🫧", "Bolla"], ["xilofono", "🎵", "Xilofono"], ["gocce", "💧", "Gocce"], ["spenti", "🔕", "Spenti"]];
+const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella" };
 function cleanCustom(c) {
   c = c && typeof c === "object" ? c : {};
   const nome = typeof c.nome_app === "string" ? c.nome_app.replace(/[<>]/g, "").trim().slice(0, 24) : "";
@@ -359,9 +411,16 @@ function cleanCustom(c) {
   const colore = typeof c.colore === "string" && PALETTE.some((x) => x[0] === c.colore) ? c.colore : "fragola";
   const font = typeof c.font === "string" && FONTI.some((x) => x[0] === c.font) ? c.font : "morbido";
   const stile = typeof c.stile === "string" && STILI.some((x) => x[0] === c.stile) ? c.stile : "morbido";
-  return { colore, font, stile, nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  // solo i moduli conosciuti, solo vero/falso; quelli mancanti prendono il valore iniziale
+  const m = c.moduli && typeof c.moduli === "object" && !Array.isArray(c.moduli) ? c.moduli : {};
+  const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
+  const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
+  const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
+  return { colore, font, stile, moduli, stagione, suono, nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
+// Il modulo è acceso? (quelli che richiedono un account sono spenti in modalità prova)
+const mod = (k) => CUSTOM.moduli[k] !== false && !(MODULI.find((m) => m[0] === k)?.[5] && !ONLINE_MODE);
 const MN = () => MASC.list[CUSTOM.mascotte].nome;
 const mascot = (cls = "") => withAcc(MASC.svg(CUSTOM.mascotte, { cls }), CUSTOM.mascotte);
 
@@ -387,6 +446,7 @@ function applyCustom() {
   setLink("apple-touch-icon", `icons/icon-${CUSTOM.mascotte}-180.png`);
   setLink("icon", `icons/${CUSTOM.mascotte}.svg`);
   syncBarColor();
+  stagioniAggiorna();
   for (const id of ["topMascot", "loginMascot"]) {
     const el = document.getElementById(id);
     const key = CUSTOM.mascotte + "|" + (accWorn()?.id || "");
@@ -484,7 +544,7 @@ function openPancino() {
 }
 // Il bocconcino vola dalla spunta alla mascotte in alto
 function feed(fromEl, it) {
-  const m = $("#topMascot"); if (!m) return;
+  const m = $("#topMascot"); if (!m || !mod("pancino")) return;
   const a = fromEl.getBoundingClientRect(), b = m.getBoundingClientRect();
   if (b.bottom < 0 || b.top > innerHeight || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const f = document.createElement("span");
@@ -499,6 +559,7 @@ function feed(fromEl, it) {
 }
 // Nuovo regalo sbloccato: festa una volta sola
 function checkRegalo(prima) {
+  if (!mod("pancino")) return;
   const dopo = bocconcini().length;
   const t = TRAGUARDI.find((x) => prima < x.n && dopo >= x.n); if (!t) return;
   const k = "mochi.regali." + (store.user?.id || "local");
@@ -534,7 +595,8 @@ function openMascotPicker() {
 const state = {
   items: [], liste: [], umori: {}, turni: {}, turniImp: { tipi: [], ciclo: [], ciclo_inizio: null }, tab: "oggi", todoFilter: "tutte", noteFilter: "tutte",
   calMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  calSel: todayStr(), recapMonth: null, synced: true
+  calSel: todayStr(), recapMonth: null, synced: true,
+  spese: { voci: [], budget: null }, speseMese: null, stAperti: new Set()
 };
 
 function setSync(ok) { state.synced = ok; const el = $("#syncDot"); if (el) el.className = "sync" + (ok ? "" : " off"); }
@@ -576,11 +638,15 @@ function itemRow(it) {
   if (lst && it.done && it.done_by && it.done_by !== myId()) chips.push(`<span class="chip">✓ ${esc(nomeMembro(lst, it.done_by))}</span>`);
   if (it.remind_at && !it.reminded) chips.push(`<span class="chip">🔔</span>`);
   if (it.body) chips.push(`<span class="chip">📝</span>`);
+  // lista da spuntare: "3/7" si apre e si spunta senza aprire l'editor
+  const st = it.sottotask || [], aperto = st.length && state.stAperti.has(it.id);
+  if (st.length) chips.push(`<button class="chip st-chip ${aperto ? "on" : ""} ${st.every((x) => x.f) ? "tutte" : ""}" data-act="st-apri" data-id="${esc(it.id)}" aria-expanded="${aperto ? "true" : "false"}" aria-label="Lista da spuntare: ${st.filter((x) => x.f).length} su ${st.length}">☑ ${st.filter((x) => x.f).length}/${st.length}<span class="st-fr">${aperto ? "▴" : "▾"}</span></button>`);
   return `<div class="item ${area} ${it.done ? "done" : ""}" data-act="edit" data-id="${esc(it.id)}">
     ${left}
-    <div class="body"><div class="t">${esc(it.title)}</div><div class="meta">${chips.join("")}</div></div>
+    <div class="body"><div class="t">${esc(it.title)}</div><div class="meta">${chips.join("")}</div>${aperto ? `<div class="st-lista">${st.map((x) => stVoce(it, x)).join("")}</div>` : ""}</div>
   </div>`;
 }
+const stVoce = (it, x) => `<button class="st-voce ${x.f ? "fatto" : ""}" data-act="st-spunta" data-id="${esc(it.id)}" data-v="${esc(x.id)}" aria-pressed="${x.f ? "true" : "false"}"><span class="st-box">${x.f ? "✓" : ""}</span><span class="st-tx">${esc(x.t)}</span></button>`;
 const emptyBox = (msg) => `<div class="empty"><div class="mbox">${mascot()}</div><div>${msg}</div></div>`;
 
 function nigiSays() {
@@ -607,14 +673,14 @@ function viewOggi() {
   for (let k = 1; k <= 6; k++) week.push(ymd(addDays(new Date(), k)));
   const soon = state.items.filter((i) => !i.done && week.includes(i.due_date) && i.kind !== "note").sort(byDue).slice(0, 6);
 
-  let h = `<div class="bubble">${nigiSays()}</div>`;
+  let h = `<div class="bubble detto">${nigiSays()}</div>`;
   h += `<div class="stats">
     <div class="stat"><b>${ev.length}</b><span>appuntamenti</span></div>
     <div class="stat"><b>${todo.length + late.length}</b><span>da fare</span></div>
     <div class="stat"><b>${doneT.length}</b><span>fatte oggi</span></div></div>`;
   { const tu = turnoDi(t); if (tu && tu.k !== "") h += rigaTurno(t, true); }
-  h += umoreCard();
-  h += pancinoCard();
+  if (mod("umore")) h += umoreCard();
+  if (mod("pancino")) h += pancinoCard();
   if (late.length) h += `<div class="sec"><h2>Rimaste indietro</h2><span class="count">${late.length}</span></div><div class="list">${late.map(itemRow).join("")}</div>`;
   h += `<div class="sec"><h2>Appuntamenti di oggi</h2></div>`;
   h += ev.length ? `<div class="list">${ev.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Nessun appuntamento oggi ☁️</div>`;
@@ -638,7 +704,7 @@ function viewTodo() {
   const open = list.filter((i) => !i.done).sort(byDue);
   const done = list.filter((i) => i.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || "")).slice(0, 15);
   const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="todo-filter" data-v="${k}">${l}</button>`;
-  let h = `<div class="filters">${fb("tutte", "Tutte")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${state.liste.map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
+  let h = `<div class="filters">${fb("tutte", "Tutte")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
   h += `<div class="sec"><h2>Da fare</h2><span class="count">${open.length}</span></div>`;
   h += open.length ? `<div class="list">${open.map(itemRow).join("")}</div>` : emptyBox(`Tutto fatto! ${MN()} è fiera di te 🌸`);
   if (done.length) h += `<div class="sec"><h2>Completate</h2></div><div class="list">${done.map(itemRow).join("")}</div>`;
@@ -661,7 +727,7 @@ function monthGrid(m, map, sel, act) {
     if (k >= 35 && d.getMonth() !== m.getMonth()) break;
     const its = map[s] || [];
     const dots = its.slice(0, 3).map((i) => `<i class="${i.area === "lavoro" ? "l" : ""}"></i>`).join("");
-    const um = state.umori[s], tu = act === "cal-sel" ? turnoDi(s) : null;
+    const um = mod("umore") ? state.umori[s] : null, tu = act === "cal-sel" ? turnoDi(s) : null;
     cells += `<button class="day ${d.getMonth() !== m.getMonth() ? "out" : ""} ${s === todayStr() ? "today" : ""} ${s === sel ? "sel" : ""} ${um ? "has-um" : ""}" ${um ? `style="--um:${UMORI[um.livello].colore}"` : ""} data-act="${act}" data-v="${s}"><span class="dn">${d.getDate()}</span><span class="dots">${dots}</span>${tu && tu.k !== "" ? `<span class="tday-s" style="--tc:${TURNO_COLORI[tu.colore - 1]}">${esc(tu.sigla)}</span>` : ""}</button>`;
   }
   return `<div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div><div class="days">${cells}</div>`;
@@ -685,11 +751,11 @@ function viewAgenda() {
         <button class="fbtn" data-act="new-on-day">+ Aggiungi</button></div>
       ${rigaTurno(state.calSel)}
       ${sel.length ? `<div class="list">${sel.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:12px">${(() => { const tu = turnoDi(state.calSel); return tu && tu.inizio ? "Nient'altro in programma" : "Giornata libera 🌤️"; })()}</div>`}
-      ${state.calSel <= todayStr() ? (state.umori[state.calSel]
+      ${!mod("umore") ? "" : state.calSel <= todayStr() ? (state.umori[state.calSel]
         ? `<button class="umore-riga" data-act="umore-apri" data-v="${state.calSel}">${faccina(state.umori[state.calSel].livello, 30)}<span><b>${UMORI[state.umori[state.calSel].livello].nome}</b>${state.umori[state.calSel].nota ? `<small>${esc(state.umori[state.calSel].nota)}</small>` : ""}</span></button>`
         : `<button class="umore-riga vuota" data-act="umore-apri" data-v="${state.calSel}"><span class="pallino"></span><span><b>Com'è andata?</b><small>Tocca per colorare questo giorno</small></span></button>`) : ""}
-      ${legendaUmori()}
-      <button class="fbtn" style="margin-top:10px" data-act="giardino-apri">Il giardino del mese</button>
+      ${mod("umore") ? `${legendaUmori()}
+      <button class="fbtn" style="margin-top:10px" data-act="giardino-apri">Il giardino del mese</button>` : ""}
     </div></div>`;
 }
 
@@ -707,16 +773,17 @@ function viewMenu() {
   return `<div class="sec" style="margin-top:0"><h2>Menu</h2></div>
     <div class="mgrid">
       ${voce('data-tab="appunti"', "📝", "Appunti", "Idee, liste, cose da tenere")}
-      ${ONLINE_MODE ? voce('data-act="open-liste"', "👭", "Liste condivise", state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") : ""}
-      ${ONLINE_MODE ? voce('data-act="open-ricorrenti"', "🔁", "Ricorrenti", "Bevi acqua, fai una pausa...") : ""}
-      ${voce('data-tab="turni"', "💼", "Turni di lavoro", turniAttivi() ? (() => { const o = oreMese(new Date()); return `${fmtOre(o.min)} questo mese`; })() : "Il calendario del lavoro")}
-      ${voce('data-act="open-biscotto"', "🥠", "Biscotto del giorno", "La frase di oggi")}
-      ${voce('data-act="giardino-apri"', "🌷", "Il giardino del mese", "Le tue giornate in fiori")}
+      ${mod("spese") ? voce('data-tab="spese"', "👛", "Spese", (() => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; })()) : ""}
+      ${mod("liste") ? voce('data-act="open-liste"', "👭", "Liste condivise", state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") : ""}
+      ${mod("ricorrenti") ? voce('data-act="open-ricorrenti"', "🔁", "Ricorrenti", "Bevi acqua, fai una pausa...") : ""}
+      ${mod("turni") ? voce('data-tab="turni"', "💼", "Turni di lavoro", turniAttivi() ? (() => { const o = oreMese(new Date()); return `${fmtOre(o.min)} questo mese`; })() : "Il calendario del lavoro") : ""}
+      ${mod("biscotto") ? voce('data-act="open-biscotto"', "🥠", "Biscotto del giorno", "La frase di oggi") : ""}
+      ${mod("umore") ? voce('data-act="giardino-apri"', "🌷", "Il giardino del mese", "Le tue giornate in fiori") : ""}
       ${voce('data-act="open-recap"', "🎀", "Recap del mese", "Com'è andato il mese")}
-      ${voce('data-act="open-pancino"', "🍣", `Il pancino di ${esc(MN())}`, "Bocconcini e regali")}
+      ${mod("pancino") ? voce('data-act="open-pancino"', "🍣", `Il pancino di ${esc(MN())}`, "Bocconcini e regali") : ""}
       ${ONLINE_MODE ? voce('data-act="open-consiglio"', "💌", "Consiglia", "Scrivi alla sviluppatrice") : ""}
       ${isAdmin ? voce('data-act="open-inbox"', "📬", "Messaggi ricevuti", adminUnread ? `${adminUnread} da leggere` : "Tutti letti") : ""}
-      ${voce('data-act="open-settings"', "⚙️", "Impostazioni", "Colori, carattere, account")}
+      ${voce('data-act="open-settings"', "⚙️", "Impostazioni", "Colori, cosa usare, suoni")}
     </div>`;
 }
 // Ordine dei post-it: prima i fissati, poi l'ordine scelto trascinando; quelli nuovi (senza posizione) in cima
@@ -800,24 +867,30 @@ function viewAppunti() {
   else if (f !== "tutte") list = list.filter((i) => i.area === f);
   list.sort(ordineNote);
   const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="note-filter" data-v="${k}">${l}</button>`;
-  let h = `<div class="filters">${fb("tutte", "Tutti")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${state.liste.map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
+  let h = `<div class="filters">${fb("tutte", "Tutti")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
   if (!list.length) return h + emptyBox("Nessun appunto. Idee, liste della spesa, password del wifi di casa della nonna... 📝");
   h += `<div class="notes">${list.map((n) => `<div class="note c${n.color || 1} ${n.pinned ? "fissa" : ""}" style="${bachecaStile(n.id)}" data-act="edit" data-id="${esc(n.id)}">
       ${n.pinned ? `<span class="pin">📌</span>` : ""}
       <h3>${esc(n.title)}</h3>${n.body ? `<p>${esc(n.body)}</p>` : ""}
-      <div class="when">${n.lista_id && listaById(n.lista_id) ? esc(listaById(n.lista_id).emoji) : n.area === "lavoro" ? "💼" : "🌷"} ${niceDate(ymd(new Date(n.updated_at || n.created_at)))}</div></div>`).join("")}</div>`;
+      ${n.sottotask?.length ? `<div class="st-note">${n.sottotask.slice(0, 10).map((x) => stVoce(n, x)).join("")}${n.sottotask.length > 10 ? `<small>e altre ${n.sottotask.length - 10}...</small>` : ""}</div>` : ""}
+      <div class="when">${n.sottotask?.length ? `☑ ${n.sottotask.filter((x) => x.f).length}/${n.sottotask.length} · ` : ""}${n.lista_id && listaById(n.lista_id) ? esc(listaById(n.lista_id).emoji) : n.area === "lavoro" ? "💼" : "🌷"} ${niceDate(ymd(new Date(n.updated_at || n.created_at)))}</div></div>`).join("")}</div>`;
   return h;
 }
 
+// Pagine che appartengono a un modulo: se è spento si torna a Oggi
+const PAGINA_MODULO = { turni: "turni", spese: "spese", liste: "liste", ricorrenti: "ricorrenti" };
 function render() {
   applyCustom();
   headerUpdate();
-  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, menu: viewMenu }[state.tab] || viewOggi)();
+  if (PAGINA_MODULO[state.tab] && !mod(PAGINA_MODULO[state.tab])) state.tab = "oggi";
+  if (!mod("liste")) { if (state.todoFilter.startsWith("l:")) state.todoFilter = "tutte"; if (state.noteFilter.startsWith("l:")) state.noteFilter = "tutte"; }
+  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, menu: viewMenu }[state.tab] || viewOggi)();
   const el = $("#view");
   el.innerHTML = `<div class="view">${v}</div>`;
   document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
   document.querySelectorAll(".nav .side-admin").forEach((b) => b.classList.toggle("hidden", !isAdmin));
-  document.querySelectorAll(".online-only").forEach((b) => b.classList.toggle("hidden", !ONLINE_MODE));
+  // voci della barra laterale: solo con account (online-only) e/o solo se il modulo è acceso (data-mod)
+  document.querySelectorAll(".nav .online-only, .nav [data-mod]").forEach((b) => b.classList.toggle("hidden", (b.classList.contains("online-only") && !ONLINE_MODE) || (!!b.dataset.mod && !mod(b.dataset.mod))));
 }
 
 /* =========================================================
@@ -825,15 +898,32 @@ function render() {
    ========================================================= */
 let draft = null, advanced = false;
 
+/* Mentre una finestra è aperta la pagina sotto resta ferma (su telefono):
+   niente scorrimenti "a catena" né pagina che si sposta quando si apre la tastiera. */
+let bloccoY = null;
+const telefono = () => !matchMedia("(min-width:1024px)").matches;
+function bloccaPagina() {
+  if (bloccoY !== null || !telefono()) return;
+  bloccoY = scrollY;
+  Object.assign(document.body.style, { position: "fixed", top: -bloccoY + "px", left: "0", right: "0", width: "100%" });
+}
+function sbloccaPagina() {
+  if (bloccoY === null) return;
+  const y = bloccoY; bloccoY = null;
+  Object.assign(document.body.style, { position: "", top: "", left: "", right: "", width: "" });
+  window.scrollTo(0, y);
+}
 function openSheet(html) {
   $("#sheet").innerHTML = `<div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">✕</button>${html}`;
   $("#sheet").scrollTop = 0;
+  bloccaPagina(); sheetSuTastiera();
   $("#scrim").classList.add("on"); $("#sheet").inert = false; $("#sheet").classList.add("on"); document.body.classList.add("sheet-open");
 }
 function closeSheet() {
   const sh = $("#sheet");
   if (sh.contains(document.activeElement)) document.activeElement.blur();
   $("#scrim").classList.remove("on"); sh.classList.remove("on"); sh.inert = true; document.body.classList.remove("sheet-open"); draft = null;
+  sbloccaPagina();
   if (askResolve) { const r = askResolve; askResolve = null; r(null); }
   // finestre automatiche in attesa (novità, invito alla Home): una alla volta, dopo questa
   if (sheetQueue.length) { const next = sheetQueue.shift(); setTimeout(next, 450); }
@@ -846,12 +936,12 @@ function whenSheetFree(fn) {
 
 /* -------- conferme e domande dentro l'app (al posto delle finestre del browser) -------- */
 let askResolve = null;
-function ask({ title, text = "", ok = "Conferma", danger = false, input = false, value = "", placeholder = "", maxlength = 40 }) {
+function ask({ title, text = "", ok = "Conferma", danger = false, input = false, value = "", placeholder = "", maxlength = 40, inputmode = "" }) {
   return new Promise((resolve) => {
     if (askResolve) { const r = askResolve; askResolve = null; r(null); }
     openSheet(`<h2><span class="mbox">${mascot()}</span>${esc(title)}</h2>
       ${text ? `<p style="margin:0 0 14px;color:var(--ink2);white-space:pre-line">${esc(text)}</p>` : ""}
-      ${input ? `<div class="field"><input class="input big" id="askInput" maxlength="${maxlength}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off"></div>` : ""}
+      ${input ? `<div class="field"><input class="input big" id="askInput" maxlength="${maxlength}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off"${inputmode === "decimal" ? ' inputmode="decimal"' : ""}></div>` : ""}
       <div class="actions"><button class="btn" data-act="ask-cancel">Annulla</button>
         <button class="btn ${danger ? "danger-full" : "primary"}" data-act="ask-ok">${esc(ok)}</button></div>`);
     askResolve = resolve;
@@ -874,7 +964,8 @@ function finishAsk(confirmed) {
 
 function openEditor(it, isNew) {
   // _autoRemind: il promemoria lo sceglie Mochi finché l'utente non lo cambia a mano
-  draft = { ...it, _new: isNew, _autoRemind: isNew || !it.due_date };
+  // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
+  draft = { ...it, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date };
   advanced = !isNew || draft.kind === "note";
   drawEditor();
   setTimeout(() => { const i = $("#fTitle"); if (i && isNew) i.focus(); }, 250);
@@ -893,9 +984,9 @@ function drawEditor() {
       ${d._new && !isNote ? `<div class="hint" id="fHint">Scrivi come parli: oggi, domani, venerdì, 12/11, alle 15, #lavoro</div>` : ""}
     </div>
     <div class="field"><div class="areas">${areaBtn("personale", '<span class="emo">🌷 </span>Personale', "per")}${areaBtn("lavoro", '<span class="emo">💼 </span>Lavoro', "lav")}</div></div>
-    ${state.liste.length ? `<div class="field"><label>Dove</label><select class="input" id="fLista">
+    ${listeUsate().length ? `<div class="field"><label>Dove</label><select class="input" id="fLista">
       <option value="" ${d.lista_id && d.user_id && d.user_id !== myId() ? "disabled" : ""}>🔒 Solo mia</option>${state.liste.map((l) => `<option value="${esc(l.id)}" ${d.lista_id === l.id ? "selected" : ""}>${esc(l.emoji)} ${esc(l.nome)} · condivisa</option>`).join("")}</select></div>` : ""}
-    ${!advanced ? `<button class="more" data-act="d-more">+ Data, promemoria e note</button>` : `
+    ${!advanced ? `<div class="more-row"><button class="more" data-act="d-more">+ Data, promemoria e note</button><button class="more" data-act="d-lista">+ Lista da spuntare</button></div>` : `
       ${!isNote ? `<div class="row">
         <div class="field"><label>Giorno</label><input class="input" type="date" id="fDate" value="${d.due_date || ""}"></div>
         <div class="field"><label>Ora</label><input class="input" type="time" id="fTime" value="${d.due_time || ""}"></div>
@@ -903,6 +994,7 @@ function drawEditor() {
       <div class="field"><label>Promemoria 🔔</label><select class="input" id="fRemind">${REMIND_OPTS.map(([v, l]) => `<option value="${v}" ${String(d.remind) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : `
       <div class="field"><label>Colore</label><div class="colors">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((c) => `<button class="note c${c} ${+d.color === c ? "on" : ""}" data-act="d-color" data-v="${c}" aria-label="Colore ${c}"></button>`).join("")}</div></div>
       <div class="field"><button class="pin-toggle ${d.pinned ? "on" : ""}" data-act="d-pin"><span class="e">📌</span><span><b>${d.pinned ? "Fissato in alto" : "Fissa in alto"}</b><small>Resta sempre in cima agli appunti</small></span><span class="sw2"></span></button></div>`}
+      <div class="field"><label>Lista da spuntare</label><div class="st-ed" id="stBox">${stEditorHtml()}</div></div>
       <div class="field"><label>${isNote ? "Testo" : "Note"}</label><textarea class="input" id="fBody" maxlength="20000" placeholder="${isNote ? "Scrivi qui..." : "Dettagli, indirizzo, cosa portare..."}">${esc(d.body || "")}</textarea></div>
     `}
     <div class="actions">
@@ -929,7 +1021,40 @@ function drawEditor() {
       if (id === "fLista") draft.lista_id = el.value || null;
     });
   });
+  const box = $("#stBox");
+  if (box) {
+    // rinominare una voce: si scrive direttamente nella riga
+    box.addEventListener("input", (e) => { const i = e.target.closest(".st-in[data-sid]"); const x = i && draft?.sottotask.find((s) => s.id === i.dataset.sid); if (x) x.t = i.value; });
+    box.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.isComposing) return;
+      if (e.target.id === "stNew") { e.preventDefault(); aggiungiSt(e.target.value); }
+      else if (e.target.matches(".st-in[data-sid]")) { e.preventDefault(); $("#stNew")?.focus(); }
+    });
+  }
   previewParse();
+}
+/* Lista da spuntare nell'editor: si ridisegna solo lei (la finestra non salta e il cursore resta dov'è) */
+function stEditorHtml() {
+  const st = draft?.sottotask || [], fatti = st.filter((x) => x.f).length;
+  return `${st.map((x, i) => `<div class="st-row ${x.f ? "fatto" : ""}">
+      <button class="st-check" data-act="st-toggle" data-v="${esc(x.id)}" aria-label="${x.f ? "Togli la spunta" : "Spunta"}">${x.f ? "✓" : ""}</button>
+      <input class="st-in" data-sid="${esc(x.id)}" value="${esc(x.t)}" maxlength="120" autocomplete="off" enterkeyhint="next" aria-label="Voce ${i + 1}">
+      <button class="st-btn" data-act="st-su" data-v="${esc(x.id)}" aria-label="Sposta su" ${i ? "" : "disabled"}>↑</button>
+      <button class="st-btn" data-act="st-del" data-v="${esc(x.id)}" aria-label="Togli">✕</button></div>`).join("")}
+    ${st.length < MAX_ST ? `<div class="st-row nuovo"><span class="st-plus">+</span><input class="st-in" id="stNew" maxlength="120" placeholder="${st.length ? "Aggiungi un'altra e premi Invio" : "Es. latte, uova... e premi Invio"}" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>` : `<p class="hint">Massimo ${MAX_ST} voci.</p>`}
+    ${st.length ? `<div class="st-prog">${fatti}/${st.length} fatte</div>` : ""}`;
+}
+function drawSt(focusNew = false) {
+  const box = $("#stBox"); if (!box || !draft) return;
+  box.innerHTML = stEditorHtml();
+  if (focusNew) { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "nearest" }); } }
+}
+function aggiungiSt(v) {
+  const t = taglia(String(v || "").replace(/\s+/g, " ").trim(), 120);
+  if (!t || !draft) return;
+  if (draft.sottotask.length >= MAX_ST) { toast(`Massimo ${MAX_ST} voci`); return; }
+  draft.sottotask.push({ id: nuovoStId(new Set(draft.sottotask.map((x) => x.id))), t, f: false });
+  drawSt(true);
 }
 
 function previewParse() {
@@ -945,6 +1070,8 @@ function previewParse() {
 
 async function saveDraft() {
   if (!draft) return;
+  // una voce scritta nella lista ma senza premere Invio non va persa
+  const sn = $("#stNew"); if (sn && sn.value.trim() && draft.sottotask.length < MAX_ST) draft.sottotask.push({ id: nuovoStId(new Set(draft.sottotask.map((x) => x.id))), t: taglia(sn.value.trim(), 120), f: false });
   const d = { ...draft };
   const t = $("#fTitle"); if (t) d.title = t.value;
   // Interpreta il testo rapido solo per le nuove voci (senza sovrascrivere scelte manuali)
@@ -960,6 +1087,7 @@ async function saveDraft() {
   if (!d.title || !d.title.trim()) { toast("Scrivi almeno il titolo 🍙"); return; }
   d.title = d.title.trim().slice(0, 300);
   d.body = String(d.body || "").slice(0, 20000);
+  d.sottotask = cleanSottotask(d.sottotask);
   if (d.due_time && !RE_TIME.test(d.due_time)) d.due_time = null;
   if (d.due_date && (!validYmd(d.due_date) || d.due_date < "2000-01-01" || d.due_date > "2100-12-31")) { toast("Data non valida 📅"); return; }
   if (!d.due_date) d.due_time = null;
@@ -1034,9 +1162,10 @@ function openRecap(month) {
         <div class="cell"><b style="font-size:${best ? 20 : 28}px;padding:4px 0">${best ? best : "-"}</b><span>giorno più produttivo ⭐</span></div>
       </div>
     </div>
-    ${(() => { const nb = bocconcini().filter((i) => inM(i.done_at)).length; return nb ? `<div class="bubble" style="margin:12px 0 0;text-align:center">Questo mese hai dato a ${esc(MN())} <b>${nb} ${nb === 1 ? "bocconcino" : "bocconcini"}</b> ${cibo(key)}</div>` : ""; })()}
+    ${(() => { const nb = mod("pancino") ? bocconcini().filter((i) => inM(i.done_at)).length : 0; return nb ? `<div class="bubble" style="margin:12px 0 0;text-align:center">Questo mese hai dato a ${esc(MN())} <b>${nb} ${nb === 1 ? "bocconcino" : "bocconcini"}</b> ${cibo(key)}</div>` : ""; })()}
     ${turniAttivi() ? (() => { const o = oreMese(m); return o.turni ? `<div class="bubble" style="margin:12px 0 0;text-align:center">💼 Hai lavorato <b>${fmtOre(o.min)}</b> in ${o.turni} ${o.turni === 1 ? "turno" : "turni"}</div>` : ""; })() : ""}
-    <div class="sec"><h2>Il giardino del mese</h2></div>${giardinoSvg(m)}
+    ${mod("spese") ? (() => { const sp = totaleMese(m); return sp ? `<div class="bubble" style="margin:12px 0 0;text-align:center">👛 Hai speso <b>${euro(sp)}</b>${state.spese.budget ? (sp > state.spese.budget ? `, ${euro(sp - state.spese.budget)} oltre il budget` : `, dentro il budget`) : ""}</div>` : ""; })() : ""}
+    ${mod("umore") ? `<div class="sec"><h2>Il giardino del mese</h2></div>${giardinoSvg(m)}` : ""}
     ${all.length ? `<div class="sec"><h2>Lavoro e vita</h2></div>
       <div class="bar2"><i style="width:${pLav}%;background:var(--lav-d)"></i><i style="width:${100 - pLav}%;background:var(--pink)"></i></div>
       <div class="legend"><span><span class="emo">💼 </span>Lavoro ${lav}</span><span><span class="emo">🌷 </span>Personale ${per}</span></div>` : ""}
@@ -1069,6 +1198,11 @@ function openSettings() {
     <h2><span class="mbox">${mascot()}</span>Impostazioni</h2>
     <div class="setrow" id="pushRow">${pushRowHtml(!ONLINE_MODE ? "offline" : !PUSH_READY ? "soon" : perm === "unsupported" ? (!standalone && /iPhone|iPad/.test(navigator.userAgent) ? "home" : "unsupported") : perm === "denied" ? "denied" : "checking")}</div>
     <div class="setrow"><div><b>Nome e mascotte</b><small>${esc(CUSTOM.nome_app)} · ${esc(MN())}</small></div><button class="fbtn on" data-act="open-custom">Cambia</button></div>
+    <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
+      <div class="moduli">${MODULI.filter((m) => !m[5] || ONLINE_MODE).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>
+      ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
+    <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
+      <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     <div class="setrow"><div><b>Chiaro o scuro</b><small>Automatico segue il telefono</small></div>
       <select class="input" style="width:auto;padding:8px 12px" id="themeSel">
         <option value="auto" ${theme === "auto" ? "selected" : ""}>Auto</option><option value="light" ${theme === "light" ? "selected" : ""}>Chiaro</option><option value="dark" ${theme === "dark" ? "selected" : ""}>Scuro</option></select></div>
@@ -1141,6 +1275,8 @@ function setTheme(v) {
   LS.set("mochi.theme", v);
   syncBarColor();
 }
+// Riapre le impostazioni dopo una scelta senza tornare in cima alla finestra
+function riapriImpostazioni() { const y = $("#sheet").scrollTop; openSettings(); $("#sheet").scrollTop = y; }
 
 function b64ToU8(b64) {
   const p = "=".repeat((4 - (b64.length % 4)) % 4);
@@ -1185,26 +1321,33 @@ function maybeShowInstallHint() {
 /* Novità: si mostrano dopo un aggiornamento, a chi usava già l'app.
    Per annunciare qualcosa basta aggiungere un punto in cima, con un nome nuovo. */
 // Ogni novità ha un suo nome: a chi riapre l'app si mostrano solo quelle che non ha ancora visto.
-// Le nuove vanno in cima.
+// Le nuove vanno in cima. Il quarto valore (se c'è) è il modulo: se è spento, la novità non si mostra.
 const NOVITA = {
   titolo: "Novità in Mochi!",
   punti: [
+    ["spese", "👛", "<b>Spese</b>: segna quanto spendi in pochi tocchi, guarda il totale del mese per categoria e, se vuoi, un budget mensile. Le trovi nel menu.", "spese"],
+    ["sottotask", "☑️", "<b>Liste da spuntare</b> dentro le cose da fare e gli appunti, perfette per la spesa: le spunti anche senza aprire la voce, e nelle liste condivise le vedete tutte."],
+    ["moduli", "🧩", "<b>Cosa vuoi usare</b>: in Impostazioni puoi spegnere quello che non ti serve (turni, spese, umore...). Sparisce dall'app, ma i dati restano."],
+    ["suoni", "🔔", "<b>Suoni</b>: un piccolo suono quando spunti una cosa fatta, apri il biscotto o arriva un promemoria ad app aperta. Scegli quale (o spegnili) in Impostazioni."],
+    ["stagioni", "❄️", "<b>Stagioni</b>: neve, pioggia, sole, foglie o petali sullo sfondo. Da accendere in Impostazioni → Cosa vuoi usare."],
+    ["emoji-ric", "🍝", "<b>Nuovi simboli</b> per i promemoria ricorrenti: piatto di pasta, tè, nanna, piante, telefono e tanti altri.", "ricorrenti"],
+    ["finestre", "👆", "Le finestre ora <b>restano ferme</b> mentre scrivi o scorri: si chiudono trascinando giù dalla parte in alto."],
     ["risposte", "💌", "<b>Risposte ai tuoi consigli</b>: quando la sviluppatrice legge o realizza una tua idea, lo vedi in Consiglia e ti arriva una notifica."],
-    ["turni", "💼", "<b>Turni di lavoro</b>: segna i tuoi turni, imposta un ciclo che si ripete da solo e guarda quante ore hai lavorato nel mese. Li trovi nel menu."],
+    ["turni", "💼", "<b>Turni di lavoro</b>: segna i tuoi turni, imposta un ciclo che si ripete da solo e guarda quante ore hai lavorato nel mese. Li trovi nel menu.", "turni"],
     ["bacheca-mobile", "📌", "<b>La bacheca di sughero</b> ora c'è anche sul telefono, e i post-it non spariscono più."],
     ["trascina-note", "✋", "<b>Sposta i post-it</b> come vuoi: dal computer trascinali, dal telefono tienili premuti un attimo e poi trascina."],
-    ["fiori-passati", "🌼", "<b>Giardino del mese</b>: tocca un fiore per cambiare com'è andata quella giornata."],
-    ["q1", "🌷", "<b>Com'è andata la giornata?</b>: ogni giorno una faccina colora il calendario, e a fine mese diventa il giardino del mese."],
-    ["q2", "🥠", "<b>Il biscotto della fortuna</b>: ogni mattina, alla prima apertura, c'è un biscotto da aprire con la frase del giorno."],
+    ["fiori-passati", "🌼", "<b>Giardino del mese</b>: tocca un fiore per cambiare com'è andata quella giornata.", "umore"],
+    ["q1", "🌷", "<b>Com'è andata la giornata?</b>: ogni giorno una faccina colora il calendario, e a fine mese diventa il giardino del mese.", "umore"],
+    ["q2", "🥠", "<b>Il biscotto della fortuna</b>: ogni mattina, alla prima apertura, c'è un biscotto da aprire con la frase del giorno.", "biscotto"],
     ["q3", "📓", "<b>Nuovo stile Quaderno</b> da provare: carta puntinata, titoli scritti a mano ed etichette di carta. In Impostazioni → Stile."],
     ["q4", "🐾", "<b>12 nuove mascotte</b>: gattino, panda, coniglietta, pulcino, tartaruga, canguro, riccio, capibara, marimo, axolotl, lontra e cavallino. In Impostazioni → Nome e mascotte."],
     ["q5", "☰", "<b>Menu completo</b>: liste condivise, ricorrenti, recap e tutto il resto sono a portata di tocco dal pulsante ☰ in alto."],
-    ["q6", "🔁", "<b>Promemoria ricorrenti</b>: bevi acqua ogni 2 ore, una pausa ogni ora... Li trovi in Impostazioni."],
+    ["q6", "🔁", "<b>Promemoria ricorrenti</b>: bevi acqua ogni 2 ore, una pausa ogni ora... Li trovi in Impostazioni.", "ricorrenti"],
     ["q7", "🔤", "<b>Caratteri</b> e <b>12 colori</b> per gli appunti; da computer gli appunti stanno su una bacheca di sughero 📌"],
-    ["q8", "👭", "<b>Liste condivise</b>: crea una lista come \"Casa\" o \"Spesa\", invita chi vuoi con un codice e la usate insieme. In Impostazioni."],
+    ["q8", "👭", "<b>Liste condivise</b>: crea una lista come \"Casa\" o \"Spesa\", invita chi vuoi con un codice e la usate insieme. In Impostazioni.", "liste"],
     ["q9", "💌", "<b>Consiglia alla sviluppatrice</b>: idee, problemi o complimenti arrivano direttamente a chi ha creato l'app. Lo trovi in Impostazioni."],
     ["q10", "🎨", "<b>Colori</b>: Fragola, Matcha, Lavanda, Pesca e Cielo. Li trovi in Impostazioni."],
-    ["q11", "🍣", "<b>Il pancino</b>: ogni cosa che spunti è un bocconcino per la mascotte, che si guadagna dei regali."],
+    ["q11", "🍣", "<b>Il pancino</b>: ogni cosa che spunti è un bocconcino per la mascotte, che si guadagna dei regali.", "pancino"],
     ["q12", "👇", "Le finestre si chiudono <b>trascinandole giù</b>."],
     ["q13", "👁️", "Con l'occhiolino puoi <b>vedere la password</b> mentre la scrivi."]
   ]
@@ -1218,8 +1361,9 @@ function maybeShowNovita() {
   }
   // chi apre l'app per la prima volta non ha "novità": le scopre da sé
   if (!state.items.length) { LS.set(k, NOVITA.punti.map((p) => p[0])); return; }
-  const nuove = () => NOVITA.punti.filter((p) => !viste.includes(p[0]));
-  if (!nuove().length) { LS.set(k, viste); return; }
+  // quelle dei moduli spenti non si mostrano (e restano "viste": riaccendendo il modulo non spuntano vecchie notizie)
+  const nuove = () => NOVITA.punti.filter((p) => !viste.includes(p[0]) && (!p[3] || mod(p[3])));
+  if (!nuove().length) { LS.set(k, NOVITA.punti.map((p) => p[0])); return; }
   setTimeout(() => whenSheetFree(() => {
     const da = nuove(); if (!da.length) return;
     LS.set(k, NOVITA.punti.map((p) => p[0]));
@@ -1237,6 +1381,8 @@ function maybeShowNovita() {
    ========================================================= */
 const myId = () => store.user?.id || null;
 const listaById = (id) => state.liste.find((l) => l.id === id) || null;
+// Liste da proporre nei filtri e nell'editor: nessuna se il modulo è spento (le voci condivise restano visibili)
+const listeUsate = () => (mod("liste") ? state.liste : []);
 const nomeMembro = (l, uid) => (l?.membri || []).find((m) => m.user_id === uid)?.nome || "qualcuno";
 const EMOJI_LISTE = ["🏠", "🛒", "🍣", "✈️", "🎁", "🐶", "💼", "📚", "🌸", "🍳", "🎉", "💪"];
 const RE_INVITO = /^[0-9A-Fa-f]{16}$/;
@@ -1353,6 +1499,7 @@ function leggiInvitoDaLink() {
 }
 function invitoInSospeso() {
   let c = null; try { c = sessionStorage.getItem("mochi.invito"); sessionStorage.removeItem("mochi.invito"); } catch {}
+  if (c && RE_INVITO.test(c) && !mod("liste")) { setTimeout(() => toast("Per usare l'invito accendi le Liste condivise in Impostazioni"), 1200); return; }
   if (c && RE_INVITO.test(c)) setTimeout(() => whenSheetFree(() => proponiInvito(c)), 1200);
 }
 async function esciLista(id) {
@@ -1536,6 +1683,7 @@ async function salvaGiardino() {
    con la frase del giorno, la stessa che poi resta sotto il saluto.
    ========================================================= */
 function maybeBiscotto() {
+  if (!mod("biscotto")) return;
   const oggi = todayStr();
   if (LS.get("mochi.biscotto", "") === oggi || new Date().getHours() < 5) return;
   setTimeout(() => whenSheetFree(() => {
@@ -1571,6 +1719,7 @@ function apriBiscotto() {
 function rompiBiscotto() {
   const w = $(".biscotto-wrap"); if (!w || w.classList.contains("aperto")) return;
   w.classList.add("aperto");
+  suona("biscotto");
   if (navigator.vibrate) navigator.vibrate([12, 40, 18]);
   const r = $(".b-cookie", w).getBoundingClientRect();
   setTimeout(() => confetti(r.left + r.width / 2, r.top + r.height / 2, 22), 250);
@@ -1588,7 +1737,9 @@ function chiudiBiscotto() {
    ========================================================= */
 const RE_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const OGNI_OPZ = [[30, "Ogni 30 minuti"], [60, "Ogni ora"], [90, "Ogni ora e mezza"], [120, "Ogni 2 ore"], [180, "Ogni 3 ore"], [240, "Ogni 4 ore"], [360, "Ogni 6 ore"], [1440, "Una volta al giorno"]];
-const EMOJI_RIC = ["💧", "🧘", "👀", "🚶", "🌿", "🍎", "☕", "💊", "🛏️", "🐶", "📖", "🦷"];
+// 30 simboli: 5 righe ordinate da 6 sul telefono. Niente lettere, cifre o simboli HTML (regola "ricorrenti_ok" del database)
+const EMOJI_RIC = ["💧", "🧘", "👀", "🚶", "🌿", "🍎", "☕", "💊", "🛏️", "🐶", "📖", "🦷",
+  "🍝", "🍽️", "🥗", "🍵", "💤", "🧴", "📚", "🪴", "💻", "📞", "🧺", "🧹", "🐱", "🛁", "🎵", "🌞", "✍️", "🤸"];
 const GG = ["L", "M", "M", "G", "V", "S", "D"];
 const PRESET_RIC = [
   { emoji: "💧", titolo: "Bevi un bicchiere d'acqua", ogni_minuti: 120, dalle: "09:00", alle: "21:00", giorni: [1, 2, 3, 4, 5, 6, 7] },
@@ -1683,6 +1834,23 @@ async function toggleRicorrente(id) {
   try { await store.salvaRicorrente({ ...r, attiva: !r.attiva, fuso: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Rome" }); openRicorrenti(); }
   catch { toast("Non sono riuscita a cambiarlo"); }
 }
+// Accendere/spegnere il modulo: allo spegnimento, con conferma, mette in pausa quelli attivi.
+// Restituisce "ok", "annulla" (resta acceso) o "errore" (resta com'era).
+async function moduloRicorrenti(acceso) {
+  try { ricorrenti = (await store.ricorrenti()).map(cleanRic); ricCaricati = true; }
+  catch { toast("Non riesco a controllare i promemoria ricorrenti, riprova"); return "errore"; }
+  if (acceso) return "ok";
+  const attivi = ricorrenti.filter((r) => r.attiva);
+  if (!attivi.length) return "ok";
+  const n = attivi.length;
+  const ok = await ask({ title: n === 1 ? "Metto in pausa il tuo promemoria ricorrente?" : `Metto in pausa i tuoi ${n} promemoria ricorrenti?`, text: "Non ti arriveranno più finché non riaccendi il modulo e li riattivi dalla pagina Ricorrenti.", ok: "Metti in pausa" });
+  if (!ok) return "annulla";
+  const fuso = Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Rome";
+  let errori = 0;
+  for (const r of attivi) { try { await store.salvaRicorrente({ ...r, attiva: false, fuso }); r.attiva = false; } catch { errori++; } }
+  if (errori) { toast("Non sono riuscita a metterli tutti in pausa: il modulo resta acceso, riprova"); riapriImpostazioni(); return "errore"; }
+  return "ok";
+}
 async function eliminaRicorrente(id) {
   const r = ricorrenti.find((x) => x.id === id); if (!r) return;
   const ok = await ask({ title: `Eliminare "${r.titolo}"?`, text: "Non ti arriveranno più questi promemoria.", ok: "Elimina", danger: true });
@@ -1758,7 +1926,7 @@ async function caricaTurni() {
   try { const r = await TurniStore.carica(); state.turniImp = r.imp; state.turni = r.giorni; LS.set("mochi.turniCache", r); }
   catch { const c = LS.get("mochi.turniCache", null); state.turniImp = cleanTurniImp(c?.imp); state.turni = c?.giorni && typeof c.giorni === "object" ? c.giorni : {}; }
 }
-const turniAttivi = () => state.turniImp.tipi.length > 0;
+const turniAttivi = () => mod("turni") && state.turniImp.tipi.length > 0;
 const tipoDa = (k) => (k === "" ? RIPOSO : state.turniImp.tipi.find((t) => t.k === k) || null);
 const giorniTra = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i === 1 ? x - 1 : +x)) - Date.UTC(...a.split("-").map((x, i) => i === 1 ? x - 1 : +x))) / 864e5);
 // Dal ciclo: che turno toccherebbe quel giorno (null = il ciclo non dice niente)
@@ -1940,6 +2108,323 @@ async function salvaCiclo(vuoto = false) {
   if (await salvaImpTurni({ ...state.turniImp, ciclo: vuoto ? [] : d.ciclo, ciclo_inizio: vuoto ? null : d.inizio }, vuoto ? "Ciclo tolto" : "Ciclo salvato 🌸")) { closeSheet(); if (!vuoto) cheer(); }
 }
 
+/* =========================================================
+   SPESE
+   Private: le vede solo chi le scrive (lo garantisce il database), mai nelle liste condivise.
+   Gli importi sono in centesimi (niente arrotondamenti strani), le categorie sono fisse.
+   ========================================================= */
+// [id, emoji, nome, colore della barra]
+const CATEGORIE_SPESA = [
+  ["spesa", "🛒", "Spesa", "#bfe8b0"], ["casa", "🏠", "Casa", "#ffd29a"], ["bollette", "💡", "Bollette", "#fff09a"],
+  ["trasporti", "🚗", "Trasporti", "#b5d4ff"], ["ristoranti", "🍝", "Ristoranti", "#ffc6a8"], ["svago", "🎬", "Svago", "#d2c2ff"],
+  ["salute", "💊", "Salute", "#a8e0dc"], ["abbigliamento", "👗", "Vestiti", "#f5c2f0"], ["regali", "🎁", "Regali", "#ffb3c7"],
+  ["animali", "🐶", "Animali", "#e3f0a8"], ["altro", "✨", "Altro", "#ddd3c6"]
+];
+const MAX_CENT = 99999999; // 999.999,99 €
+const catSpesa = (k) => CATEGORIE_SPESA.find((c) => c[0] === k) || CATEGORIE_SPESA[CATEGORIE_SPESA.length - 1];
+const euro = (cent) => (cent / 100).toLocaleString("it-IT", { style: "currency", currency: "EUR" });
+// "12,50" "12.5" "1.234,56" "€ 3" -> centesimi (null se non è un importo valido)
+function parseImporto(raw) {
+  let s = String(raw ?? "").replace(/[\s€]/g, "").slice(0, 20);
+  if (!s) return null;
+  if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ""); // 1.234 = milleduecentotrentaquattro
+  if (!/^\d{1,6}(\.\d{1,2})?$/.test(s)) return null;
+  const [i, d = ""] = s.split(".");
+  const cent = parseInt(i, 10) * 100 + parseInt((d + "00").slice(0, 2), 10);
+  return cent >= 1 && cent <= MAX_CENT ? cent : null;
+}
+const fmtImporto = (cent) => (cent / 100).toFixed(2).replace(".", ",");
+function cleanSpesa(r) {
+  if (!r || typeof r !== "object") return null;
+  const id = typeof r.id === "string" && RE_ID.test(r.id) ? r.id : null;
+  const c = Number(r.importo_cent);
+  if (!id || !validYmd(r.giorno) || !Number.isInteger(c) || c < 1 || c > MAX_CENT) return null;
+  return { id, giorno: r.giorno, importo_cent: c, categoria: catSpesa(str(r.categoria))[0], nota: taglia(str(r.nota).trim(), 120), created_at: isIso(r.created_at) ? r.created_at : "" };
+}
+const cleanBudget = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= MAX_CENT ? n : null; };
+const SpeseStore = {
+  async carica() {
+    if (!ONLINE_MODE) { const o = LS.get("mochi.spese", {}) || {}; return { voci: (Array.isArray(o.voci) ? o.voci : []).map(cleanSpesa).filter(Boolean).slice(0, 5000), budget: cleanBudget(o.budget) }; }
+    const [a, b] = await Promise.all([
+      store.sb.from("spese").select("id,giorno,importo_cent,categoria,nota,created_at").order("giorno", { ascending: false }).limit(5000),
+      store.sb.from("spese_impostazioni").select("budget_cent").maybeSingle()
+    ]);
+    if (a.error) throw a.error; if (b.error) throw b.error;
+    return { voci: (a.data || []).map((r) => cleanSpesa({ ...r, id: String(r.id) })).filter(Boolean), budget: cleanBudget(b.data?.budget_cent) };
+  },
+  _local() { LS.set("mochi.spese", { voci: state.spese.voci, budget: state.spese.budget }); },
+  // Restituisce la spesa salvata (una nuova riceve l'id dal database)
+  async salva(sp, nuova) {
+    if (!ONLINE_MODE) return sp;
+    const row = { giorno: sp.giorno, importo_cent: sp.importo_cent, categoria: sp.categoria, nota: sp.nota || null };
+    if (nuova) {
+      const { data, error } = await store.sb.from("spese").insert(row).select("id,created_at").single();
+      if (error) throw error;
+      return { ...sp, id: String(data.id), created_at: data.created_at };
+    }
+    const { error } = await store.sb.from("spese").update(row).eq("id", sp.id);
+    if (error) throw error;
+    return sp;
+  },
+  async elimina(id) {
+    if (!ONLINE_MODE) return;
+    const { error } = await store.sb.from("spese").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async salvaBudget(cent) {
+    if (!ONLINE_MODE) return;
+    const { error } = await store.sb.from("spese_impostazioni").upsert({ user_id: store.user.id, budget_cent: cent }, { onConflict: "user_id" });
+    if (error) throw error;
+  }
+};
+async function caricaSpese() {
+  try { state.spese = await SpeseStore.carica(); LS.set("mochi.speseCache", state.spese); }
+  catch { const c = LS.get("mochi.speseCache", null); state.spese = { voci: (Array.isArray(c?.voci) ? c.voci : []).map(cleanSpesa).filter(Boolean), budget: cleanBudget(c?.budget) }; }
+}
+const speseDelMese = (m) => { const k = monthKey(m); return state.spese.voci.filter((v) => v.giorno.startsWith(k)); };
+const totaleMese = (m) => speseDelMese(m).reduce((a, v) => a + v.importo_cent, 0);
+const ordineSpese = (a, b) => b.giorno.localeCompare(a.giorno) || (b.created_at || "").localeCompare(a.created_at || "");
+
+// Pagina "Spese"
+function viewSpese() {
+  const m = state.speseMese || (state.speseMese = new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const voci = speseDelMese(m).sort(ordineSpese), tot = voci.reduce((a, v) => a + v.importo_cent, 0), bud = state.spese.budget;
+  const per = {}; voci.forEach((v) => { per[v.categoria] = (per[v.categoria] || 0) + v.importo_cent; });
+  const cats = Object.entries(per).sort((a, b) => b[1] - a[1]), max = cats.length ? cats[0][1] : 1;
+  const cur = monthKey(m) === monthKey(new Date());
+  const barra = bud ? (() => {
+    const pct = Math.min(100, Math.round((tot / bud) * 100)), oltre = tot > bud;
+    return `<div class="sp-bud ${oltre ? "oltre" : ""}"><span class="sp-bar"><i style="width:${pct}%"></i></span>
+      <small>${oltre ? `Oltre il budget di <b>${euro(tot - bud)}</b>` : `Restano <b>${euro(bud - tot)}</b> su ${euro(bud)}`}</small>
+      <button class="fbtn" data-act="spese-budget">Cambia</button></div>`;
+  })() : `<button class="fbtn" data-act="spese-budget" style="margin-top:10px">Imposta un budget mensile</button>`;
+  return `<div class="sec" style="margin-top:0"><h2><span class="emo">👛 </span>Spese</h2></div>
+    <div class="split spese"><div class="sp-top">
+      <div class="calhead"><button class="iconbtn" data-act="spese-mese" data-v="-1" aria-label="Mese prima">‹</button><h2>${MESI[m.getMonth()]} ${m.getFullYear()}</h2><button class="iconbtn" data-act="spese-mese" data-v="1" aria-label="Mese dopo">›</button></div>
+      <div class="sp-tot"><span>${cur ? "Questo mese hai speso" : `A ${MESI[m.getMonth()]} hai speso`}</span><b>${euro(tot)}</b>${barra}</div>
+      <button class="btn primary sp-add" data-act="spesa-nuova">+ Aggiungi una spesa</button>
+    </div><div class="col-side">
+      <div class="sec"><h2>Per categoria</h2></div>
+      ${cats.length ? `<div class="sp-cats">${cats.map(([k, c]) => { const x = catSpesa(k); return `<div class="sp-cat"><span class="sp-e" style="--cc:${x[3]}">${x[1]}</span>
+          <span class="sp-cn"><b>${x[2]}</b><span class="sp-bar"><i style="width:${Math.max(3, Math.round((c / max) * 100))}%;background:${x[3]}"></i></span></span>
+          <span class="sp-cv"><b>${euro(c)}</b><small>${Math.round((c / tot) * 100)}%</small></span></div>`; }).join("")}</div>`
+        : `<p class="hint" style="margin:0 4px">Qui vedrai dove vanno i tuoi soldi, categoria per categoria.</p>`}
+    </div><div class="sp-lista">
+      <div class="sec"><h2>Le spese del mese</h2>${voci.length ? `<span class="count">${voci.length}</span>` : ""}</div>
+      ${voci.length ? `<div class="list">${voci.map((v) => { const c = catSpesa(v.categoria); return `<button class="sp-riga" data-act="spesa-modifica" data-id="${esc(v.id)}">
+          <span class="sp-e" style="--cc:${c[3]}">${c[1]}</span><span class="sp-t"><b>${esc(v.nota || c[2])}</b><small>${v.nota ? `${c[2]} · ` : ""}${niceDate(v.giorno)}</small></span><b class="sp-i">${euro(v.importo_cent)}</b></button>`; }).join("")}</div>`
+        : `<div class="empty"><div class="mbox">${mascot()}</div><div>Nessuna spesa a ${MESI[m.getMonth()]}. Tocca <b>+ Aggiungi una spesa</b>: bastano importo e categoria.</div></div>`}
+    </div></div>`;
+}
+let spesaDraft = null;
+function apriSpesa(sp) {
+  const ultima = LS.get("mochi.spesa.cat", "spesa");
+  spesaDraft = sp ? { ...sp, _nuova: false } : { id: null, giorno: todayStr(), importo_cent: null, categoria: catSpesa(ultima)[0], nota: "", _nuova: true };
+  const d = spesaDraft, oggi = todayStr(), ieri = ymd(addDays(new Date(), -1));
+  openSheet(`<h2><span class="mbox">${mascot()}</span>${d._nuova ? "Nuova spesa" : "Modifica spesa"}</h2>
+    <div class="field sp-imp"><input class="input big" id="sImporto" inputmode="decimal" enterkeyhint="done" placeholder="0,00" maxlength="14" autocomplete="off" value="${d.importo_cent ? fmtImporto(d.importo_cent) : ""}" aria-label="Importo in euro"><span class="eur">€</span></div>
+    <div class="field"><label>Categoria</label><div class="sp-pick">${CATEGORIE_SPESA.map(([k, e, n, c]) => `<button class="${d.categoria === k ? "on" : ""}" style="--cc:${c}" data-act="spesa-cat" data-v="${k}"><span class="e">${e}</span><small>${n}</small></button>`).join("")}</div></div>
+    <div class="field"><label>Quando</label><div class="sp-quando">
+      <button class="fbtn ${d.giorno === oggi ? "on" : ""}" data-act="spesa-giorno" data-v="${oggi}">Oggi</button><button class="fbtn ${d.giorno === ieri ? "on" : ""}" data-act="spesa-giorno" data-v="${ieri}">Ieri</button>
+      <input class="input" type="date" id="sGiorno" value="${d.giorno}" min="2000-01-01" max="2100-12-31" aria-label="Giorno"></div></div>
+    <div class="field"><label>Nota, se vuoi</label><input class="input" id="sNota" maxlength="120" placeholder="Es. pizza con le amiche" autocomplete="off" value="${esc(d.nota)}"></div>
+    <div class="actions">${d._nuova ? "" : `<button class="btn danger" data-act="spesa-elimina" aria-label="Elimina">🗑</button>`}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="spesa-salva">Salva</button></div>`);
+  const imp = $("#sImporto");
+  imp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); salvaSpesa($("[data-act=spesa-salva]")); } });
+  $("#sGiorno").addEventListener("input", (e) => { spesaDraft.giorno = e.target.value; document.querySelectorAll(".sp-quando .fbtn").forEach((b) => b.classList.toggle("on", b.dataset.v === e.target.value)); });
+  if (d._nuova) setTimeout(() => imp.focus(), 250);
+}
+async function salvaSpesa(btn) {
+  const d = spesaDraft; if (!d) return;
+  const cent = parseImporto($("#sImporto")?.value);
+  if (cent === null) { toast(/\d/.test($("#sImporto")?.value || "") ? "Importo non valido: es. 12,50 (massimo 999.999,99 €)" : "Scrivi quanto hai speso, es. 12,50"); $("#sImporto")?.focus(); return; }
+  const giorno = $("#sGiorno")?.value || d.giorno;
+  if (!validYmd(giorno) || giorno < "2000-01-01" || giorno > "2100-12-31") { toast("Controlla il giorno 📅"); return; }
+  const sp = { id: d.id, giorno, importo_cent: cent, categoria: catSpesa(d.categoria)[0], nota: taglia(($("#sNota")?.value || "").trim(), 120), created_at: d.created_at || new Date().toISOString() };
+  if (d._nuova) sp.id = uid();
+  if (btn) btn.disabled = true;
+  const prima = state.spese.voci;
+  try {
+    const salvata = await SpeseStore.salva(sp, d._nuova);
+    state.spese.voci = d._nuova ? [salvata, ...prima] : prima.map((v) => (v.id === d.id ? salvata : v));
+    if (!ONLINE_MODE) SpeseStore._local();
+    LS.set("mochi.speseCache", state.spese); LS.set("mochi.spesa.cat", sp.categoria);
+    state.speseMese = new Date(+giorno.slice(0, 4), +giorno.slice(5, 7) - 1, 1);
+    closeSheet(); render();
+    toast(d._nuova ? `${catSpesa(sp.categoria)[1]} ${euro(cent)} segnati` : "Spesa aggiornata");
+  } catch (e) {
+    state.spese.voci = prima; if (btn) btn.disabled = false;
+    toast(/limite/i.test(e?.message || "") ? "Hai raggiunto il limite di 5000 spese" : /fetch|network|Failed/i.test(e?.message || "") ? "Sei offline: riprova tra poco" : "Non sono riuscita a salvarla");
+  }
+}
+async function eliminaSpesa() {
+  const d = spesaDraft; if (!d?.id) return;
+  const keep = { ...d };
+  const ok = await ask({ title: "Eliminare questa spesa?", text: `${euro(d.importo_cent)} · ${catSpesa(d.categoria)[2]}${d.nota ? ` · ${d.nota}` : ""}`, ok: "Elimina", danger: true });
+  if (!ok) { apriSpesa(keep); return; }
+  const prima = state.spese.voci;
+  state.spese.voci = prima.filter((v) => v.id !== d.id); render();
+  try { await SpeseStore.elimina(d.id); if (!ONLINE_MODE) SpeseStore._local(); LS.set("mochi.speseCache", state.spese); toast("Spesa eliminata"); }
+  catch { state.spese.voci = prima; render(); toast("Non sono riuscita a eliminarla"); }
+}
+async function chiediBudget() {
+  const b = state.spese.budget;
+  const v = await ask({ title: "Budget mensile", text: "Quanto vuoi spendere al massimo ogni mese? Lascia vuoto per toglierlo.", input: true, value: b ? fmtImporto(b) : "", placeholder: "Es. 800", ok: "Salva", maxlength: 14, inputmode: "decimal" });
+  if (v === null) return;
+  const cent = String(v).trim() ? parseImporto(v) : null;
+  if (String(v).trim() && cent === null) { toast("Importo non valido"); return; }
+  const prima = state.spese.budget; state.spese.budget = cent; render();
+  try { await SpeseStore.salvaBudget(cent); if (!ONLINE_MODE) SpeseStore._local(); LS.set("mochi.speseCache", state.spese); toast(cent ? `Budget: ${euro(cent)} al mese` : "Budget tolto"); }
+  catch { state.spese.budget = prima; render(); toast("Non sono riuscita a salvarlo"); }
+}
+
+/* =========================================================
+   STAGIONI
+   Un velo leggero sullo sfondo, dietro alle schede: poche particelle su un canvas che non riceve tocchi.
+   Si ferma quando la pagina è nascosta e se il telefono chiede meno animazioni.
+   ========================================================= */
+const stag = { tipo: null, p: [], raf: 0, last: 0, w: 0, h: 0, dpr: 1, t: 0 };
+function stagioneDiOggi() {
+  if (CUSTOM.stagione !== "auto") return CUSTOM.stagione;
+  const d = new Date(), m = d.getMonth();
+  if (m === 11 || m <= 1) return "neve";
+  if (m <= 4) return "petali";
+  if (m <= 7) return "sole";
+  // autunno: foglie, e un giorno su quattro pioggia
+  const g = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5);
+  return g % 4 === 0 ? "pioggia" : "foglie";
+}
+const menoMoto = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const temaScuro = () => { const t = document.documentElement.dataset.theme; return t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches); };
+const rnd = (a, b) => a + Math.random() * (b - a);
+function nuovaParticella(tipo, sparsa) {
+  const w = stag.w, h = stag.h, y = sparsa ? rnd(0, h) : rnd(-40, -10);
+  if (tipo === "pioggia") return { x: rnd(-40, w), y: sparsa ? rnd(0, h) : rnd(-60, -10), v: rnd(7, 10), l: rnd(10, 18) };
+  if (tipo === "sole") return { x: rnd(0, w), y: rnd(0, h), r: rnd(2.6, 5), f: rnd(0, 6.28), v: rnd(.15, .35) };
+  if (tipo === "neve") return { x: rnd(0, w), y, r: rnd(1.4, 3.4), v: rnd(.4, 1), f: rnd(0, 6.28), o: rnd(.4, 1.2) };
+  const COL = tipo === "foglie" ? ["#e8a25a", "#d9763d", "#c9a24a", "#b5653a"] : ["#ffb7c9", "#ffc8d8", "#f7a1bb", "#ffd9e4"];
+  return { x: rnd(0, w), y, r: tipo === "foglie" ? rnd(5, 8) : rnd(3.5, 5.5), v: tipo === "foglie" ? rnd(.6, 1.2) : rnd(.45, .9), f: rnd(0, 6.28), o: rnd(.6, 1.6), a: rnd(0, 6.28), va: rnd(-.04, .04), c: COL[Math.floor(Math.random() * COL.length)] };
+}
+function stagioniMisura() {
+  const cv = $("#stagioni"); if (!cv) return;
+  stag.dpr = Math.min(2, window.devicePixelRatio || 1); stag.w = innerWidth; stag.h = innerHeight;
+  cv.width = Math.round(stag.w * stag.dpr); cv.height = Math.round(stag.h * stag.dpr);
+}
+function stagioniAggiorna() {
+  const cv = $("#stagioni"); if (!cv) return;
+  const tipo = mod("stagioni") && !menoMoto() && !$("#app").classList.contains("hidden") ? stagioneDiOggi() : null;
+  if (!tipo) { cancelAnimationFrame(stag.raf); stag.raf = 0; stag.tipo = null; stag.p = []; cv.classList.remove("on"); cv.getContext("2d")?.clearRect(0, 0, cv.width, cv.height); return; }
+  if (tipo !== stag.tipo || !stag.p.length) {
+    stagioniMisura(); stag.tipo = tipo;
+    const n = Math.round(Math.min(34, Math.max(12, (stag.w * stag.h) / 26000)) * (tipo === "pioggia" ? 1.4 : tipo === "sole" ? .9 : 1));
+    stag.p = Array.from({ length: n }, () => nuovaParticella(tipo, true));
+  }
+  cv.classList.add("on");
+  if (!stag.raf && document.visibilityState === "visible") stag.raf = requestAnimationFrame(stagioniFrame);
+}
+function stagioniFrame(now) {
+  stag.raf = 0;
+  if (!stag.tipo || document.visibilityState !== "visible") return;
+  stag.raf = requestAnimationFrame(stagioniFrame);
+  if (now - stag.last < 33) return; // circa 30 immagini al secondo bastano e risparmiano batteria
+  const k = stag.last ? Math.min(3, (now - stag.last) / 33) : 1; stag.last = now; stag.t += k;
+  const cv = $("#stagioni"), c = cv.getContext("2d"), { w, h, tipo } = stag, scuro = temaScuro();
+  c.setTransform(stag.dpr, 0, 0, stag.dpr, 0, 0); c.clearRect(0, 0, w, h);
+  if (tipo === "sole") {
+    const g = c.createRadialGradient(w - 40, 30, 10, w - 40, 30, 190);
+    g.addColorStop(0, scuro ? "rgba(255,214,120,.16)" : "rgba(255,200,90,.22)"); g.addColorStop(1, "rgba(255,200,90,0)");
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  }
+  stag.p.forEach((p, i) => {
+    if (tipo === "pioggia") {
+      p.y += p.v * k; p.x += p.v * .18 * k;
+      c.strokeStyle = scuro ? "rgba(190,210,255,.32)" : "rgba(100,135,190,.32)"; c.lineWidth = 1.2; c.lineCap = "round";
+      c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - p.l * .18, p.y - p.l); c.stroke();
+      if (p.y - p.l > h) stag.p[i] = nuovaParticella(tipo, false);
+      return;
+    }
+    if (tipo === "sole") {
+      p.f += .05 * k; p.y -= p.v * k;
+      const a = (Math.sin(p.f) + 1) / 2, r = p.r * (.6 + a * .6);
+      c.fillStyle = scuro ? `rgba(255,226,140,${.25 + a * .45})` : `rgba(240,180,50,${.22 + a * .4})`;
+      c.beginPath(); c.moveTo(p.x, p.y - r * 2); c.quadraticCurveTo(p.x, p.y, p.x + r * 2, p.y); c.quadraticCurveTo(p.x, p.y, p.x, p.y + r * 2);
+      c.quadraticCurveTo(p.x, p.y, p.x - r * 2, p.y); c.quadraticCurveTo(p.x, p.y, p.x, p.y - r * 2); c.fill();
+      if (p.y < -10) { stag.p[i] = nuovaParticella(tipo, true); stag.p[i].y = h + 10; }
+      return;
+    }
+    p.f += .02 * k; p.y += p.v * k; p.x += Math.sin(p.f) * p.o * .5 * k;
+    if (tipo === "neve") {
+      c.fillStyle = scuro ? "rgba(255,255,255,.7)" : "rgba(150,172,212,.55)";
+      c.beginPath(); c.arc(p.x, p.y, p.r, 0, 6.283); c.fill();
+    } else {
+      p.a += p.va * k;
+      c.save(); c.translate(p.x, p.y); c.rotate(p.a + Math.sin(p.f) * .5); c.globalAlpha = scuro ? .6 : .7; c.fillStyle = p.c;
+      c.beginPath();
+      if (tipo === "foglie") { c.moveTo(0, -p.r); c.quadraticCurveTo(p.r * .9, 0, 0, p.r); c.quadraticCurveTo(-p.r * .9, 0, 0, -p.r); }
+      else c.ellipse(0, 0, p.r, p.r * .62, 0, 0, 6.283);
+      c.fill(); c.restore();
+    }
+    if (p.y > h + 12) stag.p[i] = nuovaParticella(tipo, false);
+  });
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { stag.last = 0; stagioniAggiorna(); } else { cancelAnimationFrame(stag.raf); stag.raf = 0; } });
+addEventListener("resize", () => { if (stag.tipo) { stagioniMisura(); stag.p.forEach((p) => { if (p.x > stag.w) p.x = rnd(0, stag.w); if (p.y > stag.h) p.y = rnd(0, stag.h); }); } });
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener?.("change", () => stagioniAggiorna());
+
+/* =========================================================
+   SUONI (dentro l'app)
+   Il suono delle notifiche del telefono lo decide il sistema: da una web app non si può cambiare.
+   Questi suoni sono creati dal codice con WebAudio (nessun file), a volume basso.
+   ========================================================= */
+let actx = null;
+function audio() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+  if (!actx) { try { actx = new AC(); } catch { return null; } }
+  if (actx.state === "suspended") actx.resume().catch(() => {});
+  return actx;
+}
+// iPhone: l'audio parte solo dopo un tocco. Al primo tocco lo preparo, in silenzio.
+function sbloccaAudio() {
+  ["pointerdown", "touchend", "keydown"].forEach((ev) => document.removeEventListener(ev, sbloccaAudio, true));
+  if (CUSTOM.suono === "spenti") return;
+  const a = audio(); if (!a) return;
+  try { const s = a.createBufferSource(); s.buffer = a.createBuffer(1, 1, 22050); s.connect(a.destination); s.start(0); } catch {}
+}
+["pointerdown", "touchend", "keydown"].forEach((ev) => document.addEventListener(ev, sbloccaAudio, { capture: true, passive: true }));
+function nota(a, out, t, f, dur, tipo = "sine", vol = 1, f2 = 0) {
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = tipo; o.frequency.setValueAtTime(f, t);
+  if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur * .7);
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + .05);
+}
+// lungo = notifica e biscotto; corto = cosa fatta
+const MOTIVI = {
+  campanella: (a, o, t, lungo) => { nota(a, o, t, 1318.5, 1.1, "sine", .6); nota(a, o, t, 2637, .5, "sine", .15); if (lungo) { nota(a, o, t + .2, 1760, 1.3, "sine", .5); nota(a, o, t + .2, 3520, .4, "sine", .1); } },
+  bolla: (a, o, t, lungo) => { nota(a, o, t, 380, .2, "sine", .9, 950); if (lungo) nota(a, o, t + .17, 520, .22, "sine", .8, 1300); },
+  xilofono: (a, o, t, lungo) => { (lungo ? [1046.5, 1318.5, 1568, 2093] : [1568, 2093]).forEach((f, i) => { nota(a, o, t + i * .11, f, .4, "triangle", .7); nota(a, o, t + i * .11, f * 4, .07, "sine", .1); }); },
+  gocce: (a, o, t, lungo) => { nota(a, o, t, 1500, .16, "sine", .7, 700); if (lungo) { nota(a, o, t + .18, 1800, .15, "sine", .6, 850); nota(a, o, t + .38, 1300, .2, "sine", .5, 600); } }
+};
+function suona(evento, quale = CUSTOM.suono) {
+  if (!MOTIVI[quale]) return; // "spenti"
+  const a = audio(); if (!a) return;
+  try {
+    const out = a.createGain(); out.gain.value = evento === "spunta" ? .07 : .12; out.connect(a.destination);
+    MOTIVI[quale](a, out, a.currentTime + .02, evento !== "spunta");
+  } catch {}
+}
+// Promemoria arrivato mentre l'app è aperta: il service worker avvisa, l'app suona e lo mostra
+navigator.serviceWorker?.addEventListener("message", (e) => {
+  const d = e.data;
+  if (!d || typeof d !== "object" || d.tipo !== "mochi-notifica" || document.visibilityState !== "visible") return;
+  if (d.ric === true && !mod("ricorrenti")) return; // promemoria ricorrente con il modulo spento: in silenzio
+  suona("notifica");
+  const t = taglia(str(d.title).trim(), 80), b = taglia(str(d.body).trim(), 120);
+  if (t || b) toast(`${t}${t && b ? ": " : ""}${b}`);
+});
+
 /* ---------- Consiglia alla sviluppatrice ---------- */
 // Solo il tipo di dispositivo (niente modello, versione o altro): serve a capire dove c'è un problema
 function dispositivo() {
@@ -2077,7 +2562,8 @@ function maybeAskPush() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), voci: state.items, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni } }, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), voci: state.items, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni },
+    spese: { budget_mensile_cent: state.spese.budget, voci: [...state.spese.voci].sort(ordineSpese) } }, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `mochi-backup-${todayStr()}.json`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -2089,38 +2575,85 @@ function exportData() {
 let toastT;
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2600); }
 /* Trascina giù la finestra per chiuderla (su telefono), come nelle app native.
-   Parte solo se il contenuto è già in cima, così non litiga con lo scorrimento. */
+   La finestra si muove SOLO se il dito parte:
+   - dalla maniglia / intestazione (la fascia in alto), oppure
+   - dal contenuto, ma solo se è già in cima, nessun campo è attivo (tastiera chiusa) e si tira verso il basso.
+   In tutti gli altri casi il dito scorre il contenuto e basta: la finestra resta ferma e la pagina sotto non si muove. */
+const ZONA_MANIGLIA = 48;
+const campo = (el) => el && el.closest && el.closest("input,textarea,select,[contenteditable]");
+// C'è un elemento (fino alla finestra compresa) che può ancora scorrere in quella direzione?
+function puoScorrere(el, sh, dx, dy) {
+  for (let n = el; n && n !== sh.parentNode; n = n.parentNode) {
+    if (n.nodeType !== 1) continue;
+    const s = getComputedStyle(n);
+    if (Math.abs(dy) >= Math.abs(dx)) {
+      if (/(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight + 1) {
+        if (dy < 0 && n.scrollTop + n.clientHeight < n.scrollHeight - 1) return true; // dito in su: scorre verso il basso
+        if (dy > 0 && n.scrollTop > 0) return true;
+      }
+    } else if (/(auto|scroll)/.test(s.overflowX) && n.scrollWidth > n.clientWidth + 1) {
+      if (dx < 0 && n.scrollLeft + n.clientWidth < n.scrollWidth - 1) return true;
+      if (dx > 0 && n.scrollLeft > 0) return true;
+    }
+    if (n === sh) break;
+  }
+  return false;
+}
 (function sheetSwipe() {
-  const sh = $("#sheet"); let y0 = null, dy = 0, t0 = 0, dragging = false;
-  const desk = () => matchMedia("(min-width:1024px)").matches;
+  const sh = $("#sheet"), scrim = $("#scrim");
+  let g = null; // gesto in corso
   sh.addEventListener("touchstart", (e) => {
-    if (desk() || !sh.classList.contains("on") || e.touches.length !== 1) return;
-    if (e.target.closest("input,textarea,select")) return;
-    y0 = e.touches[0].clientY; dy = 0; t0 = Date.now(); dragging = false;
+    g = null;
+    if (!telefono() || !sh.classList.contains("on") || e.touches.length !== 1) return;
+    const t = e.touches[0], top = sh.getBoundingClientRect().top;
+    const maniglia = t.clientY - top <= ZONA_MANIGLIA && !campo(e.target);
+    const tastiera = !!campo(document.activeElement) && sh.contains(document.activeElement);
+    g = { x0: t.clientX, y0: t.clientY, t0: Date.now(), dy: 0, dragging: false, deciso: false,
+      // dal contenuto: solo se in cima, fuori dai campi e con la tastiera chiusa
+      puo: maniglia || (sh.scrollTop <= 0 && !campo(e.target) && !tastiera) };
   }, { passive: true });
   sh.addEventListener("touchmove", (e) => {
-    if (y0 === null) return;
-    const d = e.touches[0].clientY - y0;
-    if (!dragging) {
-      if (d > 6 && sh.scrollTop <= 0) { dragging = true; sh.style.transition = "none"; }
-      else if (Math.abs(d) > 6) { y0 = null; return; }
-      else return;
+    if (!g || e.touches.length !== 1) return;
+    const t = e.touches[0], dx = t.clientX - g.x0, d = t.clientY - g.y0;
+    if (!g.deciso) {
+      if (Math.abs(d) < 6 && Math.abs(dx) < 6) return;
+      g.deciso = true;
+      // tira giù, in verticale, da un punto consentito, e niente dentro può ancora scorrere verso l'alto
+      if (g.puo && d > 0 && Math.abs(d) > Math.abs(dx) && sh.scrollTop <= 0 && !puoScorrere(e.target, sh, 0, 1)) {
+        g.dragging = true; sh.style.transition = "none";
+      }
     }
-    dy = Math.max(0, d);
-    sh.style.transform = `translateY(${dy}px)`;
-    e.preventDefault();
+    if (g.dragging) {
+      g.dy = Math.max(0, d);
+      sh.style.transform = `translateY(${g.dy}px)`;
+      e.preventDefault(); return;
+    }
+    // scorrimento normale: se niente può più scorrere in quella direzione, il gesto si ferma qui
+    // (altrimenti su iPhone si muoverebbe tutta la pagina, finestra compresa)
+    if (e.cancelable && !puoScorrere(e.target, sh, dx, d)) e.preventDefault();
   }, { passive: false });
   const end = () => {
-    if (y0 === null) return;
-    y0 = null;
+    if (!g) return;
+    const { dragging, dy, t0 } = g; g = null;
     if (!dragging) return;
-    dragging = false;
     const fast = dy / Math.max(1, Date.now() - t0) > 0.5;
     sh.style.transition = ""; sh.style.transform = "";
     if (dy > 110 || (fast && dy > 40)) closeSheet();
   };
   sh.addEventListener("touchend", end); sh.addEventListener("touchcancel", end);
+  // toccando lo sfondo scuro la pagina sotto non scorre
+  scrim.addEventListener("touchmove", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 })();
+/* iPhone con la tastiera aperta: la finestra resta appoggiata sopra la tastiera, dentro la parte visibile */
+function sheetSuTastiera() {
+  const vv = window.visualViewport, sh = $("#sheet"); if (!vv || !sh) return;
+  if (!telefono()) { sh.style.removeProperty("--vv-b"); sh.style.removeProperty("--vv-h"); return; }
+  const sotto = Math.max(0, document.documentElement.clientHeight - (vv.offsetTop + vv.height));
+  sh.style.setProperty("--vv-b", Math.round(sotto) + "px");
+  sh.style.setProperty("--vv-h", Math.round(vv.height) + "px");
+}
+window.visualViewport?.addEventListener("resize", sheetSuTastiera);
+window.visualViewport?.addEventListener("scroll", sheetSuTastiera);
 
 function confetti(x, y, n = 18) {
   const cols = ["#ff8fb1", "#ff9e7a", "#ffd6e4", "#bfe8d4", "#e5dcff", "#fff1c2"];
@@ -2157,12 +2690,48 @@ document.addEventListener("click", async (e) => {
       const it = state.items.find((x) => x.id === id); if (!it) break;
       const prima = bocconcini().length;
       it.done = !it.done; it.done_at = it.done ? new Date().toISOString() : null; it.updated_at = new Date().toISOString();
-      if (it.done) { const r = el.getBoundingClientRect(); confetti(r.left + 13, r.top + 13); if (navigator.vibrate) navigator.vibrate(15); feed(el, it); setTimeout(() => cheer(), 650); checkRegalo(prima); }
+      if (it.done) { const r = el.getBoundingClientRect(); confetti(r.left + 13, r.top + 13); suona("spunta"); if (navigator.vibrate) navigator.vibrate(15); feed(el, it); setTimeout(() => cheer(), 650); checkRegalo(prima); }
       else applyCustom();
       setTimeout(render, it.done ? 280 : 0);
       await store.save(it); break;
     }
     case "close": closeSheet(); break;
+    // lista da spuntare: nell'elenco e sulla bacheca (senza aprire l'editor)
+    case "st-apri": { e.stopPropagation(); if (state.stAperti.has(id)) state.stAperti.delete(id); else state.stAperti.add(id); render(); break; }
+    case "st-spunta": {
+      e.stopPropagation();
+      const it = state.items.find((x) => x.id === id), x = it?.sottotask?.find((s) => s.id === v); if (!x) break;
+      x.f = !x.f; it.updated_at = new Date().toISOString();
+      if (x.f) { const r = el.getBoundingClientRect(); confetti(r.left + 12, r.top + r.height / 2, 8); suona("spunta"); }
+      render(); await store.save(it); break;
+    }
+    // lista da spuntare: dentro l'editor
+    case "st-toggle": { const x = draft?.sottotask.find((s) => s.id === v); if (x) { x.f = !x.f; drawSt(); } break; }
+    case "st-del": if (draft) { draft.sottotask = draft.sottotask.filter((s) => s.id !== v); drawSt(); } break;
+    case "st-su": { const a = draft?.sottotask, i = a ? a.findIndex((s) => s.id === v) : -1; if (i > 0) { [a[i - 1], a[i]] = [a[i], a[i - 1]]; drawSt(); } break; }
+    // spese
+    case "spesa-nuova": apriSpesa(null); break;
+    case "spesa-modifica": { const sp = state.spese.voci.find((x) => x.id === id); if (sp) apriSpesa(sp); break; }
+    case "spesa-cat": if (spesaDraft && CATEGORIE_SPESA.some((c) => c[0] === v)) { spesaDraft.categoria = v; document.querySelectorAll(".sp-pick button").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); } break;
+    case "spesa-giorno": if (spesaDraft && validYmd(v)) { spesaDraft.giorno = v; $("#sGiorno").value = v; document.querySelectorAll(".sp-quando .fbtn").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); } break;
+    case "spesa-salva": salvaSpesa(el); break;
+    case "spesa-elimina": eliminaSpesa(); break;
+    case "spese-mese": { const g = state.speseMese || new Date(); state.speseMese = new Date(g.getFullYear(), g.getMonth() + (+v), 1); render(); break; }
+    case "spese-budget": chiediBudget(); break;
+    // impostazioni: moduli, stagioni, suoni
+    case "modulo": {
+      const m = MODULI.find((x) => x[0] === v); if (!m) break;
+      const acceso = !mod(v);
+      // I ricorrenti li manda il server: spegnendo il modulo vanno messi in pausa, altrimenti continuerebbero ad arrivare
+      if (v === "ricorrenti" && ONLINE_MODE) { const r = await moduloRicorrenti(acceso); if (r === "annulla") { riapriImpostazioni(); break; } if (r === "errore") break; }
+      await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: acceso } });
+      riapriImpostazioni();
+      if (v === "ricorrenti" && acceso && ricorrenti.some((x) => !x.attiva)) toast("I tuoi promemoria ricorrenti sono in pausa: riattivali dalla pagina Ricorrenti");
+      else toast(acceso ? `${m[1]} ${m[2]}: acceso` : `${m[1]} ${m[2]}: spento. I dati restano al sicuro`);
+      break;
+    }
+    case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
+    case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
     case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); break; }
     case "open-custom": openMascotPicker(); break;
     case "open-pancino": openPancino(); break;
@@ -2227,9 +2796,9 @@ document.addEventListener("click", async (e) => {
     case "risp-salva": salvaRisposta(el); break;
     case "c-tipo": consiglio.tipo = v; openConsiglio(); break;
     case "c-send": sendConsiglio(el); break;
-    case "pick-palette": await saveCustom({ colore: v }); openSettings(); cheer(); break;
-    case "pick-font": await saveCustom({ font: v }); openSettings(); cheer(); break;
-    case "pick-stile": await saveCustom({ stile: v }); openSettings(); cheer(); break;
+    case "pick-palette": await saveCustom({ colore: v }); riapriImpostazioni(); cheer(); break;
+    case "pick-font": await saveCustom({ font: v }); riapriImpostazioni(); cheer(); break;
+    case "pick-stile": await saveCustom({ stile: v }); riapriImpostazioni(); cheer(); break;
     case "wear": await saveCustom({ accessorio: v }); openPancino(); cheer(); break;
     case "pick-mascot": {
       document.querySelectorAll(".mpick button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
@@ -2247,10 +2816,13 @@ document.addEventListener("click", async (e) => {
       if (draft._autoRemind && !draft._remindManual && v !== "note" && draft.remind !== "auto") draft.remind = defaultRemind(draft);
       drawEditor(); break;
     case "d-area": draft.area = v; drawEditor(); break;
+    case "d-lista":
     case "d-more": advanced = true;
       if (draft._new && draft.title) { const p = parseQuick(draft.title); draft.due_date = draft.due_date || p.date; draft.due_time = draft.due_time || p.time; }
       if (draft.remind === "auto") draft.remind = defaultRemind(draft);
-      drawEditor(); break;
+      drawEditor();
+      if (act === "d-lista") setTimeout(() => { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "center" }); } }, 60);
+      break;
     case "d-color": draft.color = +v; drawEditor(); break;
     case "d-pin": draft.pinned = !draft.pinned; drawEditor(); break;
     case "d-save": saveDraft(); break;
@@ -2321,6 +2893,7 @@ async function loadAndRender() {
   if (ONLINE_MODE && store.user) await loadListe();
   await caricaUmori();
   await caricaTurni();
+  await caricaSpese();
   state.items = await store.list();
   render(); maybeAutoRecap(); checkListeSconosciute();
 }
@@ -2368,7 +2941,7 @@ async function startOnline() {
 
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
 let loginMode = "login";
-function clearLocal() { ["mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache"].forEach((k) => localStorage.removeItem(k)); }
+function clearLocal() { ["mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache"].forEach((k) => localStorage.removeItem(k)); }
 function setLoginMode(m) {
   loginMode = m;
   $("#login").classList.remove("hidden"); $("#app").classList.add("hidden"); $("#nav").classList.add("hidden");

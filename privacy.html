@@ -8,29 +8,46 @@
 <title>Informativa privacy</title>
 <link rel="stylesheet" href="vendor/fonts/fonts.css">
 <script src="config.js"></script>
+<link rel="stylesheet" href="tema.css">
+<script src="privacy.js"></script>
 <style>
-  :root{--bg:#fff5f8;--card:#fff;--ink:#4a2f3a;--ink2:#8a6a77;--pink:#e85d8a;--line:#f6dbe5}
-  @media (prefers-color-scheme: dark){:root{--bg:#2a1d24;--card:#3a2832;--ink:#ffe9f1;--ink2:#c9a9b7;--pink:#ff8fb1;--line:#4d3541}}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:Nunito,system-ui,sans-serif;line-height:1.6}
+  /* Stessi colori, chiaro/scuro, carattere e stile scelti nell'app (li applica privacy.js leggendo le preferenze) */
+  :root{--acc:var(--pink-d)}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--acc:var(--pink)}}
+  :root[data-theme="dark"]{--acc:var(--pink)}
+  html,body{background:var(--bg)}
+  body{margin:0;color:var(--ink);font-family:var(--fb);line-height:1.6}
   main{max-width:680px;margin:0 auto;padding:28px 16px 60px}
   header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
-  header img{width:56px}
-  h1,h2{font-family:Fredoka,Nunito,sans-serif;font-weight:600;margin:0}
-  h1{font-size:26px} h2{font-size:18px;margin:22px 0 6px;color:var(--pink)}
+  header img{width:56px;border-radius:16px}
+  h1,h2{font-family:var(--ft);font-weight:600;margin:0}
+  h1{font-size:26px} h2{font-size:18px;margin:22px 0 6px;color:var(--acc)}
   section{background:var(--card);border-radius:20px;padding:4px 18px 16px;margin-bottom:12px;border:1px solid var(--line)}
   p,li{font-size:15.5px} ul{padding-left:20px;margin:6px 0}
   .muted{color:var(--ink2);font-size:13.5px}
-  a{color:var(--pink);font-weight:800}
+  a{color:var(--acc);font-weight:800}
   .back{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;background:var(--bg);border-bottom:1px solid var(--line)}
-  .back button{border:0;background:var(--card);color:var(--pink);font:inherit;font-weight:800;font-size:15px;padding:9px 14px;border-radius:14px;cursor:pointer;box-shadow:0 0 0 1px var(--line)}
+  .back button{border:0;background:var(--card);color:var(--acc);font:inherit;font-weight:800;font-size:15px;padding:9px 14px;border-radius:14px;cursor:pointer;box-shadow:0 0 0 1px var(--line)}
   .back .x{width:38px;height:38px;padding:0;border-radius:50%;font-size:17px}
-  .end{display:block;width:100%;margin-top:18px;border:0;border-radius:18px;padding:15px;font:inherit;font-weight:800;font-size:16px;color:#fff;background:linear-gradient(145deg,#ff8fb1,#e85d8a);cursor:pointer}
+  .end{display:block;width:100%;margin-top:18px;border:0;border-radius:18px;padding:15px;font:inherit;font-weight:800;font-size:16px;color:#fff;background:linear-gradient(145deg,var(--pink),var(--pink-d));box-shadow:0 8px 18px rgba(var(--acc-rgb),.3);cursor:pointer}
+  /* Stile Quaderno: carta puntinata, titoli a mano, fogli con bordo a inchiostro */
+  :root[data-stile="quaderno"],:root[data-stile="quaderno"] body{background-color:var(--paper);background-image:radial-gradient(circle,var(--dot) 1.1px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed}
+  :root[data-stile="quaderno"] :is(h1,h2){font-family:var(--fh);font-weight:400}
+  :root[data-stile="quaderno"][data-font] :is(h1,h2){font-weight:700}
+  :root[data-stile="quaderno"] h1{font-size:32px;line-height:1.1}
+  :root[data-stile="quaderno"] h2{font-size:23px;color:var(--ink)}
+  :root[data-stile="quaderno"] h2::after{content:"";display:block;width:110px;height:4px;margin-top:2px;border-radius:2px;background:var(--pink);opacity:.8}
+  :root[data-stile="quaderno"] section{border-radius:var(--r-paper);border:1.5px solid var(--ink-a);box-shadow:var(--edge)}
+  :root[data-stile="quaderno"] .back{background:var(--paper);border-bottom:2px dashed var(--ink-a)}
+  :root[data-stile="quaderno"] .back button{border-radius:8px;border:1.5px solid var(--ink-a);box-shadow:2px 2px 0 var(--ink-a)}
+  :root[data-stile="quaderno"] .end{border-radius:8px;background:var(--pink);color:#3b2a32;border:1.5px solid rgba(59,42,50,.55);box-shadow:3px 3px 0 rgba(59,42,50,.35)}
+  :root[data-stile="quaderno"] header img{border-radius:8px}
 </style>
 </head>
 <body>
 <nav class="back"><button type="button" class="js-back">‹ Indietro</button><button type="button" class="js-back x" aria-label="Chiudi">✕</button></nav>
 <main>
-  <header><img id="pm" src="icons/icon-mochi-192.png" alt="" style="border-radius:16px"><div><h1>Informativa privacy</h1><div class="muted">Mochi - le mie cose</div></div></header>
+  <header><img id="pm" src="icons/icon-mochi-192.png" alt=""><div><h1>Informativa privacy</h1><div class="muted">Mochi - le mie cose</div></div></header>
 
   <section>
     <h2>In breve</h2>
@@ -51,13 +68,15 @@
     <h2>Quali dati</h2>
     <ul>
       <li><b>Account</b>: email, nome scelto da te, password (salvata in forma cifrata, nessuno può leggerla).</li>
-      <li><b>Contenuti</b>: cose da fare, appuntamenti e appunti che scrivi tu.</li>
+      <li><b>Contenuti</b>: cose da fare, appuntamenti e appunti che scrivi tu, con le eventuali liste da spuntare al loro interno.</li>
       <li><b>Notifiche</b>: se le attivi, un identificativo tecnico del dispositivo per inviarti i promemoria.</li>
       <li><b>Com'è andata la giornata</b>: se la usi, l'umore che scegli per ogni giorno e l'eventuale nota. Nessun altro utente li vede.</li>
       <li><b>Turni di lavoro</b>: se li usi, i tipi di turno con i loro orari, il ciclo e i turni che segni giorno per giorno. Nessun altro utente li vede.</li>
+      <li><b>Spese</b>: se le usi, l'importo, la categoria, il giorno e l'eventuale nota di ogni spesa, più il budget mensile se lo imposti. Sono solo tue: nessun altro utente le vede, nemmeno nelle liste condivise.</li>
+      <li><b>Preferenze</b>: nome dell'app, mascotte, colori, stile, carattere, cosa vuoi usare, stagioni e suoni, salvati nel tuo account per ritrovarli su tutti i tuoi dispositivi.</li>
       <li><b>Liste condivise</b>: se entri in una lista condivisa, le altre persone della lista vedono il tuo nome e tutto quello che metti nella lista (non la tua email né le tue altre voci). Se elimini l'account, le voci che hai messo nelle liste condivise restano alle altre persone.</li>
       <li><b>Messaggi alla sviluppatrice</b>: se usi "Consiglia alla sviluppatrice", il testo che scrivi e il tipo di dispositivo (es. iPhone o Mac). Chi gestisce l'app li legge insieme al tuo nome e alla tua email e può risponderti dentro l'app. Messaggi e risposte vengono cancellati con il tuo account.</li>
-      <li><b>Sul tuo dispositivo</b>: una copia delle tue voci e le preferenze (es. il tema), per far funzionare l'app anche offline. Nessun cookie di tracciamento.</li>
+      <li><b>Sul tuo dispositivo</b>: una copia dei tuoi dati (voci, spese, turni...) e le preferenze (es. il tema), per far funzionare l'app anche offline. Nessun cookie di tracciamento.</li>
     </ul>
   </section>
 
@@ -89,6 +108,5 @@
   <p class="muted">Ultimo aggiornamento: novembre 2026 · <a href="./">Torna all'app</a></p>
   <button type="button" class="js-back end">Torna a Mochi</button>
 </main>
-<script src="privacy.js"></script>
 </body>
 </html>

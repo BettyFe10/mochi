@@ -1,8 +1,9 @@
 // Service worker di Mochi: funzionamento offline + notifiche push
-const CACHE = "mochi-v10";
+const CACHE = "mochi-v13";
 const SHELL = [
   "./",
   "./index.html",
+  "./tema.css",
   "./config.js",
   "./app.js",
   "./mascotte.js",
@@ -75,15 +76,20 @@ self.addEventListener("fetch", (e) => {
 self.addEventListener("push", (e) => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch { data = { title: "Mochi", body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(
-    self.registration.showNotification(data.title || "Mochi ti ricorda 🍡", {
-      body: data.body || "",
+  const title = data.title || "Mochi ti ricorda 🍡", body = data.body || "";
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(title, {
+      body,
       icon: "icons/icon-192.png",
       badge: "icons/icon-192.png",
       tag: data.id || undefined,
       data: { url: "./" }
-    })
-  );
+    }),
+    // se l'app è aperta, la avviso: suona e mostra il promemoria anche dentro l'app
+    self.clients.matchAll({ type: "window", includeUncontrolled: true })
+      .then((list) => list.forEach((c) => c.postMessage({ tipo: "mochi-notifica", ric: String(data.id || "").startsWith("ric-"), title: String(title).slice(0, 120), body: String(body).slice(0, 300) })))
+      .catch(() => {})
+  ]));
 });
 
 self.addEventListener("notificationclick", (e) => {

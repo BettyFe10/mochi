@@ -16,44 +16,11 @@
 <link rel="icon" href="icons/mochi.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="stylesheet" href="vendor/fonts/fonts.css">
+<link rel="stylesheet" href="tema.css">
 <script src="config.js"></script>
 <script src="mascotte.js"></script>
 <script src="frasi.js"></script>
 <style>
-:root{
-  --bg:#fff5f8; --bg2:#ffe9f0; --card:#ffffff; --ink:#4a2f3a; --ink2:#8a6a77; --line:#f6dbe5;
-  --pink:#ff8fb1; --pink-d:#e85d8a; --pink-l:#ffe1eb; --salmon:#ff9e7a; --salmon-l:#ffe8de;
-  --nori:#2f4a3a; --mint:#bfe8d4; --mint-d:#3f8f6a; --lav:#e5dcff; --lav-d:#7a62c9; --butter:#fff1c2;
-  --acc-rgb:232,93,138; --recap1:#ffd6e4; --recap2:#ffe8de; --recap3:#fff1c2;
-  --shadow:0 6px 20px rgba(var(--acc-rgb),.12); --r:22px;
-  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#2a1d24; --bg2:#33232c; --card:#3a2832; --ink:#ffe9f1; --ink2:#c9a9b7; --line:#4d3541;
-    --pink-l:#57324a; --salmon-l:#56362c; --mint:#2f4b3f; --lav:#3c3456; --butter:#4f4630;
-    --shadow:0 6px 20px rgba(0,0,0,.35);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#2a1d24; --bg2:#33232c; --card:#3a2832; --ink:#ffe9f1; --ink2:#c9a9b7; --line:#4d3541;
-  --pink-l:#57324a; --salmon-l:#56362c; --mint:#2f4b3f; --lav:#3c3456; --butter:#4f4630;
-  --shadow:0 6px 20px rgba(0,0,0,.35);
-}
-
-/* ---------- Temi di colore (Fragola è quello di base, definito sopra) ---------- */
-:root[data-palette="matcha"]{--pink:#7cc79a; --pink-d:#3f9a6b; --pink-l:#e3f5ea; --bg:#f4fbf6; --bg2:#e6f4ea; --line:#d6ecdd; --ink:#2f3f36; --ink2:#6b8576; --acc-rgb:63,154,107; --recap1:#d9f2e3; --recap2:#eef8e8; --recap3:#fff6d6; }
-@media (prefers-color-scheme: dark){:root[data-palette="matcha"]:not([data-theme="light"]){--bg:#1c2620; --bg2:#232f28; --card:#2a382f; --line:#3a4c41; --pink-l:#2f4a3b; --ink:#e8f6ee; --ink2:#a6c2b2; }}
-:root[data-palette="matcha"][data-theme="dark"]{--bg:#1c2620; --bg2:#232f28; --card:#2a382f; --line:#3a4c41; --pink-l:#2f4a3b; --ink:#e8f6ee; --ink2:#a6c2b2; }
-:root[data-palette="lavanda"]{--pink:#b69cff; --pink-d:#7a5fd6; --pink-l:#ece6ff; --bg:#f8f5ff; --bg2:#efe9ff; --line:#e3dbfb; --ink:#3a3150; --ink2:#7d7396; --acc-rgb:122,95,214; --recap1:#e6ddff; --recap2:#f3e8ff; --recap3:#ffe8f3; --lav:#d4f0ec; --lav-d:#2f8f84;}
-@media (prefers-color-scheme: dark){:root[data-palette="lavanda"]:not([data-theme="light"]){--bg:#211d2e; --bg2:#28233a; --card:#302a45; --line:#433b5c; --pink-l:#3d3460; --ink:#efeaff; --ink2:#b7add3; --lav:#24433f;}}
-:root[data-palette="lavanda"][data-theme="dark"]{--bg:#211d2e; --bg2:#28233a; --card:#302a45; --line:#433b5c; --pink-l:#3d3460; --ink:#efeaff; --ink2:#b7add3; --lav:#24433f;}
-:root[data-palette="pesca"]{--pink:#ffab7a; --pink-d:#e0703f; --pink-l:#ffe6d8; --bg:#fff7f2; --bg2:#ffeee3; --line:#f8dfd0; --ink:#4a3229; --ink2:#8c6e62; --acc-rgb:224,112,63; --recap1:#ffe0cc; --recap2:#ffefd9; --recap3:#fff5c8; }
-@media (prefers-color-scheme: dark){:root[data-palette="pesca"]:not([data-theme="light"]){--bg:#2a1f1a; --bg2:#33261f; --card:#3b2c24; --line:#523d32; --pink-l:#5a3a2a; --ink:#ffeee5; --ink2:#cdb0a3; }}
-:root[data-palette="pesca"][data-theme="dark"]{--bg:#2a1f1a; --bg2:#33261f; --card:#3b2c24; --line:#523d32; --pink-l:#5a3a2a; --ink:#ffeee5; --ink2:#cdb0a3; }
-:root[data-palette="cielo"]{--pink:#7cc0f0; --pink-d:#3a86c8; --pink-l:#e1f1fd; --bg:#f4f9ff; --bg2:#e7f2fd; --line:#d5e7f7; --ink:#263a4c; --ink2:#6a8197; --acc-rgb:58,134,200; --recap1:#d8ecfc; --recap2:#e8f4ff; --recap3:#fdf2d6; }
-@media (prefers-color-scheme: dark){:root[data-palette="cielo"]:not([data-theme="light"]){--bg:#1a222c; --bg2:#202a36; --card:#273342; --line:#38495c; --pink-l:#24405a; --ink:#e8f3ff; --ink2:#a8bcd0; }}
-:root[data-palette="cielo"][data-theme="dark"]{--bg:#1a222c; --bg2:#202a36; --card:#273342; --line:#38495c; --pink-l:#24405a; --ink:#e8f3ff; --ink2:#a8bcd0; }
 .palettes{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:4px 0 2px}
 .palettes button{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:none;padding:0;cursor:pointer;color:var(--ink2);font:inherit}
 .palettes .sw{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;font-size:26px;border:3px solid var(--card);box-shadow:0 0 0 2px var(--line);transition:transform .15s}
@@ -85,15 +52,6 @@
 .emojis button.on{border-color:var(--pink-d);background:var(--pink-l)}
 .codice{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:800;letter-spacing:2px;text-align:center;background:var(--pink-l);color:var(--pink-d);border-radius:16px;padding:14px;user-select:all}
 .setrow.col{flex-direction:column;align-items:stretch;gap:8px}
-:root{--fb:Nunito,system-ui,sans-serif;--ft:Fredoka,Nunito,sans-serif}
-/* ---------- Caratteri (Impostazioni > Carattere) ---------- */
-:root[data-font="tondo"]{--fb:Quicksand,system-ui,sans-serif;--ft:Quicksand,system-ui,sans-serif}
-:root[data-font="mano"]{--fb:'Patrick Hand',system-ui,sans-serif;--ft:'Patrick Hand',system-ui,sans-serif}
-:root[data-font="mano"] body{font-size:17px;letter-spacing:.2px}
-:root[data-font="pastello"]{--fb:Comfortaa,system-ui,sans-serif;--ft:Comfortaa,system-ui,sans-serif}
-:root[data-font="leggibile"]{--fb:'Atkinson Hyperlegible',system-ui,sans-serif;--ft:'Atkinson Hyperlegible',system-ui,sans-serif}
-:root[data-font="tondo"] :is(h1,h2,h3,.fred),:root[data-font="pastello"] :is(h1,h2,h3,.fred),:root[data-font="leggibile"] :is(h1,h2,h3,.fred){font-weight:700}
-:root[data-font="sistema"]{--fb:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;--ft:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
 .fonts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
 .fonts button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
 .fonts button .aa{font-size:24px;line-height:1.1}
@@ -254,7 +212,9 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
 /* ---------- sheet ---------- */
 .scrim{position:fixed;inset:0;background:rgba(74,47,58,.35);z-index:40;opacity:0;pointer-events:none;transition:.25s;backdrop-filter:blur(2px)}
 .scrim.on{opacity:1;pointer-events:auto}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;max-width:620px;margin:0 auto;background:var(--card);border-radius:28px 28px 0 0;padding:10px 18px calc(var(--safe-b) + 18px);transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.9,.3,1.1);max-height:92dvh;overflow:auto;box-shadow:0 -10px 30px rgba(0,0,0,.12)}
+.sheet{position:fixed;left:0;right:0;bottom:var(--vv-b,0px);z-index:50;max-width:620px;margin:0 auto;background:var(--card);border-radius:28px 28px 0 0;padding:10px 18px calc(var(--safe-b) + 18px);transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.9,.3,1.1);max-height:min(92dvh,calc(var(--vv-h,100dvh) - 12px));overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;box-shadow:0 -10px 30px rgba(0,0,0,.12)}
+/* la finestra resta ferma: lo sfondo scuro non fa scorrere la pagina sotto */
+.scrim{touch-action:none;overscroll-behavior:contain}
 .sheet.on{transform:none}
 .grab{width:44px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 12px}
 .sheet-x{position:sticky;top:0;margin:-22px -8px -14px auto;width:36px;height:36px;border-radius:50%;border:0;background:var(--pink-l);color:var(--ink2);font-size:16px;font-weight:800;cursor:pointer;z-index:2;display:grid;place-items:center}
@@ -320,6 +280,7 @@ textarea.input{min-height:90px;resize:vertical}
 .btn.danger{flex:0 0 auto;padding:15px 18px;background:#ffe0e4;color:#c0394e}
 .btn.danger-full{background:#d64a62;color:#fff;box-shadow:0 8px 18px rgba(214,74,98,.3)}
 .more{font-size:14px;font-weight:800;color:var(--pink-d);padding:6px 4px;margin-bottom:6px}
+.more-row{display:flex;flex-wrap:wrap;gap:0 14px}
 .setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 4px;border-bottom:1px solid var(--line)}
 .setrow:last-child{border-bottom:0}
 .setrow small{display:block;color:var(--ink2);font-size:12.5px}
@@ -558,20 +519,118 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="quaderno"] .chip.lav::before,:root[data-stile="quaderno"] .areas button.lav::before,:root[data-stile="quaderno"] .legend span:first-child::before{background:var(--lav-d)}
 :root[data-stile="quaderno"] .evdot{background:var(--salmon-l);color:var(--ink);border-radius:5px}
 .evdot .ico{width:17px;height:17px}
+/* ---------- Stagioni: dietro alle schede, non riceve tocchi ---------- */
+#stagioni{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0;transition:opacity .8s}
+#stagioni.on{opacity:1}
+.app{position:relative;z-index:1}
+/* ---------- Impostazioni: cosa vuoi usare, stagioni, suoni ---------- */
+.moduli{display:grid;gap:7px}
+.moduli .pin-toggle{padding:9px 12px}
+.moduli .pin-toggle.on{border-color:var(--line)}
+.moduli .pin-toggle .e{font-size:20px;width:26px;text-align:center;flex:none}
+.moduli .pin-toggle>span:nth-child(2){flex:1;min-width:0}
+.stag-scelta{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:16px;background:var(--bg2)}
+.stag-scelta small{color:var(--ink2);font-size:12.5px;font-weight:700}
+.stag-scelta .fbtn{font-size:13.5px;padding:7px 12px}
+.suoni{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.suoni button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 7px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink2);min-width:0}
+.suoni .sw{font-size:24px;line-height:1.1}
+.suoni small{font-size:11px;font-weight:700;letter-spacing:-.2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:370px){ .suoni{gap:4px} .suoni small{font-size:10px;letter-spacing:-.3px} }
+.suoni button.on{border-color:var(--pink-d);background:var(--pink-l);color:var(--pink-d)}
+/* ---------- Lista da spuntare (sottotask) ---------- */
+.st-ed{display:flex;flex-direction:column;gap:6px}
+.st-row{display:flex;align-items:center;gap:6px}
+.st-check{width:26px;height:26px;flex:none;border-radius:9px;border:2.5px solid var(--pink);display:grid;place-items:center;background:var(--card);color:#fff;font-weight:800;font-size:14px}
+.st-row.fatto .st-check{background:var(--pink)}
+.st-in{flex:1;min-width:0;padding:9px 11px;border-radius:12px;border:2px solid var(--line);background:var(--bg);font-size:16px;outline:none;transition:border .2s}
+.st-in:focus{border-color:var(--pink)}
+.st-row.fatto .st-in{text-decoration:line-through;color:var(--ink2)}
+.st-btn{width:32px;height:38px;flex:none;border-radius:10px;color:var(--ink2);font-weight:800;font-size:15px}
+.st-btn:disabled{opacity:.25;cursor:default}
+.st-row.nuovo .st-plus{width:26px;flex:none;text-align:center;font-weight:800;font-size:21px;color:var(--pink-d)}
+.st-row.nuovo .st-in{border-style:dashed}
+.st-prog{font-size:12.5px;font-weight:800;color:var(--ink2);text-align:right;margin-right:4px}
+.chip.st-chip{font:inherit;font-weight:800;color:inherit;cursor:pointer;padding:2px 9px}
+.chip.st-chip.on{background:var(--pink-l);color:var(--pink-d)}
+.chip.st-chip.tutte{color:var(--mint-d)}
+.st-fr{font-size:10px;margin-left:3px}
+.st-lista{display:flex;flex-direction:column;margin:8px 0 -4px}
+.st-voce{display:flex;align-items:flex-start;gap:9px;width:100%;text-align:left;padding:6px 2px;border-radius:10px;color:var(--ink);font-size:14.5px;line-height:1.35}
+.st-voce:active{background:var(--bg2)}
+.st-box{width:20px;height:20px;flex:none;border-radius:7px;border:2px solid var(--pink);display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;margin-top:-1px}
+.item.lavoro .st-box{border-color:var(--lav-d)}
+.st-voce.fatto .st-box{background:var(--pink)}
+.item.lavoro .st-voce.fatto .st-box{background:var(--lav-d)}
+.st-tx{min-width:0;overflow-wrap:anywhere}
+.st-voce.fatto .st-tx{text-decoration:line-through;opacity:.6}
+.st-note{display:flex;flex-direction:column;margin-top:6px}
+.note .st-voce{color:inherit;padding:3px 0;font-size:13.5px;gap:7px}
+.note .st-voce:active{background:rgba(74,47,58,.06)}
+.note .st-box{width:17px;height:17px;border-radius:5px;border-color:rgba(74,47,58,.45);font-size:11px;margin-top:0}
+.note .st-voce.fatto .st-box{background:rgba(74,47,58,.55);border-color:transparent}
+.st-note small{font-size:12px;opacity:.65;padding-left:24px}
+/* ---------- Spese ---------- */
+.sp-tot{background:var(--card);box-shadow:var(--shadow);border-radius:20px;padding:16px;text-align:center}
+.sp-tot>span{display:block;color:var(--ink2);font-size:13.5px;font-weight:700}
+.sp-tot>b{display:block;font-family:var(--ft);font-size:34px;color:var(--pink-d);line-height:1.15;margin:2px 0 0}
+.sp-bud{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 10px;margin-top:12px;text-align:left}
+.sp-bud .sp-bar{grid-column:1/3}
+.sp-bud small{color:var(--ink2);font-size:13px}
+.sp-bud small b{color:var(--ink)}
+.sp-bar{display:block;height:10px;border-radius:9px;background:var(--bg2);overflow:hidden}
+.sp-bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--pink),var(--pink-d))}
+.sp-bud.oltre .sp-bar i{background:#e0566e}
+.sp-bud.oltre small b{color:#c0394e}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .sp-bud.oltre small b{color:#ff8fa3} }
+:root[data-theme="dark"] .sp-bud.oltre small b{color:#ff8fa3}
+.sp-add{display:block;width:100%;margin-top:12px}
+.sp-riga{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border-radius:16px;padding:10px 12px;box-shadow:var(--shadow);color:var(--ink)}
+.sp-e{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:20px;background:var(--cc)}
+.sp-t{flex:1;min-width:0}
+.sp-t b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-t small{display:block;color:var(--ink2);font-size:12.5px}
+.sp-i{font-size:15.5px;white-space:nowrap;flex:none}
+.sp-cats{display:flex;flex-direction:column;gap:11px;background:var(--card);box-shadow:var(--shadow);border-radius:18px;padding:14px}
+.sp-cat{display:flex;align-items:center;gap:10px}
+.sp-cat .sp-e{width:32px;height:32px;font-size:17px;border-radius:10px}
+.sp-cn{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.sp-cn b{font-size:14px}
+.sp-cn .sp-bar{height:8px}
+.sp-cv{text-align:right;flex:none}
+.sp-cv b{display:block;font-size:14px}
+.sp-cv small{color:var(--ink2);font-size:11.5px;font-weight:700}
+.sp-imp{position:relative}
+.sp-imp .input{font-size:30px;font-weight:800;padding:12px 48px 12px 16px;text-align:right;font-family:var(--ft)}
+.sp-imp .eur{position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:24px;font-weight:800;color:var(--ink2);pointer-events:none}
+.sp-pick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.sp-pick button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 7px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink2);min-width:0}
+.sp-pick .e{font-size:22px;line-height:1.1}
+.sp-pick small{font-size:11px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-pick button.on{border-color:var(--pink-d);background:var(--pink-l);color:var(--pink-d)}
+.sp-quando{display:flex;gap:8px;align-items:center}
+.sp-quando .input{flex:1;min-width:0;padding:9px 12px}
+/* telefono: totale, categorie, elenco. Computer: totale ed elenco a sinistra, categorie a destra */
+@media (min-width:1024px){ .split.spese{grid-template-columns:minmax(0,1.2fr) minmax(320px,1fr);grid-template-areas:"top side" "lista side";grid-template-rows:auto 1fr} .split.spese .sp-top{grid-area:top} .split.spese .sp-lista{grid-area:lista} .split.spese .col-side{grid-area:side} .split.spese .col-side>.sec:first-child{margin-top:0} }
+:root[data-stile="quaderno"] :is(.sp-tot,.sp-riga,.sp-cats){border-radius:var(--r-paper);box-shadow:var(--edge);border:1.5px solid var(--ink-a)}
+:root[data-stile="quaderno"] .sp-tot>b{font-family:var(--fh);font-weight:400;font-size:42px}
+:root[data-stile="quaderno"][data-font] .sp-tot>b{font-weight:700;font-size:34px}
+:root[data-stile="quaderno"] :is(.sp-e,.sp-pick button,.suoni button,.stag-scelta){border-radius:8px}
+:root[data-stile="quaderno"] .sp-e{box-shadow:inset 0 0 0 1.5px var(--ink-a)}
+:root[data-stile="quaderno"] .sp-bar,:root[data-stile="quaderno"] .sp-bar i{border-radius:3px}
+:root[data-stile="quaderno"] .sp-bar i{background:var(--pink)}
+:root[data-stile="quaderno"] .sp-bud.oltre .sp-bar i{background:#e0566e}
+:root[data-stile="quaderno"] .sp-imp .input{font-family:var(--fh);font-weight:400;font-size:36px}
+:root[data-stile="quaderno"] :is(.st-check,.st-box){border-radius:4px;border-width:2px}
+:root[data-stile="quaderno"] :is(.st-in,.st-btn){border-radius:7px}
+:root[data-stile="quaderno"] .st-in{border-width:1.5px;background:var(--card)}
+:root[data-stile="quaderno"] .moduli .pin-toggle{border-radius:8px;border-width:1.5px}
 /* =====================================================================
    QUADERNO DI CARTA
    Pagina puntinata, titoli scritti a mano con il tratto a pennarello,
    pulsanti come etichette di carta, nastro adesivo sulle finestre.
    Niente sfumature né bagliori: colori pieni, bordi a inchiostro, ombre corte.
    ===================================================================== */
-:root[data-stile="quaderno"]{
-  --paper:#fffaf7; --ink-a:rgba(59,42,50,.16); --ink-b:rgba(59,42,50,.32); --dot:rgba(59,42,50,.11);
-  --fh:'Patrick Hand',var(--ft); --r-paper:9px; --edge:0 2px 0 rgba(59,42,50,.07);
-}
-@media (prefers-color-scheme: dark){ :root[data-stile="quaderno"]:not([data-theme="light"]){ --paper:var(--bg); --ink-a:rgba(255,236,244,.16); --ink-b:rgba(255,236,244,.3); --dot:rgba(255,236,244,.08); --edge:0 2px 0 rgba(0,0,0,.25) } }
-:root[data-stile="quaderno"][data-theme="dark"]{ --paper:var(--bg); --ink-a:rgba(255,236,244,.16); --ink-b:rgba(255,236,244,.3); --dot:rgba(255,236,244,.08); --edge:0 2px 0 rgba(0,0,0,.25) }
-/* il carattere scelto dall'utente vince sui titoli scritti a mano */
-:root[data-stile="quaderno"][data-font]{ --fh:var(--ft) }
 
 :root[data-stile="quaderno"],:root[data-stile="quaderno"] body{background-color:var(--paper);background-image:radial-gradient(circle,var(--dot) 1.1px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed}
 
@@ -669,6 +728,130 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
   :root[data-stile="quaderno"] .top .hello h1{font-size:38px}
 }
 @media (prefers-reduced-motion: reduce){ :root[data-stile="quaderno"] .btn.primary,:root[data-stile="quaderno"] .nav .plus{transform:none} }
+
+/* =========================================================
+   STILE MORBIDO, versione "fatta a mano"
+   Carta e adesivi invece di ombre sfumate e sfumature: bordi sottili, spessore pieno sotto,
+   pulsanti come caramelle che si schiacciano, sfondo a pois, titoli evidenziati col pennarello.
+   ========================================================= */
+:root:not([data-stile="quaderno"]){
+  --edge-c:color-mix(in srgb, var(--line) 70%, var(--pink) 30%);
+  --carta:0 0 0 1.5px var(--line), 0 3px 0 var(--edge-c);
+  --shadow:var(--carta);
+}
+:root:not([data-stile="quaderno"]) body{
+  background-color:var(--bg);
+  background-image:radial-gradient(color-mix(in srgb, var(--pink) 22%, transparent) 1.4px, transparent 1.6px);
+  background-size:22px 22px; background-position:0 0;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-stile="quaderno"]):not([data-theme="light"]) body{ background-image:radial-gradient(rgba(255,255,255,.05) 1.4px, transparent 1.6px) } }
+:root[data-theme="dark"]:not([data-stile="quaderno"]) body{ background-image:radial-gradient(rgba(255,255,255,.05) 1.4px, transparent 1.6px) }
+@media (prefers-color-scheme: dark){ :root:not([data-stile="quaderno"]):not([data-theme="light"]){ --edge-c:rgba(0,0,0,.35) } }
+:root[data-theme="dark"]:not([data-stile="quaderno"]){ --edge-c:rgba(0,0,0,.35) }
+
+/* pulsanti pieni come caramelle: niente sfumature né alone, un bordino più scuro sotto che si schiaccia */
+:root:not([data-stile="quaderno"]) .btn.primary,
+:root:not([data-stile="quaderno"]) .nav .plus{
+  background:var(--pink-d); box-shadow:inset 0 -4px 0 rgba(0,0,0,.16), 0 2px 0 rgba(0,0,0,.06);
+  transition:transform .12s, box-shadow .12s;
+}
+:root:not([data-stile="quaderno"]) .btn.primary:active,
+:root:not([data-stile="quaderno"]) .nav .plus:active{ transform:translateY(2px); box-shadow:inset 0 -2px 0 rgba(0,0,0,.16) }
+:root:not([data-stile="quaderno"]) .btn{ box-shadow:inset 0 -3px 0 rgba(0,0,0,.05) }
+:root:not([data-stile="quaderno"]) .btn.danger-full{ box-shadow:inset 0 -4px 0 rgba(0,0,0,.18) }
+:root:not([data-stile="quaderno"]) .nav .plus{ border-radius:50%; transform:rotate(-6deg) }
+:root:not([data-stile="quaderno"]) .nav .plus:active{ transform:rotate(-6deg) translateY(2px) }
+@media (min-width:1024px){
+  :root:not([data-stile="quaderno"]) .nav .plus,:root:not([data-stile="quaderno"]) .nav .plus:active{ border-radius:16px; transform:none }
+  :root:not([data-stile="quaderno"]) .nav{ box-shadow:none; border-right:1.5px solid var(--line) }
+}
+/* barra in basso: bordo e spessore come le schede, niente alone colorato */
+:root:not([data-stile="quaderno"]) .nav .bar{ box-shadow:0 0 0 1.5px var(--line), 0 4px 0 var(--edge-c) }
+
+/* titoli delle sezioni sottolineati col pennarello */
+:root:not([data-stile="quaderno"]) .sec h2{ display:inline; background:linear-gradient(176deg, transparent 52%, color-mix(in srgb, var(--pink) 38%, transparent) 52%, color-mix(in srgb, var(--pink) 30%, transparent) 90%, transparent 90%); padding:0 5px; margin-left:-5px; border-radius:3px 8px 4px 9px }
+@media (prefers-color-scheme: dark){ :root:not([data-stile="quaderno"]):not([data-theme="light"]) .sec h2{ background:linear-gradient(176deg, transparent 52%, color-mix(in srgb, var(--pink) 28%, transparent) 52%, color-mix(in srgb, var(--pink) 22%, transparent) 90%, transparent 90%) } }
+:root[data-theme="dark"]:not([data-stile="quaderno"]) .sec h2{ background:linear-gradient(176deg, transparent 52%, color-mix(in srgb, var(--pink) 28%, transparent) 52%, color-mix(in srgb, var(--pink) 22%, transparent) 90%, transparent 90%) }
+
+/* cose da fare: niente striscia laterale, il colore dell'area sta nella casellina */
+:root:not([data-stile="quaderno"]) .item{ border-left:0 }
+:root:not([data-stile="quaderno"]) .check{ border-radius:8px }
+
+/* fumetto della mascotte con la punta verso di lei */
+:root:not([data-stile="quaderno"]) .bubble{ border:1.5px solid var(--line); box-shadow:0 3px 0 var(--edge-c) }
+:root:not([data-stile="quaderno"]) .bubble.detto::before{ content:""; position:absolute; top:-8px; left:26px; width:14px; height:14px; background:var(--card); border-left:1.5px solid var(--line); border-top:1.5px solid var(--line); transform:rotate(45deg); border-radius:3px 0 0 0 }
+
+/* i numerini di oggi come adesivi, un po' storti */
+:root:not([data-stile="quaderno"]) .stat:nth-child(1){ transform:rotate(-2deg) }
+:root:not([data-stile="quaderno"]) .stat:nth-child(2){ transform:rotate(1.4deg) translateY(2px) }
+:root:not([data-stile="quaderno"]) .stat:nth-child(3){ transform:rotate(-1deg) }
+
+/* un pezzetto di nastro adesivo sulle schede principali, come in un diario */
+:root:not([data-stile="quaderno"]) :is(.umore-card,.pancino,.sp-tot,.ore-mese){ position:relative; overflow:visible }
+:root:not([data-stile="quaderno"]) :is(.umore-card,.pancino,.sp-tot,.ore-mese)::after{
+  content:""; position:absolute; top:-9px; right:22px; width:58px; height:18px; transform:rotate(4deg); pointer-events:none;
+  background:repeating-linear-gradient(135deg, color-mix(in srgb, var(--pink) 55%, transparent) 0 6px, color-mix(in srgb, var(--pink) 30%, transparent) 6px 12px);
+  border-radius:2px; opacity:.85;
+}
+:root:not([data-stile="quaderno"]) .pancino::after{ left:18px; right:auto; transform:rotate(-5deg); background:repeating-linear-gradient(90deg, color-mix(in srgb, var(--mint-d) 35%, transparent) 0 5px, color-mix(in srgb, var(--mint-d) 18%, transparent) 5px 10px) }
+
+/* icone del menu dentro un tondino colorato, come adesivi */
+:root:not([data-stile="quaderno"]) .mtile .e{ width:46px; height:46px; display:grid; place-items:center; border-radius:50%; background:var(--pink-l); font-size:24px; transform:rotate(-6deg) }
+:root:not([data-stile="quaderno"]) .mtile:nth-child(even) .e{ transform:rotate(5deg); background:var(--butter) }
+:root:not([data-stile="quaderno"]) .mtile:nth-child(3n) .e{ background:var(--lav) }
+
+/* segmenti e filtri: pulsantino scelto con bordo pieno invece dell'ombra */
+:root:not([data-stile="quaderno"]) .seg{ background:transparent; box-shadow:inset 0 0 0 1.5px var(--line) }
+:root:not([data-stile="quaderno"]) .seg button.on{ box-shadow:0 0 0 1.5px var(--pink), 0 2px 0 var(--pink) }
+:root:not([data-stile="quaderno"]) .fbtn.on{ box-shadow:inset 0 -3px 0 rgba(0,0,0,.14) }
+
+/* finestre: maniglia a forma di nastrino, niente ombra grigia */
+:root:not([data-stile="quaderno"]) .sheet{ box-shadow:0 -1.5px 0 var(--line) }
+@media (min-width:1024px){ :root:not([data-stile="quaderno"]) .sheet{ box-shadow:0 0 0 1.5px var(--line), 0 6px 0 var(--edge-c) } }
+
+/* barre (budget, ore): tinta piena */
+:root:not([data-stile="quaderno"]) .sp-bar i{ background:var(--pink-d) }
+:root:not([data-stile="quaderno"]) .sp-bud.oltre .sp-bar i{ background:#e0566e }
+
+/* recap: niente sfumatura, carta colorata a pois */
+:root:not([data-stile="quaderno"]) .recap{ background:var(--recap1) radial-gradient(rgba(255,255,255,.55) 1.6px, transparent 1.8px) 0 0/16px 16px }
+@media (prefers-reduced-motion: reduce){ :root:not([data-stile="quaderno"]) .stat{ transform:none } }
+
+/* =========================================================
+   STILE QUADERNO: evidenziatori
+   Come gli evidenziatori veri: tratto un po' storto, bordi irregolari, colori diversi.
+   Pochi e sulle cose che contano (numeri, parole importanti, oggi), così restano utili.
+   ========================================================= */
+:root[data-stile="quaderno"]{
+  --evi-giallo:rgba(255,226,64,.55); --evi-rosa:color-mix(in srgb, var(--pink) 50%, transparent);
+  --evi-menta:rgba(96,214,160,.42); --evi-lilla:rgba(178,148,255,.42); --evi-blend:multiply;
+}
+@media (prefers-color-scheme: dark){ :root[data-stile="quaderno"]:not([data-theme="light"]){ --evi-giallo:rgba(255,226,64,.24); --evi-rosa:color-mix(in srgb, var(--pink) 30%, transparent); --evi-menta:rgba(96,214,160,.22); --evi-lilla:rgba(178,148,255,.26); --evi-blend:normal } }
+:root[data-stile="quaderno"][data-theme="dark"]{ --evi-giallo:rgba(255,226,64,.24); --evi-rosa:color-mix(in srgb, var(--pink) 30%, transparent); --evi-menta:rgba(96,214,160,.22); --evi-lilla:rgba(178,148,255,.26); --evi-blend:normal }
+
+/* il tratto: più carico al centro, che sfuma ai bordi come l'inchiostro che finisce */
+:root[data-stile="quaderno"] :is(.bubble b, .stat b, .sp-tot>b, .ore-mese>b, .recap .cell b, .note h3){
+  --evi:var(--evi-giallo);
+  background:linear-gradient(100deg, transparent .2em, var(--evi) .35em, var(--evi) calc(100% - .4em), transparent calc(100% - .15em)) 0 62% / 100% 58% no-repeat;
+  -webkit-box-decoration-break:clone; box-decoration-break:clone;
+  padding:0 .3em; margin:0 -.15em; border-radius:.25em .7em .35em .6em;
+  mix-blend-mode:var(--evi-blend); color:inherit;
+}
+/* i numeri grandi stanno in un blocco: l'evidenziatore li abbraccia senza riempire la scheda */
+:root[data-stile="quaderno"] :is(.stat b, .sp-tot>b, .ore-mese>b, .recap .cell b){ display:table; margin-left:auto; margin-right:auto; transform:rotate(-1.5deg) }
+:root[data-stile="quaderno"] .recap .cell b{ margin-left:-.15em }
+:root[data-stile="quaderno"] .stat:nth-child(2) b{ --evi:var(--evi-rosa); transform:rotate(1.2deg) }
+:root[data-stile="quaderno"] .stat:nth-child(3) b{ --evi:var(--evi-menta) }
+:root[data-stile="quaderno"] .recap .cell:nth-child(2) b{ --evi:var(--evi-rosa) }
+:root[data-stile="quaderno"] .recap .cell:nth-child(3) b{ --evi:var(--evi-menta) }
+:root[data-stile="quaderno"] .recap .cell:nth-child(4) b{ --evi:var(--evi-lilla) }
+:root[data-stile="quaderno"] .ore-mese>b{ --evi:var(--evi-menta) }
+/* sui post-it il titolo si evidenzia di bianco, che sul colore della carta si vede meglio */
+:root[data-stile="quaderno"] .note h3{ --evi:rgba(255,255,255,.7); mix-blend-mode:normal; display:inline }
+/* scadute: una passata di rosa sopra l'etichetta */
+:root[data-stile="quaderno"] .chip.late{ background:linear-gradient(98deg, transparent 2px, var(--evi-rosa) 5px, var(--evi-rosa) calc(100% - 5px), transparent calc(100% - 2px)); color:inherit; font-weight:800 }
+/* oggi nel calendario: un colpo di evidenziatore giallo invece del riquadro */
+:root[data-stile="quaderno"] .day.today:not(.sel){ background:radial-gradient(ellipse 46% 36% at 50% 50%, var(--evi-giallo) 92%, transparent 100%); color:inherit }
 </style>
 </head>
 <body>
@@ -685,6 +868,7 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
     <symbol id="i-fiore" viewBox="0 0 24 24"><circle cx="12" cy="9" r="2.2"/><path d="M12 6.8c-.6-2.6 2.6-3.6 3.2-1.4.5 1.8-1.4 3-3.2 3.6M14.2 9c2.6-.6 3.6 2.6 1.4 3.2-1.8.5-3-1.4-3.6-3.2M12 11.2c.6 2.6-2.6 3.6-3.2 1.4-.5-1.8 1.4-3 3.2-3.6M9.8 9c-2.6.6-3.6-2.6-1.4-3.2 1.8-.5 3 1.4 3.6 3.2M12 11.4V20M12 16.6c1.6-1.8 3.6-2 4.6-1.6-.4 1.6-2.4 2.6-4.6 2.4"/></symbol>
     <symbol id="i-biscotto" viewBox="0 0 24 24"><path d="M12 7.2C9 5.6 4.8 6.6 3.4 10.4c-.4 1.2.8 1.6 1.6 1.2 2.4-1.2 5 .2 6.2 2.6.4.8.8.8.8 0V7.2c0 0 0 0 0 0zM12 7.2c3-1.6 7.2-.6 8.6 3.2.4 1.2-.8 1.6-1.6 1.2-2.4-1.2-5 .2-6.2 2.6-.4.8-.8.8-.8 0"/><path d="M12 14.6l1.2 4"/></symbol>
     <symbol id="i-turni" viewBox="0 0 24 24"><path d="M4.2 8.4c0-.7.5-1.2 1.2-1.2h13.2c.7 0 1.2.5 1.2 1.2v9.4c0 .7-.5 1.2-1.2 1.2H5.4c-.7 0-1.2-.5-1.2-1.2z"/><path d="M9 7.2V5.6c0-.5.4-.9.9-.9h4.2c.5 0 .9.4.9.9v1.6M4.4 12.6c4.9 1.8 10.3 1.8 15.2 0"/></symbol>
+    <symbol id="i-spese" viewBox="0 0 24 24"><path d="M4.2 8.4c0-1 .8-1.8 1.8-1.8h12.3c.9 0 1.6.7 1.6 1.6v10c0 .9-.7 1.6-1.6 1.6H6c-1 0-1.8-.8-1.8-1.8z"/><path d="M4.5 8.2c.3-1.3 1.2-2 2.5-2.5l7.5-2.6c.8-.2 1.5.3 1.5 1.1v2.3"/><path d="M19.9 11.4h-3.4c-1 0-1.8.8-1.8 1.8s.8 1.8 1.8 1.8h3.4"/><path d="M16.8 13.2h.1"/></symbol>
     <symbol id="i-consiglia" viewBox="0 0 24 24"><path d="M3.8 6.6c0-.7.6-1.2 1.2-1.2h14c.7 0 1.2.5 1.2 1.2v10.8c0 .7-.5 1.2-1.2 1.2H5c-.6 0-1.2-.5-1.2-1.2z"/><path d="M4.4 6.4l7.6 6.2 7.6-6.2"/></symbol>
     <symbol id="i-messaggi" viewBox="0 0 24 24"><path d="M4 13.4l2.4-7.3c.2-.5.6-.8 1.1-.8h9c.5 0 .9.3 1.1.8l2.4 7.3v4.8c0 .6-.5 1.1-1.1 1.1H5.1c-.6 0-1.1-.5-1.1-1.1z"/><path d="M4.2 13.4h4.2l1.3 2.4h4.6l1.3-2.4h4.2"/></symbol>
     <symbol id="i-impostazioni" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.4l1.4 2.2 2.5-.6.6 2.5 2.3 1.2-1 2.3 1 2.3-2.3 1.2-.6 2.5-2.5-.6L12 20.6l-1.4-2.2-2.5.6-.6-2.5-2.3-1.2 1-2.3-1-2.3 2.3-1.2.6-2.5 2.5.6z"/></symbol>
@@ -721,6 +905,8 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 </div>
 
 <!-- ============ APP ============ -->
+<!-- Stagioni: neve, pioggia, sole, foglie o petali dietro alle schede (si accende in Impostazioni) -->
+<canvas id="stagioni" aria-hidden="true"></canvas>
 <div id="app" class="app hidden">
   <header class="top">
     <button class="mascot" id="topMascot" data-act="poke" aria-label="Mascotte"></button>
@@ -745,14 +931,15 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
     <button class="tab" data-tab="agenda"><span class="i"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>Agenda</button>
     <button class="tab" data-tab="appunti"><span class="i"><span class="emo">📝</span><svg class="ico q" aria-hidden="true"><use href="#i-appunti"/></svg></span>Appunti</button>
     <!-- Su computer la barra a sinistra contiene tutto il menu -->
-    <button class="side desk-only online-only" data-tab="liste"><span class="i"><span class="emo">👭</span><svg class="ico q" aria-hidden="true"><use href="#i-liste"/></svg></span>Liste condivise</button>
-    <button class="side desk-only online-only" data-act="open-ricorrenti" data-tab="ricorrenti"><span class="i"><span class="emo">🔁</span><svg class="ico q" aria-hidden="true"><use href="#i-ricorrenti"/></svg></span>Ricorrenti</button>
-    <button class="side desk-only" data-tab="turni"><span class="i"><span class="emo">💼</span><svg class="ico q" aria-hidden="true"><use href="#i-turni"/></svg></span>Turni di lavoro</button>
+    <button class="side desk-only online-only" data-mod="liste" data-tab="liste"><span class="i"><span class="emo">👭</span><svg class="ico q" aria-hidden="true"><use href="#i-liste"/></svg></span>Liste condivise</button>
+    <button class="side desk-only online-only" data-mod="ricorrenti" data-act="open-ricorrenti" data-tab="ricorrenti"><span class="i"><span class="emo">🔁</span><svg class="ico q" aria-hidden="true"><use href="#i-ricorrenti"/></svg></span>Ricorrenti</button>
+    <button class="side desk-only" data-mod="turni" data-tab="turni"><span class="i"><span class="emo">💼</span><svg class="ico q" aria-hidden="true"><use href="#i-turni"/></svg></span>Turni di lavoro</button>
+    <button class="side desk-only" data-mod="spese" data-tab="spese"><span class="i"><span class="emo">👛</span><svg class="ico q" aria-hidden="true"><use href="#i-spese"/></svg></span>Spese</button>
     <div class="side-sep desk-only"></div>
     <button class="side desk-only" data-act="open-recap"><span class="i"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recap"/></svg></span>Recap del mese</button>
-    <button class="side desk-only" data-act="giardino-apri"><span class="i"><span class="emo">🌷</span><svg class="ico q" aria-hidden="true"><use href="#i-fiore"/></svg></span>Il giardino del mese</button>
-    <button class="side desk-only" data-act="open-biscotto"><span class="i"><span class="emo">🥠</span><svg class="ico q" aria-hidden="true"><use href="#i-biscotto"/></svg></span>Biscotto del giorno</button>
-    <button class="side desk-only" data-act="open-pancino"><span class="i"><span class="emo">🍣</span><svg class="ico q" aria-hidden="true"><use href="#i-pancino"/></svg></span>Il pancino</button>
+    <button class="side desk-only" data-mod="umore" data-act="giardino-apri"><span class="i"><span class="emo">🌷</span><svg class="ico q" aria-hidden="true"><use href="#i-fiore"/></svg></span>Il giardino del mese</button>
+    <button class="side desk-only" data-mod="biscotto" data-act="open-biscotto"><span class="i"><span class="emo">🥠</span><svg class="ico q" aria-hidden="true"><use href="#i-biscotto"/></svg></span>Biscotto del giorno</button>
+    <button class="side desk-only" data-mod="pancino" data-act="open-pancino"><span class="i"><span class="emo">🍣</span><svg class="ico q" aria-hidden="true"><use href="#i-pancino"/></svg></span>Il pancino</button>
     <button class="side desk-only online-only" data-act="open-consiglio"><span class="i"><span class="emo">💌</span><svg class="ico q" aria-hidden="true"><use href="#i-consiglia"/></svg></span>Consiglia</button>
     <button class="side side-admin desk-only hidden" data-act="open-inbox"><span class="i"><span class="emo">📬</span><svg class="ico q" aria-hidden="true"><use href="#i-messaggi"/></svg></span>Messaggi ricevuti</button>
     <button class="side desk-only" data-act="open-settings"><span class="i"><span class="emo">⚙️</span><svg class="ico q" aria-hidden="true"><use href="#i-impostazioni"/></svg></span>Impostazioni</button>
