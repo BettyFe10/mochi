@@ -12,3 +12,8 @@ Da lanciare con la versione del 4 novembre (prima di pubblicarla, in quest'ordin
 
 Da lanciare con la versione "Serie di giorni + Concentrazione" (prima di pubblicarla):
 - `13-giorni-attivi.sql`: tabella `giorni_attivi` (le date in cui hai spuntato qualcosa, per la serie)
+
+Da lanciare con la versione "Spesa intelligente + Riepilogo della domenica" (prima di pubblicarla):
+- `14-riepilogo.sql`: funzione `riepilogo_settimanale()`, tabella `riepilogo_inviati` e il cron `mochi-riepilogo`
+  (ogni ora la domenica, UTC; manda solo quando a Roma sono le 20). Serve pg_cron attivo, come per i promemoria:
+  se lo script è lanciato prima di attivarlo, rilancialo dopo (si può rilanciare).

@@ -3,10 +3,18 @@
    ========================================================= */
 const CFG = window.MOCHI_CONFIG || {};
 const SIGNUP_OPEN = CFG.REGISTRAZIONI_APERTE !== false;
-const ONLINE_MODE = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
+// L'app è collegata a Supabase (config.js)...
+const CONFIG_ONLINE = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
+/* ...ma si può usare anche come OSPITE, senza account: tutto resta sul dispositivo, come la modalità prova.
+   "mochi.ospite" nel dispositivo: "si" = si usa come ospite; "passaggio" = l'ospite sta creando un account o entrando
+   (le sue cose restano sul dispositivo finché non le porta nell'account). Si decide all'avvio: cambiare modo ricarica la pagina.
+   ONLINE_MODE (= "in linea") vale quindi: collegata a Supabase E non ospite. */
+const PRIVACY_VERSIONE = "2026-11"; // versione dell'informativa accettata alla registrazione
+const OSPITE = CONFIG_ONLINE && (() => { try { return JSON.parse(localStorage.getItem("mochi.ospite")) === "si"; } catch { return false; } })();
+const ONLINE_MODE = CONFIG_ONLINE && !OSPITE;
 // Le notifiche push si attivano solo quando è configurata la chiave pubblica VAPID
 const PUSH_READY = ONLINE_MODE && !!CFG.VAPID_PUBLIC_KEY;
-let NOME = ONLINE_MODE ? "" : (CFG.NOME || "");
+let NOME = ONLINE_MODE || OSPITE ? "" : (CFG.NOME || ""); // l'ospite non ha un nome (quello di config.js vale solo per la modalità prova)
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(16).slice(2));
@@ -211,16 +219,16 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa) {
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
       CUSTOM = cleanCustom({ nome_app: md.nome_app, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
         moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
         // casetta: scelta e mobili spenti dall'account, sblocchi uniti (non si perdono mai)
-        casa: md.casa ? unisciCasa(md.casa, CUSTOM.casa) : CUSTOM.casa });
+        casa: md.casa ? unisciCasa(md.casa, CUSTOM.casa) : CUSTOM.casa, spesa_reparti: md.spesa_reparti ?? CUSTOM.spesa_reparti });
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -228,7 +236,8 @@ const SupaStore = {
     this.user = data.user; this.applyName();
   },
   async signup(nome, email, password) {
-    const { data, error } = await this.sb.auth.signUp({ email, password, options: { data: { nome }, emailRedirectTo: this.redirect } });
+    // il consenso all'informativa: versione e data, nei metadati dell'account (non tocca le preferenze)
+    const { data, error } = await this.sb.auth.signUp({ email, password, options: { data: { nome, privacy_ok: PRIVACY_VERSIONE, privacy_ok_il: new Date().toISOString() }, emailRedirectTo: this.redirect } });
     if (error) throw error;
     if (data.session) { this.user = data.user; this.applyName(); return "logged"; }
     return "confirm";
@@ -396,6 +405,7 @@ const MODULI = [
   ["spese", "👛", "Spese", "Quanto spendi ogni mese, con il budget", true],
   ["serie", "🔥", "Serie di giorni", "Quanti giorni di fila spunti qualcosa", true],
   ["focus", "🪴", "Concentrazione", "Un timer con una piantina che cresce", true],
+  ["riepilogo", "🌙", "Riepilogo della domenica", "I numeri della settimana, la domenica sera", true],
   ["casa", "🏡", "La casetta", "La casa della mascotte, con i mobili in regalo", true],
   ["umore", "🌷", "Com'è andata la giornata", "Faccine nel calendario e giardino del mese", true],
   ["ricorrenti", "🔁", "Promemoria ricorrenti", "Bevi acqua, fai una pausa...", true, true],
@@ -441,7 +451,7 @@ const STAGIONI = [["auto", "🗓️", "Segue la stagione"], ["neve", "❄️", "
 // Suoni dentro l'app (creati dal codice, nessun file): notifiche con l'app aperta, cose fatte, biscotto
 const SUONI = [["campanella", "🔔", "Campana"], ["bolla", "🫧", "Bolla"], ["xilofono", "🎵", "Xilofono"], ["gocce", "💧", "Gocce"], ["spenti", "🔕", "Spenti"]];
 const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
-  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA };
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true };
 function cleanCustom(c) {
   c = c && typeof c === "object" ? c : {};
   const nome = typeof c.nome_app === "string" ? c.nome_app.replace(/[<>]/g, "").trim().slice(0, 24) : "";
@@ -454,7 +464,7 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
 // Il modulo è acceso? (quelli che richiedono un account sono spenti in modalità prova)
@@ -659,7 +669,7 @@ function headerUpdate() {
   $("#hello").textContent = greeting();
   const m = $("#motto"); if (m) m.innerHTML = `<span class="emo">💭 </span>${esc(fraseDelGiorno())}`;
   const d = new Date();
-  $("#today").innerHTML = `${GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getDate()} ${MESI[d.getMonth()]} ${ONLINE_MODE ? `· <span id="syncDot" class="sync${state.synced ? "" : " off"}"><i></i>${state.synced ? "sincronizzato" : "offline"}</span>` : "· modalità prova"}`;
+  $("#today").innerHTML = `${GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getDate()} ${MESI[d.getMonth()]} ${OSPITE ? "· ospite" : ONLINE_MODE ? `· <span id="syncDot" class="sync${state.synced ? "" : " off"}"><i></i>${state.synced ? "sincronizzato" : "offline"}</span>` : "· modalità prova"}`;
 }
 
 const byDue = (a, b) => (a.due_date || "9999") .localeCompare(b.due_date || "9999") || (a.due_time || "99").localeCompare(b.due_time || "99");
@@ -683,7 +693,7 @@ function itemRow(it) {
   if (st.length) chips.push(`<button class="chip st-chip ${aperto ? "on" : ""} ${st.every((x) => x.f) ? "tutte" : ""}" data-act="st-apri" data-id="${esc(it.id)}" aria-expanded="${aperto ? "true" : "false"}" aria-label="Lista da spuntare: ${st.filter((x) => x.f).length} su ${st.length}">☑ ${st.filter((x) => x.f).length}/${st.length}<span class="st-fr">${aperto ? "▴" : "▾"}</span></button>`);
   return `<div class="item ${area} ${it.done ? "done" : ""}" data-act="edit" data-id="${esc(it.id)}">
     ${left}
-    <div class="body"><div class="t">${esc(it.title)}</div><div class="meta">${chips.join("")}</div>${aperto ? `<div class="st-lista">${st.map((x) => stVoce(it, x)).join("")}</div>` : ""}</div>
+    <div class="body"><div class="t">${esc(it.title)}</div><div class="meta">${chips.join("")}</div>${aperto ? `<div class="st-lista">${voceListaHtml(it)}</div>` : ""}</div>
   </div>`;
 }
 const stVoce = (it, x) => `<button class="st-voce ${x.f ? "fatto" : ""}" data-act="st-spunta" data-id="${esc(it.id)}" data-v="${esc(x.id)}" aria-pressed="${x.f ? "true" : "false"}"><span class="st-box">${x.f ? "✓" : ""}</span><span class="st-tx">${esc(x.t)}</span></button>`;
@@ -713,11 +723,12 @@ function viewOggi() {
   for (let k = 1; k <= 6; k++) week.push(ymd(addDays(new Date(), k)));
   const soon = state.items.filter((i) => !i.done && week.includes(i.due_date) && i.kind !== "note").sort(byDue).slice(0, 6);
 
-  let h = `<div class="bubble detto">${nigiSays()}</div>`;
+  let h = `<div class="bubble detto">${nigiSays()}</div>${invitoOspite()}`;
   h += `<div class="stats">
     <div class="stat"><b>${ev.length}</b><span>appuntamenti</span></div>
     <div class="stat"><b>${todo.length + late.length}</b><span>da fare</span></div>
     <div class="stat"><b>${doneT.length}</b><span>fatte oggi</span></div></div>`;
+  h += riepilogoCard();
   if (mod("serie")) h += serieCard();
   { const tu = turnoDi(t); if (tu && tu.k !== "") h += rigaTurno(t, true); }
   if (mod("umore")) h += umoreCard();
@@ -915,7 +926,7 @@ function viewAppunti() {
   h += `<div class="notes">${list.map((n) => `<div class="note c${n.color || 1} ${n.pinned ? "fissa" : ""}" style="${bachecaStile(n.id)}" data-act="edit" data-id="${esc(n.id)}">
       ${n.pinned ? `<span class="pin">📌</span>` : ""}
       <h3>${esc(n.title)}</h3>${n.body ? `<p>${esc(n.body)}</p>` : ""}
-      ${n.sottotask?.length ? `<div class="st-note">${n.sottotask.slice(0, 10).map((x) => stVoce(n, x)).join("")}${n.sottotask.length > 10 ? `<small>e altre ${n.sottotask.length - 10}...</small>` : ""}</div>` : ""}
+      ${n.sottotask?.length ? `<div class="st-note">${voceListaHtml(n, 10)}</div>` : ""}
       <div class="when">${n.sottotask?.length ? `☑ ${n.sottotask.filter((x) => x.f).length}/${n.sottotask.length} · ` : ""}${n.lista_id && listaById(n.lista_id) ? esc(listaById(n.lista_id).emoji) : n.area === "lavoro" ? "💼" : "🌷"} ${niceDate(ymd(new Date(n.updated_at || n.created_at)))}</div></div>`).join("")}</div>`;
   return h;
 }
@@ -1018,7 +1029,7 @@ function finishAsk(confirmed) {
 function openEditor(it, isNew) {
   // _autoRemind: il promemoria lo sceglie Mochi finché l'utente non lo cambia a mano
   // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
-  draft = { ...it, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date };
+  draft = { ...it, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it) };
   advanced = !isNew || draft.kind === "note";
   drawEditor();
   setTimeout(() => { const i = $("#fTitle"); if (i && isNew) i.focus(); }, 250);
@@ -1056,7 +1067,7 @@ function drawEditor() {
       <button class="btn primary" data-act="d-save">Salva</button>
     </div>`);
   const t = $("#fTitle");
-  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); });
+  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); if (!draft._spesa && titoloSpesa(t.value)) { draft._spesa = true; drawSt(); } });
   t.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveDraft(); } });
   ["fDate", "fTime", "fRemind", "fBody", "fLista"].forEach((id) => {
     const el = $("#" + id); if (!el) return;
@@ -1077,7 +1088,9 @@ function drawEditor() {
   const box = $("#stBox");
   if (box) {
     // rinominare una voce: si scrive direttamente nella riga
-    box.addEventListener("input", (e) => { const i = e.target.closest(".st-in[data-sid]"); const x = i && draft?.sottotask.find((s) => s.id === i.dataset.sid); if (x) x.t = i.value; });
+    box.addEventListener("input", (e) => {
+      if (e.target.id === "stNew") { aggiornaSuggerimenti(e.target.value); return; } // lista della spesa: cose già scritte in passato
+      const i = e.target.closest(".st-in[data-sid]"); const x = i && draft?.sottotask.find((s) => s.id === i.dataset.sid); if (x) x.t = i.value; });
     box.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" || e.isComposing) return;
       if (e.target.id === "stNew") { e.preventDefault(); aggiungiSt(e.target.value); }
@@ -1089,12 +1102,20 @@ function drawEditor() {
 /* Lista da spuntare nell'editor: si ridisegna solo lei (la finestra non salta e il cursore resta dov'è) */
 function stEditorHtml() {
   const st = draft?.sottotask || [], fatti = st.filter((x) => x.f).length;
-  return `${st.map((x, i) => `<div class="st-row ${x.f ? "fatto" : ""}">
+  const spesa = !!draft?._spesa, perReparto = spesa && CUSTOM.spesa_reparti !== false, daTitolo = spesa && titoloSpesa(draft.title);
+  const riga = (x, i, su) => `<div class="st-row ${x.f ? "fatto" : ""}">
       <button class="st-check" data-act="st-toggle" data-v="${esc(x.id)}" aria-label="${x.f ? "Togli la spunta" : "Spunta"}">${x.f ? "✓" : ""}</button>
       <input class="st-in" data-sid="${esc(x.id)}" value="${esc(x.t)}" maxlength="120" autocomplete="off" enterkeyhint="next" aria-label="Voce ${i + 1}">
-      <button class="st-btn" data-act="st-su" data-v="${esc(x.id)}" aria-label="Sposta su" ${i ? "" : "disabled"}>↑</button>
-      <button class="st-btn" data-act="st-del" data-v="${esc(x.id)}" aria-label="Togli">✕</button></div>`).join("")}
+      ${su ? `<button class="st-btn" data-act="st-su" data-v="${esc(x.id)}" aria-label="Sposta su" ${i ? "" : "disabled"}>↑</button>` : ""}
+      <button class="st-btn" data-act="st-del" data-v="${esc(x.id)}" aria-label="Togli">✕</button></div>`;
+  const righe = perReparto ? gruppiSpesa(st).map((g) => `<div class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</div>${g.voci.map((x) => riga(x, st.indexOf(x), false)).join("")}`).join("") : st.map((x, i) => riga(x, i, true)).join("");
+  const rc = spesa && st.length < MAX_ST ? ricompri(st) : [];
+  return `<div class="sp-opz"><button class="pin-toggle mini-t ${spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${spesa}" ${daTitolo ? "disabled" : ""}><span><b>È una lista della spesa</b><small>${daTitolo ? "L'ho capito dal titolo" : "Suggerimenti e reparti del supermercato"}</small></span><span class="sw2"></span></button>
+    ${spesa ? `<button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="st-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b><small>Nell'ordine del giro del supermercato</small></span><span class="sw2"></span></button>` : ""}</div>
+    ${righe}
     ${st.length < MAX_ST ? `<div class="st-row nuovo"><span class="st-plus">+</span><input class="st-in" id="stNew" maxlength="120" placeholder="${st.length ? "Aggiungi un'altra e premi Invio" : "Es. latte, uova... e premi Invio"}" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>` : `<p class="hint">Massimo ${MAX_ST} voci.</p>`}
+    ${spesa ? `<div class="sp-sugg-box" id="stSugg" aria-live="polite"></div>` : ""}
+    ${rc.length ? `<div class="sp-ricompri"><span class="sp-sugg-l">Ricompri spesso:</span>${rc.map(chipSugg).join("")}</div>` : ""}
     ${st.length ? `<div class="st-prog">${fatti}/${st.length} fatte</div>` : ""}`;
 }
 function drawSt(focusNew = false) {
@@ -1106,7 +1127,8 @@ function aggiungiSt(v) {
   const t = taglia(String(v || "").replace(/\s+/g, " ").trim(), 120);
   if (!t || !draft) return;
   if (draft.sottotask.length >= MAX_ST) { toast(`Massimo ${MAX_ST} voci`); return; }
-  draft.sottotask.push({ id: nuovoStId(new Set(draft.sottotask.map((x) => x.id))), t, f: false });
+  const visti = new Set(draft.sottotask.map((x) => x.id));
+  draft.sottotask.push({ id: (draft._spesa ? MARCA_SPESA : "") + nuovoStId(visti), t, f: false });
   drawSt(true);
 }
 
@@ -1140,7 +1162,7 @@ async function saveDraft() {
   if (!d.title || !d.title.trim()) { toast("Scrivi almeno il titolo 🍙"); return; }
   d.title = d.title.trim().slice(0, 300);
   d.body = String(d.body || "").slice(0, 20000);
-  d.sottotask = cleanSottotask(d.sottotask);
+  d.sottotask = cleanSottotask(marcaSpesa(cleanSottotask(d.sottotask), !!d._spesa || titoloSpesa(d.title)));
   if (d.due_time && !RE_TIME.test(d.due_time)) d.due_time = null;
   if (d.due_date && (!validYmd(d.due_date) || d.due_date < "2000-01-01" || d.due_date > "2100-12-31")) { toast("Data non valida 📅"); return; }
   if (!d.due_date) d.due_time = null;
@@ -1250,6 +1272,7 @@ function openSettings() {
   const theme = document.documentElement.dataset.theme || "auto";
   openSheet(`
     <h2><span class="mbox">${mascot()}</span>Impostazioni</h2>
+    ${OSPITE ? schedaOspite() : ""}${ONLINE_MODE ? rigaPassaggio() : ""}
     <div class="setrow" id="pushRow">${pushRowHtml(!ONLINE_MODE ? "offline" : !PUSH_READY ? "soon" : perm === "unsupported" ? (!standalone && /iPhone|iPad/.test(navigator.userAgent) ? "home" : "unsupported") : perm === "denied" ? "denied" : "checking")}</div>
     <div class="setrow"><div><b>Nome e mascotte</b><small>${esc(CUSTOM.nome_app)} · ${esc(MN())}</small></div><button class="fbtn on" data-act="open-custom">Cambia</button></div>
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
@@ -1272,6 +1295,8 @@ function openSettings() {
     <div class="setrow"><div><b>Esci</b><small>Su questo dispositivo</small></div><button class="fbtn" data-act="logout">Esci</button></div>
     <div class="setrow"><div><b>Privacy</b><small>Come vengono trattati i tuoi dati</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
     <div class="setrow"><div><b style="color:var(--danger)">Elimina account</b><small>Cancella per sempre account e dati</small></div><button class="fbtn" style="color:var(--danger)" data-act="delete-account">Elimina</button></div>` :
+    OSPITE ? `<div class="setrow"><div><b>Privacy</b><small>Come ospite le tue cose restano su questo dispositivo</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
+    <div class="setrow"><div><b>Esci</b><small>Dalla modalità ospite</small></div><button class="fbtn" data-act="ospite-esci">Esci</button></div>` :
     `<div class="setrow"><div><b>Modalità prova</b><small>I dati restano solo su questo dispositivo</small></div></div>`}
     <div class="actions"><button class="btn" data-act="close">Chiudi</button></div>`);
   $("#themeSel").addEventListener("change", (e) => setTheme(e.target.value));
@@ -1283,7 +1308,7 @@ function openSettings() {
    un sito non può toglierlo da solo, l'iscrizione sì (ed è quella che usa il server). */
 function pushRowHtml(s) {
   const txt = {
-    offline: "Disponibili dopo aver collegato Supabase",
+    offline: OSPITE ? "Con un account ti avviso all'orario giusto, anche ad app chiusa" : "Disponibili dopo aver collegato Supabase",
     soon: "In arrivo: le notifiche non sono ancora attive 🌸",
     home: "Prima aggiungi l'app alla Home",
     unsupported: "Questo browser non supporta le notifiche",
@@ -1379,6 +1404,8 @@ function maybeShowInstallHint() {
 const NOVITA = {
   titolo: "Novità in Mochi!",
   punti: [
+    ["spesa-smart", "🛒", "<b>Lista della spesa intelligente</b>: nelle liste da spuntare della spesa ti suggerisco le cose che compri di solito e le metto in ordine per reparto, come il giro del supermercato."],
+    ["riepilogo", "🌙", "<b>Riepilogo della domenica</b>: la domenica sera i numeri della tua settimana (cose fatte, giorni attivi, turni e spese), con il confronto con quella prima.", "riepilogo"],
     ["casette", "🏡", "<b>La casetta</b>: la tua mascotte ha una casa tutta sua. I mobili arrivano in regalo spuntando le cose fatte, le casette nuove si aprono con i giorni attivi. La trovi nel menu (o tieni premuta la mascotte in alto).", "casa"],
     ["cartone", "🖍️", "Nuovo stile <b>Cartone</b>: linee scure, colori pieni e tutto tondo, come nei cartoni animati. Lo trovi in Impostazioni → Stile, accanto a Morbido e Quaderno."],
     ["serie", "🔥", "<b>Serie di giorni</b>: in Oggi vedi quanti giorni di fila hai spuntato qualcosa. Ogni settimana c'è un giorno di riposo che non spezza la serie, e il record resta tuo.", "serie"],
@@ -1465,7 +1492,7 @@ function checkListeSconosciute() {
 // Pagina "Liste condivise" (nel menu, non nelle impostazioni)
 function openListe() { if ($("#sheet").classList.contains("on")) closeSheet(); state.tab = "liste"; render(); window.scrollTo({ top: 0 }); }
 function viewListe() {
-  if (!ONLINE_MODE) return emptyBox("Le liste condivise funzionano quando l'app è collegata a un account 🌸");
+  if (!ONLINE_MODE) return OSPITE ? invitoAccount("Le liste condivise si usano insieme ad altre persone: crea un account per usare questa funzione.") : emptyBox("Le liste condivise funzionano quando l'app è collegata a un account 🌸");
   const me = myId();
   return `<div class="sec" style="margin-top:0"><h2><span class="emo">👭 </span>Liste condivise</h2></div>
     <p style="margin:0 0 12px;color:var(--ink2)">Tutto quello che metti in una lista lo vedono, modificano e spuntano tutte le persone della lista. Le altre tue cose restano private.</p>
@@ -1832,7 +1859,7 @@ async function openRicorrenti(refresh = true) {
   state.tab = "ricorrenti"; render(); if (!giaQui) window.scrollTo({ top: 0 });
 }
 function viewRicorrenti() {
-  if (!ONLINE_MODE) return emptyBox("I promemoria ricorrenti funzionano quando l'app è collegata a un account 🌸");
+  if (!ONLINE_MODE) return OSPITE ? invitoAccount("I promemoria ricorrenti arrivano come notifiche: crea un account per usare questa funzione.") : emptyBox("I promemoria ricorrenti funzionano quando l'app è collegata a un account 🌸");
   if (!ricCaricati) { openRicorrenti(); return emptyBox("Un attimo... 🌸"); }
   const pushOn = ricPushOn;
   const quando = (r) => r.attiva && r.prossimo_invio ? `Prossimo: ${new Date(r.prossimo_invio).toLocaleString("it-IT", { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : "In pausa";
@@ -2336,6 +2363,387 @@ async function chiediBudget() {
   const prima = state.spese.budget; state.spese.budget = cent; render();
   try { await SpeseStore.salvaBudget(cent); if (!ONLINE_MODE) SpeseStore._local(); LS.set("mochi.speseCache", state.spese); toast(cent ? `Budget: ${euro(cent)} al mese` : "Budget tolto"); }
   catch { state.spese.budget = prima; render(); toast("Non sono riuscita a salvarlo"); }
+}
+
+/* =========================================================
+   RIEPILOGO DELLA DOMENICA (in app)
+   La notifica la manda il database la domenica alle 20 (14-riepilogo.sql). Qui, da domenica sera a mercoledì,
+   una card chiudibile in Oggi con gli stessi numeri e il confronto con la settimana prima: si calcola sul dispositivo,
+   quindi funziona anche da ospite e senza notifiche.
+   ========================================================= */
+// Il lunedì della settimana da raccontare (null = non è il momento)
+function lunediRiepilogo(ora = new Date()) {
+  const dow = (ora.getDay() + 6) % 7; // 0 = lunedì ... 6 = domenica
+  if (dow === 6 && ora.getHours() >= 20) return ymd(addDays(ora, -6));
+  if (dow <= 2) return ymd(addDays(ora, -dow - 7));
+  return null;
+}
+function numeriSettimana(lun) {
+  const giorni = Array.from({ length: 7 }, (_, i) => ymd(addDays(parseYmd(lun), i))), dentro = (g) => g >= giorni[0] && g <= giorni[6];
+  const fatte = bocconcini().filter((i) => dentro(ymd(new Date(i.done_at)))).length;
+  const attivi = [...state.giorni].filter(dentro).length;
+  const spese = state.spese.voci.filter((v) => dentro(v.giorno)).reduce((a, v) => a + v.importo_cent, 0);
+  let turni = 0, minuti = 0;
+  for (let i = 7; i < 14; i++) { const t = turnoDi(ymd(addDays(parseYmd(lun), i))); if (t && t.k !== "" && t.inizio) { turni++; minuti += minutiTipo(t); } }
+  return { fatte, attivi, spese, turni, minuti };
+}
+const confronto = (a, b, fmt = (x) => x) => (a === b ? "come la settimana prima" : `${fmt(Math.abs(a - b))} in ${a > b ? "più" : "meno"} della settimana prima`);
+function riepilogoCard() {
+  if (!mod("riepilogo")) return "";
+  const lun = lunediRiepilogo(); if (!lun || LS.get("mochi.riepilogo.chiuso", "") === lun) return "";
+  const n = numeriSettimana(lun), p = numeriSettimana(ymd(addDays(parseYmd(lun), -7)));
+  if (!n.fatte && !n.attivi && !n.spese && !n.turni) return "";
+  const righe = [`<li><b>${plur(n.fatte, "cosa fatta", "cose fatte")}</b><small>${confronto(n.fatte, p.fatte)}</small></li>`];
+  if (mod("serie")) righe.push(`<li><b>${plur(n.attivi, "giorno attivo", "giorni attivi")}</b><small>${confronto(n.attivi, p.attivi)}</small></li>`);
+  if (turniAttivi() && n.turni) righe.push(`<li><b>Settimana prossima: ${plur(n.turni, "turno", "turni")} (${fmtOre(n.minuti)})</b></li>`);
+  if (mod("spese") && n.spese) righe.push(`<li><b>Spese: ${euro(n.spese)}</b><small>${confronto(n.spese, p.spese, euro)}</small></li>`);
+  const fine = parseYmd(lun); const dom = addDays(fine, 6);
+  return `<div class="riepilogo-card" role="region" aria-label="La tua settimana">
+    <div class="rp-testa"><b>🌙 La tua settimana</b><small>dal ${fine.getDate()} ${fine.getMonth() !== dom.getMonth() ? MESI[fine.getMonth()] + " " : ""}${[8, 11].includes(dom.getDate()) ? "all'" : "al "}${dom.getDate()} ${MESI[dom.getMonth()]}</small>
+      <button class="iconbtn rp-x" data-act="riepilogo-chiudi" data-v="${lun}" aria-label="Chiudi il riepilogo">✕</button></div>
+    <ul class="rp-righe">${righe.join("")}</ul></div>`;
+}
+
+/* =========================================================
+   SCORCIATOIE (Android: tieni premuta l'icona)
+   ?azione=todo | evento | spesa | nuova-spesa  (solo questi). Si legge all'avvio, si toglie subito dall'indirizzo
+   e si esegue appena l'app è pronta (anche da ospite, o dopo l'accesso). Su iPhone non ci sono: nessun effetto.
+   ========================================================= */
+const AZIONI = ["todo", "evento", "spesa", "nuova-spesa"];
+function leggiAzioneDaLink() {
+  const p = new URLSearchParams(location.search), a = p.get("azione");
+  if (a !== null) {
+    if (AZIONI.includes(a)) { try { sessionStorage.setItem("mochi.azione", a); } catch {} }
+    p.delete("azione"); history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "") + location.hash);
+  }
+}
+function eseguiAzione() {
+  let a = null; try { a = sessionStorage.getItem("mochi.azione"); sessionStorage.removeItem("mochi.azione"); } catch {}
+  if (!AZIONI.includes(a)) return;
+  if (a === "todo") openEditor(newItem({ kind: "todo", lista_id: null }), true);
+  else if (a === "evento") openEditor(newItem({ kind: "event", due_date: todayStr(), lista_id: null }), true);
+  else if (a === "spesa") {
+    // la lista della spesa più recente ancora aperta; se non c'è, una nuova
+    const l = state.items.filter((i) => isSpesa(i) && !i.done).sort((x, y) => (y.updated_at || "").localeCompare(x.updated_at || ""))[0];
+    openEditor(l || newItem({ kind: "note", title: "Lista della spesa", lista_id: null }), !l);
+    setTimeout(() => { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "center" }); } }, 300);
+  } else if (a === "nuova-spesa") {
+    if (!mod("spese")) { toast("Le spese sono spente: le accendi in Impostazioni"); return; }
+    state.tab = "spese"; render(); apriSpesa(null);
+  }
+}
+
+/* =========================================================
+   LISTA DELLA SPESA INTELLIGENTE
+   Si appoggia alle liste da spuntare (sottotask): funziona anche nelle liste condivise, nessun dato nuovo nel database.
+   Una voce è "lista della spesa" se il titolo contiene una parola come "spesa" o "supermercato", oppure se la si segna
+   con l'interruttore: il segno è il prefisso "sp-" negli id delle righe (invisibile, già accettato dal controllo del
+   database, e chi ha l'app vecchia aperta vede e modifica la lista come sempre).
+   ========================================================= */
+const PAROLE_SPESA = ["spesa", "supermercato", "supermarket", "ipermercato", "compere", "alimentari", "da comprare", "cose da prendere", "lista spesa", "discount", "lidl", "conad", "coop", "esselunga", "carrefour", "eurospin"];
+// Reparti nell'ordine del percorso tipico del supermercato, con le parole più comuni
+const REPARTI = [
+  ["frutta", "Frutta e verdura", "🥦", "mela pera banana arancia mandarino limone pesca albicocca ciliegia fragola uva kiwi ananas melone anguria mango avocado mirtilli prugna noci mandorle insalata lattuga rucola spinaci cavolo cavolfiore broccoli carota patata cipolla aglio pomodoro pomodorini zucchina melanzana peperone cetriolo sedano finocchio carciofi asparagi funghi zucca porro radicchio fagiolini basilico prezzemolo rosmarino zenzero verdura frutta"],
+  ["pane", "Pane e dolci", "🥖", "pane panino baguette focaccia piadina grissini crackers fette-biscottate pancarre cornetti brioche croissant biscotti torta crostata merendine dolci cioccolato nutella marmellata miele cereali muesli"],
+  ["latte", "Latticini e uova", "🥛", "latte yogurt burro panna formaggio mozzarella parmigiano grana pecorino ricotta mascarpone stracchino gorgonzola provola scamorza philadelphia uova"],
+  ["carne", "Carne e pesce", "🍗", "carne pollo tacchino manzo vitello maiale macinato hamburger salsiccia wurstel prosciutto salame mortadella bresaola speck pancetta affettati pesce* salmone tonno merluzzo orata branzino gamberi cozze vongole calamari polpo alici"],
+  ["dispensa", "Dispensa", "🥫", "pasta spaghetti penne fusilli rigatoni lasagne gnocchi riso farina zucchero sale pepe olio aceto passata pelati sugo pesto fagioli ceci lenticchie mais olive capperi brodo dado spezie origano lievito caffe the tisana camomilla cacao patatine ketchup maionese"],
+  ["surgelati", "Surgelati", "🧊", "surgelati gelato ghiaccioli bastoncini sofficini pizza minestrone patatine-fritte"],
+  ["bevande", "Bevande", "🧃", "acqua frizzante succo aranciata coca cola birra vino prosecco spumante bibite latte-soia latte-mandorla latte-avena"],
+  ["casa", "Casa e pulizia", "🧽", "detersivo ammorbidente candeggina sgrassatore anticalcare spugne stracci scopa sacchetti spazzatura carta-cucina scottex tovaglioli piatti bicchieri pellicola alluminio carta-forno lampadine pile batterie pastiglie lavastoviglie"],
+  ["igiene", "Igiene e cura", "🧴", "shampoo balsamo bagnoschiuma sapone dentifricio spazzolino collutorio deodorante carta-igienica fazzoletti assorbenti salviette cotone dischetti crema rasoio cerotti"],
+  ["animali", "Animali", "🐾", "crocchette croccantini scatolette lettiera cibo-gatto cibo-cane biscotti-cane sabbietta"],
+  ["altro", "Altro", "🧺", ""]
+];
+// "Latte", "latte ", "Mele"/"mela", "pomodori"/"pomodoro" -> stessa chiave (plurali semplici: si toglie la vocale finale)
+const ECCEZIONI_STEM = { pesce: "pesce*", pesci: "pesce*", "pesce*": "pesce*" };
+function stem(w) {
+  if (ECCEZIONI_STEM[w]) return ECCEZIONI_STEM[w];
+  if (w.length < 4) return w;
+  let s = w.replace(/[aeiou]$/, "");
+  if (/[cg]h$/.test(s)) s = s.slice(0, -1);
+  return s;
+}
+const normSpesa = (t) => str(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9* ]+/g, " ").replace(/\s+/g, " ").trim();
+const chiaveSpesa = (t) => normSpesa(t).split(" ").filter(Boolean).map(stem).join(" ");
+const titoloSpesa = (t) => { const n = ` ${normSpesa(t)} `; return PAROLE_SPESA.some((p) => n.includes(` ${p} `)); };
+const MARCA_SPESA = "sp-";
+const isSpesa = (it) => !!it && it.kind !== "event" && (titoloSpesa(it.title) || (it.sottotask || []).some((x) => x.id.startsWith(MARCA_SPESA)));
+// Mette o toglie il segno "lista della spesa" negli id delle righe (sempre unici e validi)
+function marcaSpesa(st, on) {
+  const visti = new Set();
+  return (st || []).map((x) => {
+    let id = on ? (x.id.startsWith(MARCA_SPESA) ? x.id : (MARCA_SPESA + x.id).slice(0, 40)) : (x.id.startsWith(MARCA_SPESA) ? x.id.slice(MARCA_SPESA.length) || nuovoStId() : x.id);
+    if (!RE_STID.test(id) || visti.has(id)) id = (on ? MARCA_SPESA : "") + nuovoStId(visti);
+    visti.add(id); return { ...x, id };
+  });
+}
+// Dizionario: chiave della parola (o di due parole unite da "-") -> indice del reparto
+const DIZ_REPARTI = (() => { const m = new Map(); REPARTI.forEach(([, , , parole], i) => parole.split(" ").filter(Boolean).forEach((p) => { const k = p.split("-").map(stem).join(" "); if (!m.has(k)) m.set(k, i); })); return m; })();
+const PAROLINE = new Set(["di", "de", "del", "della", "dei", "delle", "per", "il", "lo", "la", "le", "i", "gli", "da", "al", "alla", "con", "e", "in", "un", "una"]);
+function repartoDi(t) {
+  const w = normSpesa(t).split(" ").filter((x) => x && !PAROLINE.has(x)).map(stem);
+  for (let i = 0; i < w.length - 1; i++) { const k = DIZ_REPARTI.get(w[i] + " " + w[i + 1]); if (k != null) return k; } // prima le coppie ("carta igienica")
+  for (const x of w) { const k = DIZ_REPARTI.get(x); if (k != null) return k; }
+  return REPARTI.length - 1;
+}
+// Righe raggruppate per reparto, in ordine di percorso; le spuntate in fondo al loro reparto
+function gruppiSpesa(st) {
+  const g = REPARTI.map(() => []);
+  (st || []).forEach((x) => g[repartoDi(x.t)].push(x));
+  return g.map((v, i) => ({ i, voci: [...v.filter((x) => !x.f), ...v.filter((x) => x.f)] })).filter((x) => x.voci.length);
+}
+const raggruppaSpesa = (it) => isSpesa(it) && CUSTOM.spesa_reparti !== false;
+// Le cose scritte in passato nelle liste della spesa (tutte le voci caricate, anche condivise): frequenza + recenza
+let memoSugg = { items: null, n: -1, v: null };
+function storicoSpesa() {
+  if (memoSugg.items === state.items && memoSugg.n === state.items.length && memoSugg.v) return memoSugg.v;
+  const m = new Map(), ora = Date.now();
+  for (const it of state.items) {
+    if (!isSpesa(it) || !it.sottotask?.length) continue;
+    const quando = Date.parse(it.updated_at) || 0, fresco = ora - quando < 30 * 864e5 ? 1 : 0;
+    for (const x of it.sottotask) {
+      const k = chiaveSpesa(x.t); if (!k) continue;
+      const e = m.get(k) || { k, t: x.t, n: 0, comprato: 0, ultima: 0, fresco: 0 };
+      e.n++; if (x.f) e.comprato++; e.fresco += fresco;
+      if (quando >= e.ultima) { e.ultima = quando; e.t = x.t; } // si mostra come è stata scritta l'ultima volta
+      m.set(k, e);
+    }
+  }
+  const v = [...m.values()].map((e) => ({ ...e, punti: e.n * 2 + e.comprato + e.fresco * 1.5 })).sort((a, b) => b.punti - a.punti || b.ultima - a.ultima);
+  memoSugg = { items: state.items, n: state.items.length, v };
+  return v;
+}
+function suggerisci(testo, giaNellaLista, quanti = 5) {
+  const k = chiaveSpesa(testo); if (!k) return [];
+  const gia = new Set(giaNellaLista.map((x) => chiaveSpesa(x.t)));
+  return storicoSpesa().filter((e) => !gia.has(e.k) && e.k !== k && (e.k.startsWith(k) || normSpesa(e.t).startsWith(normSpesa(testo)))).slice(0, quanti);
+}
+const ricompri = (st, quanti = 8) => { const gia = new Set((st || []).map((x) => chiaveSpesa(x.t))); return storicoSpesa().filter((e) => e.comprato > 0 && !gia.has(e.k)).sort((a, b) => b.comprato - a.comprato || b.punti - a.punti).slice(0, quanti); };
+const chipSugg = (e) => `<button class="sp-sugg" data-act="st-sugg" data-v="${esc(e.t)}">${esc(e.t)}</button>`;
+function aggiornaSuggerimenti(v) {
+  const box = $("#stSugg"); if (!box || !draft) return;
+  const s = draft._spesa ? suggerisci(v, draft.sottotask) : [];
+  box.innerHTML = s.length ? `<span class="sp-sugg-l">Forse:</span>${s.map(chipSugg).join("")}` : "";
+}
+// La card della bacheca e la riga aperta delle cose da fare: per reparto, se è una lista della spesa
+function voceListaHtml(it, max = 0) {
+  const st = it.sottotask || [];
+  if (!raggruppaSpesa(it)) { const v = max ? st.slice(0, max) : st; return v.map((x) => stVoce(it, x)).join("") + (max && st.length > max ? `<small>e altre ${st.length - max}...</small>` : ""); }
+  let n = 0, h = "";
+  for (const g of gruppiSpesa(st)) {
+    if (max && n >= max) break;
+    h += `<span class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</span>`;
+    for (const x of g.voci) { if (max && n >= max) break; h += stVoce(it, x); n++; }
+  }
+  return h + (max && st.length > max ? `<small>e altre ${st.length - max}...</small>` : "");
+}
+
+/* =========================================================
+   OSPITE (senza account) E PASSAGGIO ALL'ACCOUNT
+   Come ospite l'app funziona come la modalità prova: tutto resta in questo dispositivo.
+   Creando un account (o entrando in uno esistente) le cose dell'ospite si portano nell'account:
+   si carica tutto con chiavi stabili (ripetere non crea doppioni, non si sovrascrive niente di quello che c'era)
+   e SOLO alla fine, se è andato tutto bene, si svuota il dispositivo.
+   ========================================================= */
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CHIAVI_OSPITE = ["mochi.items", "mochi.umori", "mochi.turni", "mochi.spese", "mochi.giorniAttivi", "mochi.ospite.custom"];
+// Spiegazione prima di entrare come ospite (dalla schermata di accesso)
+function apriOspite() {
+  const passaggio = LS.get("mochi.ospite", null) === "passaggio";
+  if (passaggio) { entraOspite(); return; }
+  openSheet(`<h2><span class="mbox">${mascot()}</span>Prova senza account</h2>
+    <p class="ospite-testo">Come ospite le tue cose restano solo su questo dispositivo. Se crei un account le ritrovi anche sul computer e sugli altri dispositivi, e non le perdi se cambi telefono.</p>
+    <p class="ospite-testo piccolo">Puoi creare un account quando vuoi: le cose che hai scritto le porti con te. <a href="privacy.html" target="_blank" rel="noopener">Leggi l'informativa privacy</a></p>
+    <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="ospite-entra">Entra come ospite</button></div>`);
+}
+function entraOspite() { LS.set("mochi.ospite", "si"); location.reload(); }
+// Da ospite: "Crea account" o "Ho già un account". Le cose restano nel dispositivo finché non arrivano nell'account.
+function vaiAdAccount(modo) {
+  if (!OSPITE) return;
+  lasciaOspite(); LS.set("mochi.ospite.modo", modo); LS.set("mochi.ospite.origine", "account"); // è l'ospite stesso che entra
+  location.reload();
+}
+/* L'ospite lascia il dispositivo (per entrare in un account o con "Esci"): le sue cose restano in attesa e le sue
+   preferenze (colori, mascotte, casetta con gli sblocchi) passano nella sua copia. Chi entra trova le preferenze pulite:
+   arrivano in un account solo con il passaggio confermato. */
+function lasciaOspite() {
+  LS.set("mochi.ospite.custom", CUSTOM); LS.set("mochi.ospite", "passaggio");
+  LS.set("mochi.custom", cleanCustom({ stile: CUSTOM.stile })); // resta solo lo stile della schermata di accesso
+}
+const invitoAccount = (testo) => `<div class="empty"><div class="mbox">${mascot()}</div><div>${esc(testo)}</div>
+  <div class="actions ospite-azioni"><button class="btn primary" data-act="ospite-account" data-v="signup">Crea un account</button></div></div>`;
+// Impostazioni: scheda in alto per l'ospite
+const schedaOspite = () => `<div class="ospite-scheda"><b>Sei ospite</b><small>Le tue cose restano solo su questo dispositivo. Con un account le ritrovi ovunque e non le perdi se cambi telefono.</small>
+  <div class="ospite-bottoni"><button class="fbtn" data-act="ospite-account" data-v="login">Ho già un account</button><button class="fbtn on" data-act="ospite-account" data-v="signup">Crea account</button></div></div>`;
+// Oggi: un invito discreto, al massimo una volta ogni 7 giorni (si chiude con la X)
+function invitoOspite() {
+  if (!OSPITE || !state.items.length || Date.now() - LS.get("mochi.ospite.invito", 0) < 7 * 864e5) return "";
+  return `<div class="ospite-invito"><span>Le tue cose sono solo su questo dispositivo. <button class="more" data-act="ospite-account" data-v="signup">Crea un account</button> per ritrovarle ovunque.</span>
+    <button class="iconbtn ospite-x" data-act="ospite-invito-chiudi" aria-label="Chiudi l'invito">✕</button></div>`;
+}
+// Esci da ospite: le cose restano sul dispositivo (oppure si cancellano, chiedendo due volte)
+function esciOspite() {
+  const n = quanteCose(datiOspite());
+  openSheet(`<h2><span class="mbox">${mascot()}</span>Uscire da ospite?</h2>
+    <p class="ospite-testo">${n ? `Le ${n} cose che hai scritto restano su questo dispositivo: le ritrovi se rientri come ospite, oppure le porti in un account quando entri.` : "Tornerai alla schermata di accesso."}</p>
+    ${n ? `<button class="more ospite-cancella" data-act="ospite-cancella">Cancella le mie cose da questo dispositivo ed esci</button>` : ""}
+    <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="ospite-esci-ok">Esci</button></div>`);
+}
+async function cancellaOspite() {
+  const ok = await ask({ title: "Cancellare tutto?", text: "Le cose che hai scritto come ospite spariranno per sempre da questo dispositivo.", ok: "Cancella ed esci", danger: true });
+  if (!ok) { esciOspite(); return; }
+  CHIAVI_OSPITE.forEach((k) => localStorage.removeItem(k)); localStorage.removeItem("mochi.ospite");
+  location.reload();
+}
+// Le cose dell'ospite nel dispositivo, ripulite come all'avvio della modalità prova
+function datiOspite() {
+  const items = normalizeAll(LS.get("mochi.items", []));
+  const u = LS.get("mochi.umori", {}), umori = {};
+  if (u && typeof u === "object") for (const k in u) if (validYmd(k) && cleanUmore(u[k])) umori[k] = cleanUmore(u[k]);
+  const t = LS.get("mochi.turni", {}) || {}, giorniT = {};
+  for (const k in (t.giorni && typeof t.giorni === "object" ? t.giorni : {})) if (validYmd(k) && /^[a-z0-9]{0,8}$/.test(str(t.giorni[k]))) giorniT[k] = str(t.giorni[k]);
+  const sp = LS.get("mochi.spese", {}) || {};
+  const ga = LS.get("mochi.giorniAttivi", []);
+  return { items, umori, turni: { imp: cleanTurniImp(t.imp), giorni: giorniT },
+    spese: { voci: (Array.isArray(sp.voci) ? sp.voci : []).map(cleanSpesa).filter(Boolean).slice(0, 5000), budget: cleanBudget(sp.budget) },
+    giorni: (Array.isArray(ga) ? ga : []).map(str).filter(giornoValido) };
+}
+const quanteCose = (d) => d.items.length + Object.keys(d.umori).length + Object.keys(d.turni.giorni).length + d.spese.voci.length;
+const haDatiOspite = (d) => quanteCose(d) > 0 || d.giorni.length > 0 || d.turni.imp.tipi.length > 0 || !!d.spese.budget;
+const plur = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+function elencoCose(d) {
+  const v = d.items.filter((i) => i.kind !== "note").length, a = d.items.length - v, out = [];
+  if (v) out.push(plur(v, "cosa da fare o appuntamento", "cose da fare e appuntamenti"));
+  if (a) out.push(plur(a, "appunto", "appunti"));
+  if (Object.keys(d.umori).length) out.push(plur(Object.keys(d.umori).length, "giornata colorata", "giornate colorate"));
+  if (Object.keys(d.turni.giorni).length) out.push(plur(Object.keys(d.turni.giorni).length, "turno", "turni"));
+  if (d.spese.voci.length) out.push(plur(d.spese.voci.length, "spesa", "spese"));
+  return out;
+}
+// Impostazioni (con account): le cose dell'ospite ancora da portare
+function rigaPassaggio() {
+  if (LS.get("mochi.ospite", null) !== "passaggio" || nonMieDaMe()) return "";
+  const n = quanteCose(datiOspite());
+  return n ? `<div class="ospite-scheda"><b>Cose da portare nell'account</b><small>Su questo dispositivo ${n === 1 ? "c'è 1 cosa scritta" : `ci sono ${n} cose scritte`} come ospite. Se sono tue, puoi portarle nel tuo account.</small>
+    <div class="ospite-bottoni"><button class="fbtn" data-act="passaggio-non-mie">Non sono mie</button><button class="fbtn on" data-act="passaggio-proponi">Portale qui</button></div></div>` : "";
+}
+/* Telefono condiviso: chi entra potrebbe non essere l'ospite. Le scelte valgono per QUESTO account (id):
+   "Più tardi" = non chiedo per 7 giorni; "Non sono mie, lasciale" = non chiedo più a questo account
+   (un altro account che entra se le vede proporre: potrebbe essere proprio la persona che le ha scritte). */
+const chiaveRimando = () => "mochi.ospite.dopo." + (store.user?.id || "");
+const nonMieDaMe = () => { const a = LS.get("mochi.ospite.non_mie", []); return Array.isArray(a) && a.includes(store.user?.id); };
+const rimandaPassaggio = () => LS.set(chiaveRimando(), Date.now());
+function nonSonoMie() {
+  const n = quanteCose(datiOspite());
+  openSheet(`<h2><span class="mbox">${mascot()}</span>Non sono tue?</h2>
+    <p class="ospite-testo">Nessun problema: non le porto nel tuo account. Cosa faccio con ${n === 1 ? "la cosa scritta" : `le ${n} cose scritte`} come ospite su questo dispositivo?</p>
+    <button class="more ospite-cancella" data-act="passaggio-cancella">Cancellale da questo dispositivo</button>
+    <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="passaggio-lascia">Lasciale qui</button></div>`);
+}
+function lasciaSulDispositivo() {
+  const a = LS.get("mochi.ospite.non_mie", []), id = store.user?.id;
+  if (id) LS.set("mochi.ospite.non_mie", [...new Set([...(Array.isArray(a) ? a : []), id])].slice(-20));
+  closeSheet(); toast("Restano su questo dispositivo: non te lo chiedo più");
+}
+async function cancellaCoseOspite() {
+  const ok = await ask({ title: "Cancellarle dal dispositivo?", text: "Le cose scritte come ospite spariranno per sempre da questo dispositivo. Il tuo account non cambia.", ok: "Cancella", danger: true });
+  if (!ok) { nonSonoMie(); return; }
+  finePassaggio(); toast("Cancellate dal dispositivo");
+}
+// Dopo l'accesso: proposta di portare le cose dell'ospite
+async function proponiPassaggio(subito = false) {
+  if (!ONLINE_MODE || !store.user || LS.get("mochi.ospite", null) !== "passaggio") return;
+  const d = datiOspite();
+  // senza cose scritte: le preferenze dell'ospite vanno solo a un account nuovo, che non ne ha di sue
+  // senza cose scritte: le preferenze dell'ospite si portano da sole SOLO se è l'ospite stesso a entrare
+  // (da "Crea account" / "Ho già un account") in un account che non ne ha; dopo "Esci" non si applicano mai a chi entra
+  if (!haDatiOspite(d)) { if (LS.get("mochi.ospite.origine", "") === "account" && !accountHaPreferenze()) { try { await portaPreferenze(); finePassaggio(); } catch {} } else finePassaggio(); return; }
+  if (!subito && (nonMieDaMe() || Date.now() - LS.get(chiaveRimando(), 0) < 7 * 864e5)) return;
+  const n = quanteCose(d), giaPieno = state.items.length > 0 || state.spese.voci.length > 0 || Object.keys(state.umori).length > 0;
+  const apri = () => { rimandaPassaggio(); openSheet(`<h2><span class="mbox">${mascot()}</span>Cose scritte come ospite</h2>
+    <p class="ospite-testo"><b>Su questo dispositivo ${n === 1 ? "c'è 1 cosa scritta" : `ci sono ${n} cose scritte`} come ospite. Sono tue?</b></p>
+    ${elencoCose(d).length ? `<ul class="ospite-elenco">${elencoCose(d).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    <p class="ospite-testo piccolo">${giaPieno ? "Nell'account ci sono già delle cose: le unisco, non cancello e non sostituisco niente. " : ""}Porto qui anche colori, stile, mascotte e casetta. Finché non è tutto nell'account, sul dispositivo non tocco niente.</p>
+    <button class="more" data-act="passaggio-non-mie">Non sono mie</button>
+    <div class="actions"><button class="btn" data-act="passaggio-tardi">Più tardi</button><button class="btn primary" data-act="passaggio-via">Sì, portale nel mio account</button></div>`); };
+  if (subito) apri(); else setTimeout(() => whenSheetFree(apri), 900);
+}
+// Id stabili per voci e spese (servono uuid): se ne manca uno lo creo e lo SALVO nel dispositivo prima di caricare,
+// così un nuovo tentativo usa gli stessi id e il database riconosce quello che ha già (niente doppioni)
+function idStabili() {
+  const it = LS.get("mochi.items", []);
+  if (Array.isArray(it) && it.some((x) => x && typeof x === "object" && !RE_UUID.test(String(x.id)))) LS.set("mochi.items", it.map((x) => (x && typeof x === "object" && !RE_UUID.test(String(x.id)) ? { ...x, id: crypto.randomUUID() } : x)));
+  const sp = LS.get("mochi.spese", {});
+  if (sp && Array.isArray(sp.voci) && sp.voci.some((x) => x && !RE_UUID.test(String(x.id)))) LS.set("mochi.spese", { ...sp, voci: sp.voci.map((x) => (x && typeof x === "object" && !RE_UUID.test(String(x.id)) ? { ...x, id: crypto.randomUUID() } : x)) });
+}
+const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i += n) await fn(righe.slice(i, i + n)); };
+const giu = (r) => { if (r.error) throw r.error; return r; };
+// Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
+// (gli sblocchi della casetta si uniscono sempre: non si perdono mai)
+const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa"].some((k) => md[k] != null); };
+async function portaPreferenze() {
+  const copia = LS.get("mochi.ospite.custom", null); if (!copia) return; // solo la copia dell'ospite, mai le preferenze di chi è entrato
+  const ospite = cleanCustom(copia);
+  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa) } : { ...ospite });
+  LS.set("mochi.custom", CUSTOM); applyCustom();
+  await store.saveCustom(CUSTOM); // se non riesce, l'errore ferma il passaggio: la copia resta e si può riprovare
+}
+function finePassaggio() { CHIAVI_OSPITE.forEach((k) => localStorage.removeItem(k)); ["mochi.ospite", "mochi.ospite.non_mie", "mochi.ospite.origine"].forEach((k) => localStorage.removeItem(k)); }
+let passaggioInCorso = false;
+async function eseguiPassaggio(btn) {
+  if (passaggioInCorso || !ONLINE_MODE || !store.user) return;
+  passaggioInCorso = true; localStorage.removeItem(chiaveRimando()); if (btn) { btn.disabled = true; btn.textContent = "Porto le tue cose..."; }
+  const sb = store.sb, me = store.user.id;
+  try {
+    idStabili();
+    const d = datiOspite(), giaPieno = state.items.length > 0 || state.spese.voci.length > 0;
+    // 1) voci (cose da fare, appuntamenti, appunti con sottotask e posizione); quelle già presenti si lasciano come sono
+    const righe = d.items.map((it) => ({ ...store.clean({ ...it, lista_id: null }) }));
+    await aBlocchi(righe, 200, async (b) => {
+      let r = await sb.from("items").upsert(b, { onConflict: "id", ignoreDuplicates: true });
+      if (r.error && store.manca(r.error)) r = await sb.from("items").upsert(b.map(({ sottotask, ...x }) => x), { onConflict: "id", ignoreDuplicates: true });
+      giu(r);
+    });
+    // 2) com'è andata la giornata (se un giorno c'è già nell'account, resta quello)
+    const um = Object.entries(d.umori).map(([giorno, u]) => ({ user_id: me, giorno, livello: u.livello, nota: u.nota || null }));
+    await aBlocchi(um, 500, async (b) => giu(await sb.from("umori").upsert(b, { onConflict: "user_id,giorno", ignoreDuplicates: true })));
+    // 3) turni: i tipi si uniscono (per codice), il ciclo resta quello dell'account se c'è; i giorni già segnati restano
+    if (d.turni.imp.tipi.length || Object.keys(d.turni.giorni).length) {
+      const a = giu(await sb.from("turni_impostazioni").select("tipi,ciclo,ciclo_inizio").maybeSingle()).data;
+      const acc = cleanTurniImp(a || {}), tipi = [...acc.tipi];
+      d.turni.imp.tipi.forEach((t) => { if (tipi.length < 12 && !tipi.some((x) => x.k === t.k)) tipi.push(t); });
+      const imp = acc.ciclo.length ? { ...acc, tipi } : { tipi, ciclo: d.turni.imp.ciclo, ciclo_inizio: d.turni.imp.ciclo_inizio };
+      giu(await sb.from("turni_impostazioni").upsert({ user_id: me, tipi: imp.tipi, ciclo: imp.ciclo, ciclo_inizio: imp.ciclo_inizio }, { onConflict: "user_id" }));
+      const tg = Object.entries(d.turni.giorni).map(([giorno, tipo]) => ({ user_id: me, giorno, tipo }));
+      await aBlocchi(tg, 500, async (b) => giu(await sb.from("turni").upsert(b, { onConflict: "user_id,giorno", ignoreDuplicates: true })));
+    }
+    // 4) spese (con il loro id: ripetere non le raddoppia) e budget, se l'account non ne ha uno
+    const spr = d.spese.voci.map((v) => ({ id: v.id, giorno: v.giorno, importo_cent: v.importo_cent, categoria: v.categoria, nota: v.nota || null }));
+    await aBlocchi(spr, 200, async (b) => giu(await sb.from("spese").upsert(b, { onConflict: "id", ignoreDuplicates: true })));
+    if (d.spese.budget) {
+      const b = giu(await sb.from("spese_impostazioni").select("budget_cent").maybeSingle()).data;
+      if (!b?.budget_cent) giu(await sb.from("spese_impostazioni").upsert({ user_id: me, budget_cent: d.spese.budget }, { onConflict: "user_id" }));
+    }
+    // 5) giorni attivi della serie
+    if (d.giorni.length) await GiorniStore.aggiungi(d.giorni);
+    // 6) preferenze (colori, stile, mascotte, moduli, casetta)
+    await portaPreferenze();
+    // tutto arrivato: solo adesso si svuota il dispositivo
+    finePassaggio();
+    closeSheet(); await loadAndRender();
+    const n = quanteCose(d);
+    openSheet(`<div class="recap"><div class="mbox">${mascot("happy")}</div><h2 class="fred">Fatto!</h2>
+      <div class="say">Ho portato nell'account ${plur(n, "cosa", "cose")}${giaPieno ? ", insieme a quelle che c'erano già" : ""}. Ora le ritrovi su tutti i tuoi dispositivi 💗</div></div>
+      <div class="actions"><button class="btn primary" data-act="close">Che bello!</button></div>`);
+    confetti(innerWidth / 2, innerHeight * .35, 30); cheer(1800);
+  } catch (e) {
+    console.warn("Passaggio da ospite non riuscito", e);
+    const msg = /limite/i.test(e?.message || "") ? "Nell'account c'è il limite di voci raggiunto." : /fetch|network|Failed/i.test(e?.message || "") ? "La connessione si è interrotta." : "Qualcosa non è andato.";
+    openSheet(`<h2><span class="mbox">${mascot()}</span>Non sono riuscita a portare tutto</h2>
+      <p class="ospite-testo">${esc(msg)} Le tue cose sono al sicuro su questo dispositivo: non ho cancellato niente. Riprova tra poco: quello che è già arrivato non verrà doppiato.</p>
+      <div class="actions"><button class="btn" data-act="close">Più tardi</button><button class="btn primary" data-act="passaggio-via">Riprova</button></div>`);
+  } finally { passaggioInCorso = false; }
 }
 
 /* =========================================================
@@ -3399,6 +3807,9 @@ document.addEventListener("click", async (e) => {
     }
     // lista da spuntare: dentro l'editor
     case "st-toggle": { const x = draft?.sottotask.find((s) => s.id === v); if (x) { x.f = !x.f; drawSt(); } break; }
+    case "st-spesa": if (draft && !titoloSpesa(draft.title)) { draft._spesa = !draft._spesa; drawSt(); } break;
+    case "st-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); if (draft) drawSt(); break;
+    case "st-sugg": if (draft && v) aggiungiSt(v); break;
     case "st-del": if (draft) { draft.sottotask = draft.sottotask.filter((s) => s.id !== v); drawSt(); } break;
     case "st-su": { const a = draft?.sottotask, i = a ? a.findIndex((s) => s.id === v) : -1; if (i > 0) { [a[i - 1], a[i]] = [a[i], a[i - 1]]; drawSt(); } break; }
     // spese
@@ -3410,6 +3821,20 @@ document.addEventListener("click", async (e) => {
     case "spesa-elimina": eliminaSpesa(); break;
     case "spese-mese": { const g = state.speseMese || new Date(); state.speseMese = new Date(g.getFullYear(), g.getMonth() + (+v), 1); render(); break; }
     case "spese-budget": chiediBudget(); break;
+    // ospite
+    case "riepilogo-chiudi": LS.set("mochi.riepilogo.chiuso", v || ""); render(); break;
+    case "ospite-entra": entraOspite(); break;
+    case "ospite-account": vaiAdAccount(v === "login" ? "login" : "signup"); break;
+    case "ospite-esci": esciOspite(); break;
+    case "ospite-esci-ok": lasciaOspite(); LS.set("mochi.ospite.origine", "esci"); location.reload(); break;
+    case "ospite-cancella": cancellaOspite(); break;
+    case "ospite-invito-chiudi": LS.set("mochi.ospite.invito", Date.now()); render(); break;
+    case "passaggio-proponi": proponiPassaggio(true); break;
+    case "passaggio-tardi": rimandaPassaggio(); closeSheet(); break;
+    case "passaggio-non-mie": nonSonoMie(); break;
+    case "passaggio-lascia": lasciaSulDispositivo(); break;
+    case "passaggio-cancella": cancellaCoseOspite(); break;
+    case "passaggio-via": eseguiPassaggio(el); break;
     // serie di giorni
     case "serie-apri": apriSerie(); break;
     // casetta
@@ -3632,12 +4057,16 @@ async function loadAndRender() {
 }
 async function boot() {
   leggiInvitoDaLink();
+  leggiAzioneDaLink();
   applyCustom();
   focusRiprendiDaSalvata();
   const th = LS.get("mochi.theme", "auto"); if (th !== "auto") document.documentElement.dataset.theme = th;
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-  if (!ONLINE_MODE) { showApp(); await loadAndRender(); maybeShowInstallHint(); maybeShowNovita(); maybeBiscotto(); return; }
+  if (!ONLINE_MODE) { showApp(); await loadAndRender(); maybeShowInstallHint();
+    // ospite con un link d'invito: l'invito resta da parte (lo propongo dopo l'accesso)
+    eseguiAzione();
+    if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); maybeBiscotto(); return; }
 
   // Modalità online: mostra subito la cache, poi verifica la sessione
   let logged = false;
@@ -3646,7 +4075,7 @@ async function boot() {
     setLoginMode("login"); $("#lErr").textContent = "Connessione assente. Riprova tra poco."; return;
   }
   if (/type=recovery/.test(location.hash)) { setLoginMode("newpass"); return; }
-  if (!logged) { setLoginMode("login"); maybeShowInstallHint(); return; }
+  if (!logged) { const modo = LS.get("mochi.ospite.modo", "login"); localStorage.removeItem("mochi.ospite.modo"); setLoginMode(modo === "signup" && SIGNUP_OPEN ? "signup" : "login"); maybeShowInstallHint(); return; }
   startOnline();
 }
 async function startOnline() {
@@ -3655,8 +4084,10 @@ async function startOnline() {
   state.items = normalizeAll(LS.get("mochi.cache", [])); state.giorni = new Set(giorniCache()); render();
   await loadAndRender();
   maybeShowInstallHint();
+  eseguiAzione();
   maybeShowNovita();
   maybeBiscotto();
+  proponiPassaggio();
   resyncPush();
   checkAdmin();
   controllaRisposte();
@@ -3702,6 +4133,12 @@ function setLoginMode(m) {
   $("#lSwitch").classList.toggle("hidden", m === "newpass" || (!SIGNUP_OPEN && m === "login"));
   $("#lSwitch").textContent = m === "login" ? "Non hai un account? Creane uno" : "Hai già un account? Entra";
   $("#lForgot").classList.toggle("hidden", m !== "login");
+  // ospite: "Prova senza account", oppure "Continua come ospite" se ci sono già cose sul dispositivo
+  const passaggio = LS.get("mochi.ospite", null) === "passaggio";
+  $("#lOspite").classList.toggle("hidden", m === "newpass");
+  $("#lOspite").textContent = passaggio ? "Continua come ospite" : "Prova senza account";
+  $("#lOspiteNota").classList.toggle("hidden", !passaggio || m === "newpass" || m === "forgot");
+  $("#lPrivacyRow").classList.remove("errore"); $("#lPrivacyErr").textContent = "";
 }
 // Occhiolino: mostra o nasconde la password mentre la scrivi
 function showPass(on) {
@@ -3713,6 +4150,8 @@ function showPass(on) {
 $("#lEye").addEventListener("click", () => { showPass($("#lPass").type === "password"); $("#lPass").focus(); });
 $("#lSwitch").addEventListener("click", () => setLoginMode(loginMode === "login" ? "signup" : "login"));
 $("#lForgot").addEventListener("click", () => setLoginMode("forgot"));
+$("#lPrivacy").addEventListener("change", () => { if ($("#lPrivacy").checked) { $("#lPrivacyRow").classList.remove("errore"); $("#lPrivacyErr").textContent = ""; } });
+$("#lOspite").addEventListener("click", () => apriOspite());
 
 $("#loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -3729,7 +4168,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
       startOnline();
     } else if (loginMode === "signup") {
       if (!nome) throw new Error("Dimmi come ti chiami 🌸");
-      if (!$("#lPrivacy").checked) throw new Error("Spunta l'informativa privacy per continuare");
+      if (!$("#lPrivacy").checked) { $("#lPrivacyRow").classList.add("errore"); $("#lPrivacyErr").textContent = "Per creare l'account spunta la casella dell'informativa privacy"; $("#lPrivacy").focus(); throw new Error(""); }
       const r = await store.signup(nome, email, pass).catch((x) => {
         throw new Error(/registered|exists/i.test(x.message) ? "Questa email ha già un account" : /signup.*disabled|not allowed/i.test(x.message) ? "Le registrazioni sono chiuse" : x.message);
       });
@@ -3743,7 +4182,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
       history.replaceState(null, "", location.pathname);
       toast("Password aggiornata 🔐"); startOnline();
     }
-  } catch (x) { err.style.color = ""; err.textContent = x.message || "Qualcosa è andato storto"; }
+  } catch (x) { err.style.color = ""; err.textContent = x.message === "" ? "" : x.message || "Qualcosa è andato storto"; }
   finally { btn.disabled = false; btn.style.opacity = ""; }
 });
 

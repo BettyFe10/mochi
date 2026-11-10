@@ -10,7 +10,67 @@
   "theme_color": "#ffd6e4",
   "lang": "it",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nuova cosa da fare",
+      "short_name": "Da fare",
+      "url": "./?azione=todo",
+      "icons": [
+        {
+          "src": "icons/icon-mochi-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Nuovo appuntamento",
+      "short_name": "Appuntamento",
+      "url": "./?azione=evento",
+      "icons": [
+        {
+          "src": "icons/icon-nigi-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Lista della spesa",
+      "short_name": "Spesa",
+      "url": "./?azione=spesa",
+      "icons": [
+        {
+          "src": "icons/icon-kame-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Nuova spesa",
+      "short_name": "Spesa €",
+      "url": "./?azione=nuova-spesa",
+      "icons": [
+        {
+          "src": "icons/icon-castagna-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

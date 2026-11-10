@@ -35,6 +35,9 @@ select cron.schedule('mochi-pulizia', '17 3 * * *', $$
   delete from public.notifiche_coda where created_at < now() - interval '1 day';
 $$);
 
+-- 4) Riepilogo della domenica sera: lo crea anche aggiornamenti/14-riepilogo.sql (ogni ora la domenica, UTC: la funzione manda solo alle 20 di Roma)
+select cron.schedule('mochi-riepilogo', '7 * * * 0', 'select public.riepilogo_settimanale()');
+
 -- Controllare che giri:  select * from cron.job_run_details order by start_time desc limit 5;
 -- Fermarlo:              select cron.unschedule('mochi-promemoria');
 -- Cambiare il segreto:   select vault.update_secret((select id from vault.secrets where name = 'mochi_cron_secret'), '<NUOVO>');

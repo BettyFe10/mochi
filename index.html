@@ -339,6 +339,9 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
   .nav .side.hidden{display:none}
   .nav .side-sep{height:1px;background:var(--line);margin:10px 8px}
   .nav{top:0;right:auto;bottom:0;width:248px;padding:24px 16px;pointer-events:auto;background:var(--card);box-shadow:4px 0 24px rgba(var(--acc-rgb),.08)}
+  /* con tutte le funzioni accese le voci non entrano in altezza: la barra scorre per conto suo */
+  .nav{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .nav::-webkit-scrollbar{width:6px} .nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
   .nav .bar{display:flex;flex-direction:column;align-items:stretch;gap:6px;height:auto;padding:0;max-width:none;background:none;box-shadow:none;border-radius:0}
   .nav .brand{padding:4px 12px 18px}
   .nav .brand span{display:block;font-family:var(--ft);font-weight:700;font-size:26px;color:var(--acc-t);line-height:1.1}
@@ -753,9 +756,8 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 .item.done .check{color:var(--on-acc)}
 :is(button,a,[tabindex],summary):focus-visible{outline:3px solid var(--acc-t);outline-offset:2px}
 .input:focus-visible{outline:none}
-@media (min-width:1440px){ .app{max-width:1320px} }
+/* su computer il contenuto usa tutta la larghezza accanto alla barra laterale */
 @media (min-width:1024px){ .split .col-side>.sec:first-child{margin-top:0} }
-#lPrivacy{width:22px;height:22px;flex:none}
 /* le intestazioni con le frecce dentro le finestre non finiscono sotto la X */
 .sheet > .calhead{padding-right:52px}
 /* frase del giorno: area di tocco alta 44px senza cambiare l'aspetto */
@@ -769,7 +771,6 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 }
 /* computer: il menu è una griglia fitta, non riquadri giganti */
 @media (min-width:1024px){ .mgrid{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));max-width:1000px} }
-#lPrivacyRow{padding:6px 0}
 /* QA: area di tocco delle caselline della lista da spuntare (editor) e degli interruttori piccoli */
 .st-check{width:28px;height:28px;position:relative}
 .st-check::after{content:"";position:absolute;inset:-10px;z-index:1} /* area di tocco 48x48 anche sopra il bordo del campo accanto; l'aspetto resta 28x28 */
@@ -1157,6 +1158,67 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="cartone"] .casa-scena{border:2px solid var(--tratto);box-shadow:var(--ombra-adesivo)}
 :root[data-stile="cartone"] .casa-scelta{border-color:var(--tratto-l)}
 :root[data-stile="cartone"] .casa-scelta.on{border-color:var(--tratto)}
+/* ---------- Accesso: consenso privacy e ospite ---------- */
+#lPrivacyRow{display:flex;gap:2px;align-items:center;text-align:left;font-size:14px;color:var(--ink);margin:2px 0 0 -10px;border-radius:var(--r-m);border:2px solid transparent;padding:0 8px 0 0}
+#lPrivacyRow.hidden{display:none}
+#lPrivacyRow .np{white-space:nowrap}
+#lPrivacyRow a{color:var(--acc-t);font-weight:800;display:inline-block;padding:12px 0;margin:-12px 0}
+/* casella grande 24px dentro un'area di tocco di 44px (il bordo trasparente fa parte della casella) */
+#lPrivacy{appearance:none;-webkit-appearance:none;flex:none;width:44px;height:44px;margin:0;border:10px solid transparent;border-radius:16px;background:var(--card) center/16px no-repeat;background-clip:padding-box;box-shadow:inset 0 0 0 2px var(--tratto-m);cursor:pointer}
+#lPrivacy:checked{background-color:var(--pink-d);box-shadow:inset 0 0 0 2px var(--pink-d);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3L13 4.5' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#lPrivacy:focus-visible{outline:3px solid var(--acc-t);outline-offset:-8px}
+#lPrivacyRow.errore{border-color:var(--danger);background:var(--danger-l)}
+#lPrivacyRow.errore #lPrivacy{box-shadow:inset 0 0 0 2px var(--danger)}
+.priv-err{min-height:0;margin:4px 0 6px;text-align:left}
+.priv-err:empty{display:none}
+.login-ospite{margin:4px 0 0!important;color:var(--ink2)!important;text-decoration:underline;text-underline-offset:3px}
+.login-nota{margin:0;font-size:13px;line-height:1.45;color:var(--ink2);font-weight:600}
+.ospite-testo{margin:0 0 var(--s3);font-size:15px;line-height:1.5;color:var(--ink)}
+.ospite-testo.piccolo{font-size:14px;color:var(--ink2)}
+.ospite-testo a{color:var(--acc-t);font-weight:800}
+.ospite-elenco{margin:0 0 var(--s3);padding-left:22px;line-height:1.6;color:var(--ink)}
+.ospite-scheda{display:flex;flex-direction:column;gap:4px;padding:var(--s4);margin:0 0 var(--s2);border-radius:var(--r-l);background:var(--pink-l);border:2px solid var(--line)}
+.ospite-scheda b{font-size:16px}
+.ospite-scheda small{font-size:13px;color:var(--ink2);line-height:1.4}
+.ospite-bottoni{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s2)}
+.ospite-invito{display:flex;align-items:center;gap:var(--s2);margin:0 0 var(--s4);padding:var(--s2) var(--s2) var(--s2) var(--s4);border-radius:var(--r-l);background:var(--card);border:2px dashed var(--line);font-size:14px;line-height:1.45;color:var(--ink2)}
+.ospite-invito .more{display:inline;min-height:0;padding:0;margin:0;font-size:14px;position:relative}
+.ospite-invito .more::after{content:"";position:absolute;inset:-12px -4px}
+.ospite-invito span{flex:1;min-width:0}
+.ospite-x{flex:none;font-size:14px}
+.ospite-cancella{color:var(--danger)!important;margin:0 0 var(--s2)}
+.ospite-azioni{max-width:320px;margin:var(--s4) auto 0}
+:root[data-stile="quaderno"] :is(.ospite-scheda,.ospite-invito){border-radius:var(--r-paper);border-width:1.5px}
+:root[data-stile="quaderno"] #lPrivacy{border-radius:13px}
+:root[data-stile="cartone"] .ospite-scheda{border-color:var(--tratto-l)}
+/* ---------- Lista della spesa ---------- */
+.sp-opz{display:grid;gap:var(--s2);margin-bottom:var(--s2)}
+.pin-toggle.mini-t{padding:8px 12px;min-height:52px}
+.pin-toggle.mini-t>span:first-child{flex:1;min-width:0}
+.pin-toggle.mini-t b{font-size:14px}
+.pin-toggle:disabled{cursor:default;opacity:.85}
+.sp-rep{display:block;margin:var(--s2) 0 2px;font-size:13px;font-weight:800;color:var(--ink2);line-height:1.3}
+.st-ed .sp-rep{margin:var(--s3) 4px 0}
+.st-note .sp-rep{margin:6px 0 0;font-size:12.5px;opacity:.85;color:inherit}
+.st-lista .sp-rep:first-child,.st-note .sp-rep:first-child{margin-top:0}
+.sp-sugg-box,.sp-ricompri{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2)}
+.sp-sugg-box:empty{display:none}
+.sp-ricompri{margin-top:var(--s2)}
+.sp-sugg-l{font-size:13px;font-weight:800;color:var(--ink2)}
+.sp-sugg{min-height:44px;padding:6px 14px;border-radius:99px;border:2px solid var(--tratto-l);background:var(--card);color:var(--ink);font-size:14px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-sugg::before{content:"+ ";color:var(--acc-t);font-weight:800}
+:root[data-stile="quaderno"] .sp-sugg{border-radius:7px;border-width:1.5px}
+/* ---------- Riepilogo della domenica ---------- */
+.riepilogo-card{margin:0 0 var(--s4);padding:var(--s3) var(--s4) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow)}
+.rp-testa{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:var(--s2)}
+.rp-testa b{font-size:16px}
+.rp-testa small{grid-column:1;font-size:13px;color:var(--ink2);font-weight:600}
+.rp-x{grid-column:2;grid-row:1/3;font-size:14px}
+.rp-righe{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s2)}
+.rp-righe li b{display:block;font-size:15px}
+.rp-righe li small{display:block;font-size:13px;color:var(--ink2)}
+:root[data-stile="quaderno"] .riepilogo-card{border-radius:var(--r-paper);box-shadow:var(--edge);border:1.5px solid var(--ink-a)}
+:root[data-stile="cartone"] .riepilogo-card{border:2px solid var(--tratto-l);box-shadow:none}
 </style>
 </head>
 <body>
@@ -1200,16 +1262,19 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
         <input class="input" id="lPass" type="password" placeholder="Password" autocomplete="current-password" minlength="8">
         <button type="button" class="pw-eye" id="lEye" aria-label="Mostra password" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="eye-off" d="M4 4l16 16"/></svg></button>
       </div>
-      <label id="lPrivacyRow" class="hidden" style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:13.5px;color:var(--ink2);margin:4px 2px 0">
-        <input type="checkbox" id="lPrivacy" style="margin-top:3px;accent-color:var(--pink-d)">
-        <span>Ho letto l'<a href="privacy.html" target="_blank" style="color:var(--acc-t);font-weight:800">informativa privacy</a></span>
+      <label id="lPrivacyRow" class="hidden">
+        <input type="checkbox" id="lPrivacy" aria-describedby="lPrivacyErr">
+        <span>Ho letto e accetto <span class="np">l'<a href="privacy.html" target="_blank" rel="noopener">informativa privacy</a></span></span>
       </label>
+      <div class="err priv-err" id="lPrivacyErr" role="alert"></div>
       <div class="err" id="lErr"></div>
       <button class="btn primary" style="width:100%" type="submit" id="lBtn">Entra</button>
     </form>
     <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;font-weight:800;font-size:14.5px">
       <button class="more" style="margin:0" id="lSwitch">Non hai un account? Creane uno</button>
       <button class="more" style="margin:0;color:var(--ink2)" id="lForgot">Password dimenticata?</button>
+      <button class="more login-ospite" id="lOspite">Prova senza account</button>
+      <p class="login-nota hidden" id="lOspiteNota">Le cose che hai scritto come ospite sono al sicuro su questo dispositivo: dopo l'accesso te le porto nell'account.</p>
     </div>
   </div>
 </div>
