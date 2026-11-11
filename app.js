@@ -1052,7 +1052,7 @@ let sheetOpener = null;
 function openSheet(html) {
   const ae = document.activeElement;
   if (!$("#sheet").classList.contains("on") && ae && ae !== document.body && !$("#sheet").contains(ae)) sheetOpener = ae;
-  $("#sheet").innerHTML = `<div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">✕</button>${html}`;
+  $("#sheet").innerHTML = `<div class="sheet-bar"><div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">✕</button></div>${html}`;
   $("#sheet").scrollTop = 0;
   bloccaPagina(); sheetSuTastiera();
   $("#scrim").classList.add("on"); $("#sheet").inert = false; $("#sheet").classList.add("on"); document.body.classList.add("sheet-open");
@@ -1107,7 +1107,7 @@ function finishAsk(confirmed) {
 function openEditor(it, isNew) {
   // _autoRemind: il promemoria lo sceglie Mochi finché l'utente non lo cambia a mano
   // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
-  draft = { ...it, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it) };
+  draft = { ...it, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
   advanced = !isNew || draft.kind === "note";
   drawEditor();
   setTimeout(() => { const i = $("#fTitle"); if (i && isNew) i.focus(); }, 250);
@@ -1145,7 +1145,7 @@ function drawEditor() {
       <button class="btn primary" data-act="d-save">Salva</button>
     </div>`);
   const t = $("#fTitle");
-  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); if (!draft._spesa && titoloSpesa(t.value)) { draft._spesa = true; drawSt(); } });
+  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); if (!draft._spesa && !draft._spesaScelta && titoloSpesa(t.value)) { draft._spesa = true; drawSt(); } });
   t.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveDraft(); } });
   ["fDate", "fTime", "fRemind", "fBody", "fLista"].forEach((id) => {
     const el = $("#" + id); if (!el) return;
@@ -1180,7 +1180,7 @@ function drawEditor() {
 /* Lista da spuntare nell'editor: si ridisegna solo lei (la finestra non salta e il cursore resta dov'è) */
 function stEditorHtml() {
   const st = draft?.sottotask || [], fatti = st.filter((x) => x.f).length;
-  const spesa = !!draft?._spesa, perReparto = spesa && CUSTOM.spesa_reparti !== false, daTitolo = spesa && titoloSpesa(draft.title);
+  const spesa = !!draft?._spesa, perReparto = spesa && CUSTOM.spesa_reparti !== false, daTitolo = spesa && !draft._spesaScelta && titoloSpesa(draft.title);
   const riga = (x, i, su) => `<div class="st-row ${x.f ? "fatto" : ""}">
       <button class="st-check" data-act="st-toggle" data-v="${esc(x.id)}" aria-label="${x.f ? "Togli la spunta" : "Spunta"}">${x.f ? "✓" : ""}</button>
       <input class="st-in" data-sid="${esc(x.id)}" value="${esc(x.t)}" maxlength="120" autocomplete="off" enterkeyhint="next" aria-label="Voce ${i + 1}">
@@ -1188,7 +1188,7 @@ function stEditorHtml() {
       <button class="st-btn" data-act="st-del" data-v="${esc(x.id)}" aria-label="Togli">✕</button></div>`;
   const righe = perReparto ? gruppiSpesa(st).map((g) => `<div class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</div>${g.voci.map((x) => riga(x, st.indexOf(x), false)).join("")}`).join("") : st.map((x, i) => riga(x, i, true)).join("");
   const rc = spesa && st.length < MAX_ST ? ricompri(st) : [];
-  return `<div class="sp-opz"><button class="pin-toggle mini-t ${spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${spesa}" ${daTitolo ? "disabled" : ""}><span><b>È una lista della spesa</b><small>${daTitolo ? "L'ho capito dal titolo" : "Suggerimenti e reparti del supermercato"}</small></span><span class="sw2"></span></button>
+  return `<div class="sp-opz"><button class="pin-toggle mini-t ${spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${spesa}"><span><b>È una lista della spesa</b><small>${daTitolo ? "L'ho capito dal titolo" : "Suggerimenti e reparti del supermercato"}</small></span><span class="sw2"></span></button>
     ${spesa ? `<button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="st-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b><small>Nell'ordine del giro del supermercato</small></span><span class="sw2"></span></button>` : ""}</div>
     ${righe}
     ${st.length < MAX_ST ? `<div class="st-row nuovo"><span class="st-plus">+</span><input class="st-in" id="stNew" maxlength="120" placeholder="${st.length ? "Aggiungi un'altra e premi Invio" : "Es. latte, uova... e premi Invio"}" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>` : `<p class="hint">Massimo ${MAX_ST} voci.</p>`}
@@ -1206,7 +1206,7 @@ function aggiungiSt(v) {
   if (!t || !draft) return;
   if (draft.sottotask.length >= MAX_ST) { toast(`Massimo ${MAX_ST} voci`); return; }
   const visti = new Set(draft.sottotask.map((x) => x.id));
-  draft.sottotask.push({ id: (draft._spesa ? MARCA_SPESA : "") + nuovoStId(visti), t, f: false });
+  draft.sottotask.push({ id: (draft._spesa ? MARCA_SPESA : draft._spesaScelta ? MARCA_NO_SPESA : "") + nuovoStId(visti), t, f: false });
   drawSt(true);
 }
 
@@ -1240,7 +1240,9 @@ async function saveDraft() {
   if (!d.title || !d.title.trim()) { toast("Scrivi almeno il titolo 🍙"); return; }
   d.title = d.title.trim().slice(0, 300);
   d.body = String(d.body || "").slice(0, 20000);
-  d.sottotask = cleanSottotask(marcaSpesa(cleanSottotask(d.sottotask), !!d._spesa || titoloSpesa(d.title)));
+  const modoSpesa = d._spesaScelta ? (d._spesa ? "on" : "off") : (d._spesa || titoloSpesa(d.title) ? "on" : null);
+  d.sottotask = cleanSottotask(marcaSpesa(cleanSottotask(d.sottotask), modoSpesa));
+  ricordaSpesaOff(d.id, modoSpesa === "off" && !d.sottotask.length);
   if (d.due_time && !RE_TIME.test(d.due_time)) d.due_time = null;
   if (d.due_date && (!validYmd(d.due_date) || d.due_date < "2000-01-01" || d.due_date > "2100-12-31")) { toast("Data non valida 📅"); return; }
   if (!d.due_date) d.due_time = null;
@@ -2559,14 +2561,29 @@ function stem(w) {
 const normSpesa = (t) => str(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9* ]+/g, " ").replace(/\s+/g, " ").trim();
 const chiaveSpesa = (t) => normSpesa(t).split(" ").filter(Boolean).map(stem).join(" ");
 const titoloSpesa = (t) => { const n = ` ${normSpesa(t)} `; return PAROLE_SPESA.some((p) => n.includes(` ${p} `)); };
-const MARCA_SPESA = "sp-";
-const isSpesa = (it) => !!it && it.kind !== "event" && (titoloSpesa(it.title) || (it.sottotask || []).some((x) => x.id.startsWith(MARCA_SPESA)));
+const MARCA_SPESA = "sp-", MARCA_NO_SPESA = "ns-";
+// La scelta "spento" dell'utente sta nello stesso posto della scelta "acceso": un prefisso negli id delle righe ("ns-", invisibile,
+// valido per il controllo del database, quindi nessuna colonna nuova e vale anche nelle liste condivise e da ospite).
+// Una lista senza righe non ha id dove scriverlo: in quel caso il "spento" resta solo su questo dispositivo (mochi.spesaOff).
+const spesaOffLocale = () => { const a = LS.get("mochi.spesaOff", []); return Array.isArray(a) ? a.filter((x) => typeof x === "string" && x.length <= 64).slice(-200) : []; };
+function ricordaSpesaOff(id, off) { if (!id) return; const s = new Set(spesaOffLocale()); if (off) s.add(id); else s.delete(id); LS.set("mochi.spesaOff", [...s].slice(-200)); }
+// Scelta esplicita: "on", "off" oppure null (mai scelto: decide il titolo)
+function sceltaSpesa(it) {
+  const st = it?.sottotask || [];
+  if (st.some((x) => x.id.startsWith(MARCA_SPESA))) return "on";
+  if (st.some((x) => x.id.startsWith(MARCA_NO_SPESA))) return "off";
+  if (!st.length && it?.id && spesaOffLocale().includes(it.id)) return "off";
+  return null;
+}
+const isSpesa = (it) => { if (!it || it.kind === "event") return false; const c = sceltaSpesa(it); return c ? c === "on" : titoloSpesa(it.title); };
 // Mette o toglie il segno "lista della spesa" negli id delle righe (sempre unici e validi)
-function marcaSpesa(st, on) {
-  const visti = new Set();
+// modo: "on" (sp-), "off" (ns-) oppure null (nessun segno)
+function marcaSpesa(st, modo) {
+  const visti = new Set(), pre = modo === "on" ? MARCA_SPESA : modo === "off" ? MARCA_NO_SPESA : "";
   return (st || []).map((x) => {
-    let id = on ? (x.id.startsWith(MARCA_SPESA) ? x.id : (MARCA_SPESA + x.id).slice(0, 40)) : (x.id.startsWith(MARCA_SPESA) ? x.id.slice(MARCA_SPESA.length) || nuovoStId() : x.id);
-    if (!RE_STID.test(id) || visti.has(id)) id = (on ? MARCA_SPESA : "") + nuovoStId(visti);
+    const nudo = x.id.replace(/^((sp|ns)-)+/, ""); // anche i prefissi accumulati da un'app vecchia (sp-ns-...)
+    let id = (pre + (nudo || nuovoStId())).slice(0, 40);
+    if (!RE_STID.test(id) || visti.has(id)) id = pre + nuovoStId(visti);
     visti.add(id); return { ...x, id };
   });
 }
@@ -4168,7 +4185,7 @@ document.addEventListener("click", async (e) => {
     }
     // lista da spuntare: dentro l'editor
     case "st-toggle": { const x = draft?.sottotask.find((s) => s.id === v); if (x) { x.f = !x.f; drawSt(); } break; }
-    case "st-spesa": if (draft && !titoloSpesa(draft.title)) { draft._spesa = !draft._spesa; drawSt(); } break;
+    case "st-spesa": if (draft) { draft._spesa = !draft._spesa; draft._spesaScelta = true; drawSt(); } break;
     case "st-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); if (draft) drawSt(); break;
     case "st-sugg": if (draft && v) aggiungiSt(v); break;
     case "st-del": if (draft) { draft.sottotask = draft.sottotask.filter((s) => s.id !== v); drawSt(); } break;
@@ -4471,7 +4488,7 @@ async function startOnline() {
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
 let loginMode = "login";
 function clearLocal() {
-  ["mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione"].forEach((k) => localStorage.removeItem(k));
+  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione"].forEach((k) => localStorage.removeItem(k));
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
