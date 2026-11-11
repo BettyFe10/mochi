@@ -421,6 +421,24 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
 .umore-riga .pallino{width:30px;height:30px;border-radius:50%;border:2px dashed var(--line);flex:none}
 .u-legenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:var(--s3);font-size:13px;color:var(--ink2);font-weight:700}
 .u-legenda i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.u-legenda span{display:inline-flex;align-items:center}
+.u-legenda svg{width:26px;height:26px;margin-right:4px;flex:none}
+.fiori-scelta{margin-top:var(--s3);border:2px solid var(--line);border-radius:14px;background:var(--bg);padding:2px 12px}
+.fiori-scelta summary{display:flex;flex-direction:column;gap:1px;min-height:44px;justify-content:center;cursor:pointer;color:var(--ink)}
+.fiori-scelta summary small{font-size:13px;color:var(--ink2)}
+.fiori-modi{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}
+.fiori-griglia{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.fiore-op{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:44px;padding:8px 6px 7px;border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+.fiore-op{position:relative}
+.fiore-op.on{border-color:var(--pink-d);background:var(--pink-l);box-shadow:inset 0 0 0 1px var(--pink-d)}
+.fiore-op.on::after{content:"✓";position:absolute;top:3px;right:7px;font-size:14px;font-weight:800;line-height:1;color:var(--pink-d)}
+.fiore-op svg{width:100%;height:auto;max-height:54px}
+.fiore-op b{font-size:13px}
+.fiori-set{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-bottom:6px}
+.fiore-um{display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center;min-width:0;color:var(--ink)}
+.fiore-um svg{width:100%;max-width:56px;height:auto}
+.fiore-um b{font-size:11.5px;letter-spacing:-.2px}
+.fiore-um small{font-size:11.5px;color:var(--ink2)}
 .giardino{display:block;width:100%;height:auto;border-radius:16px;box-shadow:var(--shadow)}
 :root[data-stile="quaderno"] .umore-card,:root[data-stile="quaderno"] .umore-riga{border-radius:var(--r-paper);box-shadow:var(--edge);border:1.5px solid var(--ink-a)}
 :root[data-stile="quaderno"] .umore-card .u-domanda{font-weight:400;font-size:22px}
@@ -1138,6 +1156,17 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 .mob-ico.chiuso *{fill:var(--ink)!important;stroke:none!important;opacity:.16}
 .mob-riga.chiuso{background:var(--bg2);border-style:dashed;cursor:default}
 .mob-riga>span:nth-of-type(1){flex:1;min-width:0}
+.mob-item{display:grid;gap:0}
+.mob-colori{display:flex;gap:2px;padding:0 6px 0 58px;margin-top:-2px}
+.mob-colore{width:44px;height:44px;flex:none;display:grid;place-items:center;padding:0;border:0;background:none;border-radius:50%;cursor:pointer;color:inherit}
+.mob-colore span{position:relative;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--c);border:2px solid rgba(74,47,58,.28);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.mob-colore.on span{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--ink);border-color:rgba(74,47,58,.55)}
+.mob-colore.on span::after{content:"";width:9px;height:5px;margin-top:-2px;border-left:3px solid #4a2f3a;border-bottom:3px solid #4a2f3a;transform:rotate(-45deg)}
+.mob-colore:focus-visible{outline:3px solid var(--pink-d);outline-offset:-3px}
+:root[data-stile="cartone"] .mob-colore span{border:2px solid var(--tratto);box-shadow:var(--ombra-adesivo)}
+:root[data-stile="cartone"] .mob-colore.on span{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--tratto)}
+:root[data-stile="quaderno"] .mob-colore span{border:1.5px solid var(--ink-a);border-radius:48% 52% 46% 54%/54% 46% 52% 48%;box-shadow:none}
+:root[data-stile="quaderno"] .mob-colore.on span{box-shadow:0 0 0 2.5px var(--card),0 0 0 4px var(--ink-a)}
 .casa-hint{margin:var(--s3) 4px 0}
 .casa-festa .casa-scena.mini{max-width:320px;margin:0 auto var(--s3)}
 @media (min-width:1024px){ .split.casa{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)} .split.casa .casa-scena{max-width:820px} }

@@ -219,18 +219,22 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null) {
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
       CUSTOM = cleanCustom({ nome_app: md.nome_app, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
         moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
         // casetta: scelta e mobili spenti dall'account, sblocchi uniti (non si perdono mai)
         casa: md.casa ? unisciCasa(md.casa, CUSTOM.casa) : CUSTOM.casa, spesa_reparti: md.spesa_reparti ?? CUSTOM.spesa_reparti,
         // compleanno dall'account (se c'è); ricordi delle feste uniti come la casetta: non si perdono mai
-        compleanno: md.compleanno ?? CUSTOM.compleanno, ricordi: unisciRicordi(md.ricordi, CUSTOM.ricordi) });
+        compleanno: md.compleanno ?? CUSTOM.compleanno, ricordi: unisciRicordi(md.ricordi, CUSTOM.ricordi),
+        // fiori del giardino: quelli scelti sull'account, altrimenti restano quelli di questo dispositivo
+        fiori: md.fiori ?? CUSTOM.fiori,
+        // pronomi: quelli dell'account (anche vuoti: "tolti"), altrimenti restano quelli di questo dispositivo
+        pronomi: md.pronomi ?? CUSTOM.pronomi });
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -479,7 +483,10 @@ const CASETTE = [
   ["bosco", "Casetta nel bosco", "🌲", 0, ["miso", "bambu", "castagna", "mochi", "nigi"], ["#e3b88a", "#cfa275"]],
   ["spiaggia", "Spiaggia", "🏖️", 10, [], ["#e2f3fb", "#f6e3b8"]],
   ["serra", "Serra dei fiori", "🌼", 30, [], ["#e6f5e2", "#f0bd9c"]],
-  ["nuvole", "Casetta sulle nuvole", "☁️", 60, [], ["#ebe4fd", "#f6f2ff"]]
+  ["nuvole", "Casetta sulle nuvole", "☁️", 60, [], ["#ebe4fd", "#f6f2ff"]],
+  ["pasticceria", "Pasticceria", "🧁", 90, [], ["#ffe9ec", "#ffd9de"]],
+  ["cameretta", "Cameretta in città", "🌆", 120, [], ["#dfe0f8", "#ebd2b0"]],
+  ["baita", "Baita in montagna", "🏔️", 150, [], ["#d49a68", "#c7986a"]]
 ];
 // [id, nome, bocconcini per averlo in regalo]  (ognuno ha il suo posto fisso nella stanza)
 const MOBILI = [
@@ -487,28 +494,57 @@ const MOBILI = [
   ["lampada", "Lampada", 23], ["libreria", "Libreria", 31], ["orologio", "Orologio", 40], ["fiori", "Vasetto di fiori", 50],
   ["tavolino", "Tavolino con la tazza", 62], ["mensola", "Mensola con i barattoli", 75], ["cesto", "Cesto della lana", 90], ["lucine", "Lucine", 110]
 ];
+// Colori dei mobili: 3 varianti per mobile. Ogni riga = i colori principali del disegno (la prima e' l'aspetto di sempre, il primo colore e' il pallino).
+// Le varianti 1 e 2 sostituiscono, nello stesso ordine, i colori della variante 0 (nessun disegno duplicato).
+const COLORI_MOBILI = {
+  tappeto: [["#ffd1dc", "#f2a9bc", "#ffe6ec"], ["#bfe8d3", "#8fcfa8", "#e4f6ec"], ["#ffe9a8", "#e8c35a", "#fff4cf"]],
+  cuscino: [["#cdbcf7", "#a993e6", "#e6dbff"], ["#ffc2d4", "#e57a98", "#ffe0e8"], ["#b9ecd0", "#7fc9a0", "#dcf6e8"]],
+  piantina: [["#ee9b72", "#d37a52", "#f6b088"], ["#9fd4ef", "#6fb0d6", "#bfe3f6"], ["#c9b2ff", "#a38be0", "#dccdff"]],
+  quadretto: [["#f7d9a8", "#d9b27a"], ["#ffd1dc", "#f2a9bc"], ["#c8efd6", "#8fcfa8"]],
+  lampada: [["#ffe08a", "#e8bf5a", "#ffd1dc", "#f2a9bc"], ["#ffc2d4", "#f08fae", "#fff0b8", "#e8c35a"], ["#b9ecd0", "#7fc9a0", "#ffffff", "#cfe9db"]],
+  libreria: [["#e8c39a", "#c99b6c", "#f3dcbf"], ["#ffc9d6", "#e5849f", "#ffe6ec"], ["#bfe0f5", "#7fb4d6", "#e3f2fc"]],
+  orologio: [["#ffd1dc", "#f2a9bc"], ["#c8efd6", "#8fcfa8"], ["#ffe9a8", "#e8c35a"]],
+  fiori: [["#b9e3f5", "#8cc4dc"], ["#ffd1dc", "#f2a9bc"], ["#ffe9a8", "#e8c35a"]],
+  tavolino: [["#f7d9a8", "#e0bb8b", "#c4955a"], ["#d4f2e1", "#b5e3cb", "#7fc09e"], ["#e6dbff", "#d0c0f5", "#a993e6"]],
+  mensola: [["#e0bb8b", "#c4955a"], ["#bfe8d3", "#8fcfa8"], ["#d9ccff", "#a993e6"]],
+  cesto: [["#e8c08a", "#c4955a", "#cf9f62"], ["#b9e3cc", "#7fbf9e", "#9fd1b5"], ["#d9ccff", "#a993e6", "#c0b0f0"]],
+  lucine: [["#ffd76a", "#ff9db5", "#9fd4ef", "#b7e39a"], ["#ff9db5", "#c9b2ff", "#ffd76a", "#9fd4ef"], ["#9fd4ef", "#b7e39a", "#ffb48f", "#c9b2ff"]]
+};
 const casaDi = (id) => CASETTE.find((c) => c[0] === id) || null;
 const casaHabitat = (masc) => (CASETTE.find((c) => c[4].includes(masc)) || CASETTE[2])[0];
-const CASA_VUOTA = { scelta: "auto", spenti: [], casette: [], mobili: [] };
+const CASA_VUOTA = { scelta: "auto", spenti: [], casette: [], mobili: [], colori: {} };
 // Preferenze della casetta: solo id conosciuti, niente doppioni (arrivano anche dall'account: mai fidarsi)
 function cleanCasa(c) {
   c = c && typeof c === "object" && !Array.isArray(c) ? c : {};
   const ids = (a, ok) => [...new Set((Array.isArray(a) ? a : []).filter((x) => typeof x === "string" && ok(x)))];
+  const col = c.colori && typeof c.colori === "object" && !Array.isArray(c.colori) ? c.colori : {};
   return {
     scelta: typeof c.scelta === "string" && (c.scelta === "auto" || casaDi(c.scelta)) ? c.scelta : "auto",
     spenti: ids(c.spenti, (x) => MOBILI.some((m) => m[0] === x)),
     casette: ids(c.casette, (x) => !!casaDi(x) && casaDi(x)[3] > 0),
-    mobili: ids(c.mobili, (x) => MOBILI.some((m) => m[0] === x))
+    mobili: ids(c.mobili, (x) => MOBILI.some((m) => m[0] === x)),
+    // colori: solo id di mobili esistenti con indice 0-2 (si scorre l'elenco dei mobili, non le chiavi ricevute)
+    colori: Object.fromEntries(MOBILI.filter((m) => Object.prototype.hasOwnProperty.call(col, m[0]) && Number.isInteger(col[m[0]]) && col[m[0]] >= 0 && col[m[0]] <= 2).map((m) => [m[0], col[m[0]]]))
   };
 }
 // Unione: gli sblocchi non si perdono mai (dispositivo + account)
-const unisciCasa = (a, b) => { const x = cleanCasa(a), y = cleanCasa(b); return { ...x, casette: [...new Set([...x.casette, ...y.casette])], mobili: [...new Set([...x.mobili, ...y.mobili])] }; };
+const unisciCasa = (a, b) => { const x = cleanCasa(a), y = cleanCasa(b); return { ...x, casette: [...new Set([...x.casette, ...y.casette])], mobili: [...new Set([...x.mobili, ...y.mobili])], colori: { ...y.colori, ...x.colori } }; };
 // Effetto delle stagioni: "auto" segue il calendario, gli altri sono fissi
 const STAGIONI = [["auto", "🗓️", "Segue la stagione"], ["neve", "❄️", "Neve"], ["pioggia", "🌧️", "Pioggia"], ["sole", "☀️", "Sole"], ["foglie", "🍂", "Foglie"], ["petali", "🌸", "Petali"]];
 // Suoni dentro l'app (creati dal codice, nessun file): notifiche con l'app aperta, cose fatte, biscotto
 const SUONI = [["campanella", "🔔", "Campana"], ["bolla", "🫧", "Bolla"], ["xilofono", "🎵", "Xilofono"], ["gocce", "💧", "Gocce"], ["spenti", "🔕", "Spenti"]];
 const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
-  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [] };
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "" };
+// I pronomi: servono solo ad adattare i testi (Benvenuta / Benvenuto / Rieccoti). Solo "lei", "lui", "loro" o vuoto (= non specificato); tutto il resto scartato
+const PRONOMI = [["", "Non specificato"], ["lei", "Lei"], ["lui", "Lui"], ["loro", "Loro"]];
+const cleanPronomi = (p) => (typeof p === "string" && ["lei", "lui", "loro"].includes(p) ? p : "");
+// I fiori del giardino: solo modo e fiore conosciuti, tutto il resto scartato (arriva anche dall'account: mai fidarsi)
+const FIORI_UNO = ["classico", "margherita", "tulipano", "girasole", "rosa", "campanula"];
+const FIORI_UMORE = { 1: "campanula", 2: "tulipano", 3: "margherita", 4: "girasole", 5: "rosa" }; // il set fisso, uno per livello
+function cleanFiori(f) {
+  f = f && typeof f === "object" && !Array.isArray(f) ? f : {};
+  return { modo: f.modo === "umore" ? "umore" : "uno", fiore: typeof f.fiore === "string" && FIORI_UNO.includes(f.fiore) ? f.fiore : "classico" };
+}
 // Ricordi delle feste: solo id conosciuti, niente doppioni (arrivano anche dall'account: mai fidarsi)
 const cleanRicordi = (a) => [...new Set((Array.isArray(a) ? a : []).filter((x) => typeof x === "string" && RICORDI.some((r) => r.id === x)))];
 const unisciRicordi = (a, b) => [...new Set([...cleanRicordi(a), ...cleanRicordi(b)])];
@@ -524,9 +560,11 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
+// Testi che si adattano: gen(neutro, lei, lui). Chi non sceglie (o sceglie "loro") legge sempre la forma neutra.
+const gen = (neutro, lei, lui) => (CUSTOM.pronomi === "lei" ? lei : CUSTOM.pronomi === "lui" ? lui : neutro);
 // Il modulo è acceso? (quelli che richiedono un account sono spenti in modalità prova)
 const mod = (k) => CUSTOM.moduli[k] !== false && !(MODULI.find((m) => m[0] === k)?.[5] && !ONLINE_MODE);
 const MN = () => MASC.list[CUSTOM.mascotte].nome;
@@ -734,12 +772,13 @@ function greeting() {
   return `${s}${NOME ? ", " + NOME : ""}!`;
 }
 /* -------- frase del giorno (frasi.js) -------- */
-const FRASI = Array.isArray(window.MOCHI_FRASI) && window.MOCHI_FRASI.length ? window.MOCHI_FRASI.map(String) : ["Una cosa alla volta è comunque un passo avanti."];
+const FRASI = Array.isArray(window.MOCHI_FRASI) && window.MOCHI_FRASI.length ? window.MOCHI_FRASI.map((f) => (Array.isArray(f) ? f.slice(0, 3).map(String) : String(f))) : ["Una cosa alla volta è comunque un passo avanti."];
 let mottoShift = 0;
 function fraseDelGiorno() {
   const d = new Date();
   const day = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5);
-  return FRASI[(day + d.getFullYear() * 7 + mottoShift) % FRASI.length];
+  const f = FRASI[(day + d.getFullYear() * 7 + mottoShift) % FRASI.length];
+  return Array.isArray(f) ? gen(f[0], f[1] ?? f[0], f[2] ?? f[0]) : f; // una frase puo' essere [neutro, lei, lui]
 }
 
 function headerUpdate() {
@@ -1299,7 +1338,7 @@ function openRecap(month) {
   const say = total === 0 ? "Un mese tranquillo. Anche il riposo conta 🍵"
     : total < 10 ? "Un mese leggero ma pieno di cose belle 🌸"
     : total < 30 ? "Che mese! Hai tenuto tutto sotto controllo 💪"
-    : `Mese da campionessa. ${MN()} ti offre un sushi immaginario 🍣🏆`;
+    : `${gen("Mese da record.", "Mese da campionessa.", "Mese da campione.")} ${MN()} ti offre un sushi immaginario 🍣🏆`;
   const isCur = key === monthKey(new Date());
   openSheet(`
     <div class="calhead" style="margin-bottom:12px">
@@ -1356,6 +1395,8 @@ function openSettings() {
     ${OSPITE ? schedaOspite() : ""}${ONLINE_MODE ? rigaPassaggio() : ""}
     <div class="setrow" id="pushRow">${pushRowHtml(!ONLINE_MODE ? "offline" : !PUSH_READY ? "soon" : perm === "unsupported" ? (!standalone && /iPhone|iPad/.test(navigator.userAgent) ? "home" : "unsupported") : perm === "denied" ? "denied" : "checking")}</div>
     <div class="setrow"><div><b>Nome e mascotte</b><small>${esc(CUSTOM.nome_app)} · ${esc(MN())}</small></div><button class="fbtn on" data-act="open-custom">Cambia</button></div>
+    <div class="setrow col" id="setPron"><div><b>I tuoi pronomi</b><small>Facoltativo. Servono solo ad adattare i testi dell'app a te (ad esempio "orgogliosa" o "orgoglioso"). Restano privati: non li vede nessun altro e non cambiano nient'altro. Se non scegli, uso parole neutre. Li cambi o li togli quando vuoi${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}.</small></div>
+      <div class="filters" style="flex-wrap:wrap" role="group" aria-label="I tuoi pronomi">${PRONOMI.map(([k, n]) => `<button class="fbtn ${CUSTOM.pronomi === k ? "on" : ""}" data-act="pick-pronomi" data-v="${k || "non"}" aria-pressed="${CUSTOM.pronomi === k}">${n}</button>`).join("")}</div></div>
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="moduli">${MODULI.filter((m) => !m[5] || ONLINE_MODE).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>
       ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
@@ -1364,6 +1405,7 @@ function openSettings() {
         return `<select class="input" id="cGiorno" aria-label="Giorno del compleanno"><option value="">Giorno</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${gg === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select>
         <select class="input" id="cMese" aria-label="Mese del compleanno"><option value="">Mese</option>${MESI.map((n, i) => `<option value="${i + 1}" ${mm === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("")}</select>`; })()}
         ${CUSTOM.compleanno ? `<button class="fbtn" data-act="compleanno-togli">Togli</button>` : ""}</div></div>` : ""}
+    ${mod("umore") ? `<div class="setrow"><div><b>I fiori del giardino</b><small>${riassuntoFiori()}</small></div><button class="fbtn on" data-act="fiori-apri">Scegli</button></div>` : ""}
     <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
       <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     <div class="setrow"><div><b>Chiaro o scuro</b><small>Automatico segue il telefono</small></div>
@@ -1663,7 +1705,7 @@ async function proponiInvito(code) {
     const id = await store.accettaInvito(code);
     if (!id) { toast("Invito non valido o scaduto 😕"); return; }
     await loadListe(); state.items = await store.list(); state.todoFilter = "l:" + id; state.tab = "todo"; render();
-    cheer(); toast(`Benvenuta in ${str(info.emoji)} ${str(info.nome)}! 💗`);
+    cheer(); toast(`${gen("Eccoti in", "Benvenuta in", "Benvenuto in")} ${str(info.emoji)} ${str(info.nome)}! 💗`);
   } catch (e) { toast(/10 persone|massimo/.test(e?.message || "") ? e.message : "Non sono riuscita a entrare"); }
 }
 async function chiediCodice() {
@@ -1686,7 +1728,7 @@ async function esciLista(id) {
   const solo = l.membri.length <= 1;
   const ok = await ask({ title: `Uscire da ${l.emoji} ${l.nome}?`, text: solo ? "Sei l'unica persona nella lista: uscendo la lista e tutte le sue voci verranno cancellate." : "Non vedrai più le voci della lista. Le altre persone continueranno a vederle.", ok: "Esci", danger: true });
   if (!ok) return;
-  try { await store.esciLista(id); await loadListe(); state.items = await store.list(); if (state.todoFilter === "l:" + id) state.todoFilter = "tutte"; if (state.noteFilter === "l:" + id) state.noteFilter = "tutte"; render(); openListe(); toast("Sei uscita dalla lista"); }
+  try { await store.esciLista(id); await loadListe(); state.items = await store.list(); if (state.todoFilter === "l:" + id) state.todoFilter = "tutte"; if (state.noteFilter === "l:" + id) state.noteFilter = "tutte"; render(); openListe(); toast(gen("Hai lasciato la lista", "Sei uscita dalla lista", "Sei uscito dalla lista")); }
   catch { toast("Non sono riuscita a uscire"); }
 }
 async function eliminaLista(id) {
@@ -1794,6 +1836,69 @@ async function togliUmore(giorno) {
   try { await UmoriStore.togli(giorno); } catch { state.umori[giorno] = prima; render(); toast("Non sono riuscita a toglierlo"); }
 }
 
+// ---- I fiori del giardino: una tabella sola (id -> disegno). Per cambiare un fiore del set "un fiore per ogni umore"
+// basta cambiare una riga di FIORI_UMORE (o il disegno qui sotto). Niente id negli SVG: si possono mettere in fila quanti si vuole.
+const _f = (n) => (+n).toFixed(1);
+const _CONTORNO = `stroke="#4a2f3a" stroke-opacity=".25" stroke-width=".9" stroke-linejoin="round"`;
+const _petalo = (x, y, rx, ry, deg, fill) => `<ellipse cx="${_f(x)}" cy="${_f(y)}" rx="${_f(rx)}" ry="${_f(ry)}" transform="rotate(${deg.toFixed(0)} ${_f(x)} ${_f(y)})" fill="${fill}" ${_CONTORNO}/>`;
+const _corona = (x, y, r, n, dist, lung, larg, fill) => { let o = ""; for (let p = 0; p < n; p++) { const a = (p / n) * Math.PI * 2; o += _petalo(x + Math.cos(a) * r * dist, y + Math.sin(a) * r * dist, r * lung, r * larg, a * 180 / Math.PI, fill); } return o; };
+// visino kawaii: due occhietti e un sorriso, grande quanto il centro del fiore
+const _visino = (x, y, s, col) => `<circle cx="${_f(x - s * .36)}" cy="${_f(y - s * .1)}" r="${_f(Math.max(s * .15, .8))}" fill="${col}"/><circle cx="${_f(x + s * .36)}" cy="${_f(y - s * .1)}" r="${_f(Math.max(s * .15, .8))}" fill="${col}"/><path d="M${_f(x - s * .2)} ${_f(y + s * .2)} Q${_f(x)} ${_f(y + s * .45)} ${_f(x + s * .2)} ${_f(y + s * .2)}" stroke="${col}" stroke-width="1" fill="none" stroke-linecap="round"/>`;
+const _luce = (x, y, rx, ry) => `<ellipse cx="${_f(x)}" cy="${_f(y)}" rx="${_f(rx)}" ry="${_f(ry)}" fill="#fff" opacity=".35"/>`;
+const FIORI = {
+  // il fiore di sempre (identico a prima)
+  classico: { nome: "Classico", plur: "", draw(cx, cy, r, c, l, g) {
+    let petali = ""; const n = l >= 4 ? 6 : 5;
+    for (let p = 0; p < n; p++) { const a = (p / n) * Math.PI * 2 - Math.PI / 2 + (g % 3) * .2; petali += `<ellipse cx="${(cx + Math.cos(a) * r).toFixed(1)}" cy="${(cy + Math.sin(a) * r).toFixed(1)}" rx="${(r * .62).toFixed(1)}" ry="${(r * .5).toFixed(1)}" transform="rotate(${(a * 180 / Math.PI).toFixed(0)} ${(cx + Math.cos(a) * r).toFixed(1)} ${(cy + Math.sin(a) * r).toFixed(1)})" fill="${c}"/>`; }
+    return petali + `<circle cx="${cx}" cy="${cy}" r="${(r * .55).toFixed(1)}" fill="#ffe28a" stroke="#f2c14e" stroke-width="1.5"/>`; } },
+  margherita: { nome: "Margherita", plur: "margherite", draw(x, y, r, c) {
+    return _corona(x, y, r, 10, .95, .55, .22, c) + `<circle cx="${_f(x)}" cy="${_f(y)}" r="${_f(r * .5)}" fill="#ffe28a" stroke="#f2c14e" stroke-width="1.2"/>` + _visino(x, y + r * .02, r * .5, "#4a2f3a"); } },
+  tulipano: { nome: "Tulipano", plur: "tulipani", draw(x, y, r, c) {
+    // calice alto e stretto: due petali laterali che si aprono e uno centrale a punta, separati da una linea
+    const P = (a, b) => `${_f(x + a * r)} ${_f(y + b * r)}`;
+    const lato = (m) => `<path d="M${P(m * .9, -1.5)} C${P(m * 1.05, -.5)} ${P(m * .7, .5)} ${P(0, .9)} L${P(0, -.2)} C${P(m * .3, -.6)} ${P(m * .5, -1.1)} ${P(m * .9, -1.5)} Z" fill="${c}" ${_CONTORNO}/>`;
+    return lato(-1) + lato(1) + `<path d="M${P(0, -1.8)} C${P(.55, -1.1)} ${P(.55, .25)} ${P(0, .9)} C${P(-.55, .25)} ${P(-.55, -1.1)} ${P(0, -1.8)} Z" fill="${c}" ${_CONTORNO}/>`
+      + `<path d="M${P(0, -1.8)} C${P(.55, -1.1)} ${P(.55, .25)} ${P(0, .9)} C${P(-.55, .25)} ${P(-.55, -1.1)} ${P(0, -1.8)} Z" fill="#fff" opacity=".2"/>` + _luce(x - r * .2, y - r * .55, r * .09, r * .35); } },
+  girasole: { nome: "Girasole", plur: "girasoli", draw(x, y, r, c) {
+    let sem = ""; for (let p = 0; p < 5; p++) { const a = p / 5 * Math.PI * 2 + .6; sem += `<circle cx="${_f(x + Math.cos(a) * r * .6)}" cy="${_f(y + Math.sin(a) * r * .6)}" r="${_f(r * .06)}" fill="#6b4129" opacity=".6"/>`; }
+    return _corona(x, y, r, 12, 1.0, .5, .2, c) + `<circle cx="${_f(x)}" cy="${_f(y)}" r="${_f(r * .78)}" fill="#8a5a3c" stroke="#6b4129" stroke-width="1.2"/>` + sem + _visino(x, y, r * .62, "#fff4e0"); } },
+  rosa: { nome: "Rosa", plur: "rose", draw(x, y, r, c) {
+    // rosa vera: giro esterno di petali, giro intermedio, bocciolo scuro al centro e due fogliette
+    const C = (a, b, k) => `<circle cx="${_f(x + a * r)}" cy="${_f(y + b * r)}" r="${_f(k * r)}" fill="${c}" ${_CONTORNO}/>`;
+    const foglia = (m) => `<ellipse cx="${_f(x + m * 1.05 * r)}" cy="${_f(y + .95 * r)}" rx="${_f(r * .42)}" ry="${_f(r * .2)}" transform="rotate(${m * -28} ${_f(x + m * 1.05 * r)} ${_f(y + .95 * r)})" fill="#9fd3a8" ${_CONTORNO}/>`;
+    let ext = "", mid = "";
+    for (let p = 0; p < 5; p++) { const a = p / 5 * Math.PI * 2 - Math.PI / 2; ext += C(Math.cos(a) * .78, Math.sin(a) * .78, .58); }
+    for (let p = 0; p < 5; p++) { const a = p / 5 * Math.PI * 2 - Math.PI / 2 + Math.PI / 5; mid += C(Math.cos(a) * .42, Math.sin(a) * .42, .46); }
+    return foglia(-1) + foglia(1) + ext + `<circle cx="${_f(x)}" cy="${_f(y)}" r="${_f(r * 1.0)}" fill="#4a2f3a" opacity=".1"/>` + mid
+      + `<circle cx="${_f(x)}" cy="${_f(y)}" r="${_f(r * .42)}" fill="#4a2f3a" opacity=".22"/>` + C(0, 0, .3) + `<path d="M${_f(x - r * .16)} ${_f(y + r * .02)} Q${_f(x)} ${_f(y - r * .22)} ${_f(x + r * .16)} ${_f(y + r * .02)}" stroke="#4a2f3a" stroke-opacity=".5" stroke-width="1" fill="none" stroke-linecap="round"/>` + _luce(x - r * .55, y - r * .8, r * .2, r * .11); } },
+  campanula: { nome: "Campanula", plur: "campanule", draw(x, y, r, c) {
+    // tre campanelle penzolanti di grandezza diversa su uno stelo curvo, bordo svasato con 5 festoni
+    const P = (a, b) => `${_f(x + a * r)} ${_f(y + b * r)}`;
+    const camp = (ax, ay, s) => { let f = ""; for (let i = 0; i < 5; i++) { const x0 = .6 - i * .24, x1 = x0 - .24; f += ` Q${P(ax + (x0 + x1) / 2 * s, ay + 1.5 * s + .3 * s)} ${P(ax + x1 * s, ay + 1.5 * s)}`; }
+      return `<path d="M${P(ax - .2 * s, ay + .2 * s)} Q${P(ax, ay)} ${P(ax + .2 * s, ay + .2 * s)} C${P(ax + .28 * s, ay + .7 * s)} ${P(ax + .55 * s, ay + 1 * s)} ${P(ax + .6 * s, ay + 1.5 * s)}${f} C${P(ax - .55 * s, ay + 1 * s)} ${P(ax - .28 * s, ay + .7 * s)} ${P(ax - .2 * s, ay + .2 * s)} Z" fill="${c}" ${_CONTORNO}/>`; };
+    const ramo = (d) => `<path d="${d}" stroke="#7cb98a" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
+    return ramo(`M${P(0, 1.2)} C${P(0, .3)} ${P(-.05, -1)} ${P(.45, -1.6)}`) + ramo(`M${P(-.02, -.3)} L${P(-.75, -.5)}`) + ramo(`M${P(.02, -.1)} L${P(1.0, -.3)}`)
+      + camp(-.75, -.5, 1.1) + camp(1.0, -.3, .9) + camp(.5, -1.6, .7) + _luce(x - r * .85, y - r * .1, r * .08, r * .22); } }
+};
+function idFiore(l) { return CUSTOM.fiori.modo === "umore" ? FIORI_UMORE[l] : CUSTOM.fiori.fiore; }
+function fioreDisegno(id, cx, cy, l, c, g, r) { return FIORI[id].draw(cx, cy, r || 7 + l * 1.3, c, l, g); }
+// descrizione per chi non vede il disegno ("Il giardino di novembre: 12 fiori, margherite")
+function etichettaFiori() {
+  if (CUSTOM.fiori.modo === "umore") return ", un fiore diverso per ogni umore";
+  const p = FIORI[CUSTOM.fiori.fiore].plur; return p ? `, ${p}` : "";
+}
+const riassuntoFiori = () => CUSTOM.fiori.modo === "umore" ? "Un fiore per ogni umore" : `Sempre lo stesso: ${FIORI[CUSTOM.fiori.fiore].nome.toLowerCase()}`;
+// anteprima nella scelta: lo stesso fiore in tre giornate (Pesante, Normale, Bellissima)
+const anteprimaFiore = (id) => `<svg viewBox="-27 -26 158 52" aria-hidden="true">${[1, 3, 5].map((l, i) => fioreDisegno(id, i * 52, 0, l, UMORI[l].colore, 0, 7 + l * 1.3)).join("")}</svg>`;
+let fioriAperto = false;
+function pannelloFiori() {
+  const uno = CUSTOM.fiori.modo === "uno";
+  return `<details class="fiori-scelta" ${fioriAperto ? "open" : ""}><summary><b>I fiori del giardino</b><small>${riassuntoFiori()}</small></summary>
+    <div class="fiori-modi" role="group" aria-label="Come sono i fiori"><button class="fbtn ${uno ? "on" : ""}" data-act="fiori-modo" data-v="uno" aria-pressed="${uno}">Sempre lo stesso fiore</button><button class="fbtn ${uno ? "" : "on"}" data-act="fiori-modo" data-v="umore" aria-pressed="${!uno}">Un fiore per ogni umore</button></div>
+    ${uno ? `<div class="fiori-griglia">${FIORI_UNO.map((id) => `<button class="fiore-op ${CUSTOM.fiori.fiore === id ? "on" : ""}" data-act="fiori-scegli" data-v="${id}" aria-pressed="${CUSTOM.fiori.fiore === id}" aria-label="${FIORI[id].nome}">${anteprimaFiore(id)}<b>${FIORI[id].nome}</b></button>`).join("")}</div>`
+      : `<div class="fiori-set">${[1, 2, 3, 4, 5].map((l) => `<div class="fiore-um"><svg viewBox="-26 -26 52 52" aria-hidden="true">${fioreDisegno(idFiore(l), 0, 0, l, UMORI[l].colore, 0, 11)}</svg><b>${UMORI[l].nome}</b><small>${FIORI[idFiore(l)].nome}</small></div>`).join("")}</div><p class="small" style="margin:6px 0 0">Un set scelto per te, dal più sobrio al più rigoglioso.</p>`}
+  </details>`;
+}
 // Il giardino del mese: un fiore per ogni giorno, del colore della giornata
 function giardinoSvg(m) {
   const y = m.getFullYear(), mo = m.getMonth(), giorni = new Date(y, mo + 1, 0).getDate();
@@ -1805,25 +1910,26 @@ function giardinoSvg(m) {
     const k = `${y}-${String(mo + 1).padStart(2, "0")}-${String(g).padStart(2, "0")}`, u = state.umori[k];
     const gambo = `<path d="M${cx} ${cy + 6} C ${cx - 4} ${cy + 18}, ${cx + 3} ${cy + 26}, ${cx} ${cy + 34}" stroke="#7cb98a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M${cx} ${cy + 24} C ${cx + 8} ${cy + 18}, ${cx + 14} ${cy + 22}, ${cx + 13} ${cy + 26} C ${cx + 8} ${cy + 28}, ${cx + 3} ${cy + 27}, ${cx} ${cy + 24} Z" fill="#9fd3a8"/>`;
     if (u) {
-      const c = UMORI[u.livello].colore, r = 7 + u.livello * 1.3;
-      let petali = ""; const n = u.livello >= 4 ? 6 : 5;
-      for (let p = 0; p < n; p++) { const a = (p / n) * Math.PI * 2 - Math.PI / 2 + (g % 3) * .2; petali += `<ellipse cx="${(cx + Math.cos(a) * r).toFixed(1)}" cy="${(cy + Math.sin(a) * r).toFixed(1)}" rx="${(r * .62).toFixed(1)}" ry="${(r * .5).toFixed(1)}" transform="rotate(${(a * 180 / Math.PI).toFixed(0)} ${(cx + Math.cos(a) * r).toFixed(1)} ${(cy + Math.sin(a) * r).toFixed(1)})" fill="${c}"/>`; }
-      fiori += gambo + petali + `<circle cx="${cx}" cy="${cy}" r="${(r * .55).toFixed(1)}" fill="#ffe28a" stroke="#f2c14e" stroke-width="1.5"/>`;
+      fiori += gambo + fioreDisegno(idFiore(u.livello), cx, cy, u.livello, UMORI[u.livello].colore, g);
     } else if (k <= oggi) {
       fiori += gambo + `<ellipse cx="${cx}" cy="${cy + 2}" rx="5" ry="7" fill="#cfe7d3"/>`;
     }
     fiori += `<text x="${cx}" y="${cy + 50}" text-anchor="middle" font-size="11" fill="#8a6a77" font-family="Nunito, sans-serif">${g}</text>`;
-    if (k <= oggi) fiori += `<rect class="fiore-tocco" x="${cx - 28}" y="${cy - 26}" width="56" height="80" rx="12" fill="transparent" data-act="giardino-fiore" data-id="${k}"><title>${g} ${MESI[mo]}: tocca per cambiare</title></rect>`;
+    if (k <= oggi) fiori += `<rect class="fiore-tocco" x="${cx - 30}" y="${cy - 24}" width="60" height="76" rx="10" fill="transparent" data-act="giardino-fiore" data-id="${k}"><title>${g} ${MESI[mo]}: tocca per cambiare</title></rect>`;
   }
   const conta = Object.keys(state.umori).filter((k) => k.startsWith(`${y}-${String(mo + 1).padStart(2, "0")}`)).length;
-  return `<svg class="giardino" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Il giardino di ${MESI[mo]}: ${conta} fiori">
+  return `<svg class="giardino" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Il giardino di ${MESI[mo]}: ${conta} fiori${etichettaFiori()}">
     <rect x="0" y="0" width="${W}" height="${H}" rx="22" fill="#fffaf5"/>
     <rect x="0" y="${H - 26}" width="${W}" height="26" fill="#e9f5e6"/>
     <text x="${W / 2}" y="42" text-anchor="middle" font-size="26" fill="#4a2f3a" font-family="'Patrick Hand', Fredoka, sans-serif">Il giardino di ${MESI[mo]}</text>
     <text x="${W / 2}" y="64" text-anchor="middle" font-size="12.5" fill="#8a6a77" font-family="Nunito, sans-serif">${conta ? `${conta} ${conta === 1 ? "fiore" : "fiori"}, uno per ogni giornata raccontata` : "Racconta le tue giornate e qui sboccia un fiore per ognuna"}</text>
     ${fiori}</svg>`;
 }
-function legendaUmori() { return `<div class="u-legenda">${[1, 2, 3, 4, 5].map((l) => `<span><i style="background:${UMORI[l].colore}"></i>${UMORI[l].nome}</span>`).join("")}</div>`; }
+function legendaUmori() {
+  // modo "un fiore per ogni umore": accanto al nome c'è il suo fiore; altrimenti il pallino colorato di sempre
+  const segno = (l) => CUSTOM.fiori.modo === "umore" ? `<svg viewBox="-24 -24 48 48" aria-hidden="true">${fioreDisegno(idFiore(l), 0, 0, l, UMORI[l].colore, 0, 11)}</svg>` : `<i style="background:${UMORI[l].colore}"></i>`;
+  return `<div class="u-legenda">${[1, 2, 3, 4, 5].map((l) => `<span>${segno(l)}${UMORI[l].nome}</span>`).join("")}</div>`;
+}
 let giardinoMese = null;
 function apriGiardino(m) {
   giardinoMese = m || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -1833,6 +1939,7 @@ function apriGiardino(m) {
       <span class="fred" style="font-size:16px;color:var(--ink2)">Il giardino del mese</span>
       <button class="iconbtn" data-act="giardino-move" data-v="1" ${cur ? "disabled style='opacity:.3'" : ""}>›</button></div>
     ${giardinoSvg(giardinoMese)}${legendaUmori()}
+    ${pannelloFiori()}
     <p class="small" style="text-align:center;margin:6px 0 0">Tocca un fiore per cambiare quella giornata</p>
     <div class="actions" style="margin-top:12px"><button class="btn" data-act="giardino-salva">Salva l'immagine</button><button class="btn primary" data-act="close">Che bello</button></div>`);
 }
@@ -2790,11 +2897,11 @@ const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i +
 const giu = (r) => { if (r.error) throw r.error; return r; };
 // Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
 // (gli sblocchi della casetta si uniscono sempre: non si perdono mai)
-const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi"].some((k) => md[k] != null); };
+const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== ""; };
 async function portaPreferenze() {
   const copia = LS.get("mochi.ospite.custom", null); if (!copia) return; // solo la copia dell'ospite, mai le preferenze di chi è entrato
   const ospite = cleanCustom(copia);
-  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi) } : { ...ospite });
+  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi), fiori: store.user?.user_metadata?.fiori != null ? CUSTOM.fiori : ospite.fiori, pronomi: cleanPronomi(store.user?.user_metadata?.pronomi) !== "" ? CUSTOM.pronomi : ospite.pronomi } : { ...ospite });
   LS.set("mochi.custom", CUSTOM); applyCustom();
   await store.saveCustom(CUSTOM); // se non riesce, l'errore ferma il passaggio: la copia resta e si può riprovare
 }
@@ -2885,13 +2992,13 @@ const fiorellino = (x, y, r, f, c = "#ffe28a") => { let p = ""; for (let i = 0; 
 const nuvoletta = (x, y, s = 1, f = "#fff", o = 1) => `<g transform="translate(${x} ${y}) scale(${s})" opacity="${o}">${sh("path", { d: "M-22 6 Q-24 -6 -12 -6 Q-10 -16 2 -14 Q12 -20 18 -8 Q28 -8 26 4 Q26 10 18 10 L-16 10 Q-22 10 -22 6Z", fill: f, stroke: "#dfe7f2", "stroke-width": 1.6 })}</g>`;
 
 /* La finestra: cornice, vista dentro (ritagliata) e davanzale. Di sera la vista diventa cielo blu con luna e stelle. */
-function finestra(uid, forma, cornice, bordo, vista) {
+function finestra(uid, forma, cornice, bordo, vista, senzaSera = false) {
   const clip = forma === "tonda" ? sh("circle", { cx: 200, cy: 66, r: 42 }) : forma === "arco" ? sh("path", { d: "M152 108 L152 62 Q152 24 200 24 Q248 24 248 62 L248 108 Z" }) : sh("rect", { x: 152, y: 26, width: 96, height: 82, rx: 10 });
   const sera = `<g class="cs-sera">${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#33407a" })}${sh("circle", { cx: 222, cy: 50, r: 11, fill: "#fff3c4" })}${sh("circle", { cx: 228, cy: 46, r: 10, fill: "#33407a" })}${stella(172, 44, 4, "#fff6d6", "#fff6d6", 1)}${stella(186, 76, 3, "#fff6d6", "#fff6d6", 1)}${stella(236, 86, 3.4, "#fff6d6", "#fff6d6", 1)}</g>`;
   const telaio = forma === "tonda" ? sh("circle", { cx: 200, cy: 66, r: 42, fill: "none", stroke: cornice, "stroke-width": 9 }) + sh("circle", { cx: 200, cy: 66, r: 46.5, fill: "none", stroke: bordo, "stroke-width": 2 }) + sh("circle", { cx: 200, cy: 66, r: 37.5, fill: "none", stroke: bordo, "stroke-width": 1.6 })
     : forma === "arco" ? sh("path", { d: "M152 108 L152 62 Q152 24 200 24 Q248 24 248 62 L248 108", fill: "none", stroke: cornice, "stroke-width": 9, "stroke-linejoin": "round" }) + sh("path", { d: "M147.5 108 L147.5 62 Q147.5 19.5 200 19.5 Q252.5 19.5 252.5 62 L252.5 108", fill: "none", stroke: bordo, "stroke-width": 2 }) + sh("path", { d: "M200 26 L200 108 M152 70 L248 70", stroke: cornice, "stroke-width": 5 })
     : sh("rect", { x: 152, y: 26, width: 96, height: 82, rx: 10, fill: "none", stroke: cornice, "stroke-width": 9 }) + sh("rect", { x: 147.5, y: 21.5, width: 105, height: 91, rx: 13, fill: "none", stroke: bordo, "stroke-width": 2 }) + sh("path", { d: "M200 28 L200 106 M154 67 L246 67", stroke: cornice, "stroke-width": 5 });
-  return `<defs><clipPath id="cf${uid}">${clip}</clipPath></defs><g clip-path="url(#cf${uid})">${vista}${sera}</g>${telaio}
+  return `<defs><clipPath id="cf${uid}">${clip}</clipPath></defs><g clip-path="url(#cf${uid})">${vista}${senzaSera ? "" : sera}</g>${telaio}
     ${sh("rect", { x: 138, y: 106, width: 124, height: 9, rx: 4, fill: cornice, stroke: bordo, "stroke-width": 2 })}`;
 }
 // pareti, pavimento e battiscopa
@@ -2991,6 +3098,65 @@ const DISEGNI_CASA = {
     const luna = `${sh("path", { d: "M276 0 V34", stroke: "#c9b2ff", "stroke-width": 1.4 })}${sh("path", { d: "M286 40 A20 20 0 1 0 288 76 A15 15 0 1 1 286 40Z", fill: "#ffe8a3", stroke: "#f0c24e", "stroke-width": 2 })}${sh("circle", { cx: 270, cy: 60, r: 1.8, fill: CINK })}${sh("path", { d: "M268 66 q3 3 6 0", stroke: CINK, "stroke-width": 1.6, fill: "none", "stroke-linecap": "round" })}`;
     return { base: stanza("#ebe4fd", stelle, "#f6f2ff", fiocchi, "#ddd3f6", "#c9bdf0"),
       finestra: finestra(u, "tonda", "#fff", "#c9bdf0", vista), fissi: appese + luna + arcobaleno };
+  },
+  pasticceria(u) {
+    let righe = ""; for (let x = 0; x < 400; x += 40) righe += sh("rect", { x, y: 0, width: 20, height: 190, fill: "#fff3ee" });
+    let tenda = ""; for (let x = 0; x < 400; x += 40) tenda += sh("path", { d: `M${x} 0 H${x + 40} V12 Q${x + 30} 24 ${x + 20} 12 Q${x + 10} 24 ${x} 12 Z`, fill: (x / 40) % 2 ? "#fff" : "#ffc9d6", stroke: "#f2a9bc", "stroke-width": 1.5 });
+    let scacchi = ""; for (let r = 0; r < 4; r++) for (let c = 0; c < 9; c++) if ((r + c) % 2 === 0) scacchi += sh("rect", { x: c * 48 - 12, y: 200 + r * 21, width: 48, height: 21, fill: "#fff6f2" });
+    const torta = (x, y, w, h, f, g, s) => `${sh("rect", { x: x - w / 2, y: y - h, width: w, height: h, rx: 3, fill: f, stroke: s, "stroke-width": 1.6 })}${sh("rect", { x: x - w / 2, y: y - h, width: w, height: 5, rx: 2.5, fill: g, stroke: s, "stroke-width": 1.2 })}${sh("circle", { cx: x, cy: y - h - 3, r: 3.2, fill: "#ff6f8f", stroke: "#d94a6c", "stroke-width": 1 })}`;
+    const cup = (x, y, f, g) => `${sh("path", { d: `M${x - 8} ${y} L${x - 6} ${y - 9} H${x + 6} L${x + 8} ${y} Z`, fill: f, stroke: "#e3b77e", "stroke-width": 1.5, "stroke-linejoin": "round" })}${sh("ellipse", { cx: x, cy: y - 12, rx: 9, ry: 6, fill: g, stroke: "#f2a9bc", "stroke-width": 1.5 })}${sh("circle", { cx: x, cy: y - 18, r: 2.6, fill: "#ff6f8f" })}`;
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#fff3ec" })}${sh("rect", { x: 140, y: 62, width: 120, height: 5, fill: "#e8c39a" })}${sh("rect", { x: 140, y: 92, width: 120, height: 5, fill: "#e8c39a" })}
+      ${torta(170, 62, 24, 14, "#ffe9c4", "#ffd1dc", "#e3b77e")}${cup(204, 62, "#ffe2b8", "#ffd1dc")}${torta(234, 62, 24, 16, "#e9d4ff", "#fff", "#b9a0e6")}
+      ${cup(166, 92, "#ffe2b8", "#c8efd6")}${torta(202, 92, 30, 18, "#ffd1dc", "#fff", "#f2a9bc")}${cup(238, 92, "#ffe2b8", "#fff3b0")}`;
+    const bancone = `${sh("rect", { x: 2, y: 170, width: 104, height: 42, rx: 6, fill: "#ffc9d6", stroke: "#f2a9bc", "stroke-width": 2.4 })}${sh("path", { d: "M24 172 V210 M46 172 V210 M68 172 V210 M90 172 V210", stroke: "#fff", "stroke-width": 5, opacity: .7 })}${sh("rect", { x: -2, y: 164, width: 112, height: 8, rx: 4, fill: "#fff", stroke: "#e8d3c6", "stroke-width": 2.2 })}
+      ${torta(36, 162, 26, 12, "#ffe9c4", "#ffd1dc", "#e3b77e")}${cup(76, 162, "#ffe2b8", "#c8efd6")}${sh("path", { d: "M14 162 Q14 134 36 134 Q58 134 58 162", fill: "#dff1fb", opacity: .55, stroke: "#9fc9e0", "stroke-width": 2 })}${sh("path", { d: "M22 144 q4 -6 11 -7", stroke: "#fff", "stroke-width": 2.2, fill: "none", "stroke-linecap": "round", opacity: .9 })}`;
+    const forno = `${sh("rect", { x: 308, y: 132, width: 86, height: 80, rx: 10, fill: "#c8efd6", stroke: "#8fcfa8", "stroke-width": 2.4 })}${sh("rect", { x: 304, y: 124, width: 94, height: 10, rx: 5, fill: "#e8f7ef", stroke: "#8fcfa8", "stroke-width": 2 })}
+      ${[326, 346, 366].map((x) => sh("circle", { cx: x, cy: 143, r: 4, fill: "#fff", stroke: "#8fcfa8", "stroke-width": 1.8 })).join("")}
+      ${sh("rect", { x: 318, y: 152, width: 66, height: 52, rx: 8, fill: "#fff8f1", stroke: "#8fcfa8", "stroke-width": 2.2 })}${sh("rect", { x: 324, y: 164, width: 54, height: 34, rx: 5, fill: "#ffb86b", stroke: "#e58f3c", "stroke-width": 1.6 })}
+      <g class="cs-fuoco">${sh("ellipse", { cx: 340, cy: 190, rx: 9, ry: 5, fill: "#ffe2b8", stroke: "#e3b77e", "stroke-width": 1.4 })}${sh("ellipse", { cx: 362, cy: 190, rx: 9, ry: 5, fill: "#ffd1dc", stroke: "#f2a9bc", "stroke-width": 1.4 })}${sh("ellipse", { cx: 351, cy: 176, rx: 12, ry: 5, fill: "#fff3c4", opacity: .7 })}</g>
+      ${sh("rect", { x: 326, y: 156, width: 50, height: 4, rx: 2, fill: "#8fcfa8" })}${sh("rect", { x: 316, y: 210, width: 10, height: 5, rx: 2, fill: "#8fcfa8" })}${sh("rect", { x: 376, y: 210, width: 10, height: 5, rx: 2, fill: "#8fcfa8" })}`;
+    const toque = (x, y, nastro) => `${sh("path", { d: `M${x} 22 V${y - 6}`, stroke: "#b07a55", "stroke-width": 1.6 })}${[-6.5, 0, 6.5].map((d, i) => sh("circle", { cx: x + d, cy: y - (i === 1 ? 4 : 1), r: 6.5, fill: "#fff", stroke: "#dccfc6", "stroke-width": 1.6 })).join("")}${sh("rect", { x: x - 9, y: y + 2, width: 18, height: 11, rx: 3, fill: "#fff", stroke: "#dccfc6", "stroke-width": 1.8 })}${nastro ? sh("path", { d: `M${x - 9} ${y + 8} H${x + 9}`, stroke: "#ff9db5", "stroke-width": 3 }) : ""}`;
+    const cappelli = `${sh("path", { d: "M6 22 H50", stroke: "#b07a55", "stroke-width": 3, "stroke-linecap": "round" })}${toque(18, 44, true)}${toque(38, 42, false)}`;
+    return { base: stanza("#ffe9ec", righe + tenda, "#ffd9de", scacchi, "#fff", "#f2c9d0"),
+      finestra: finestra(u, "quadra", "#fff", "#f2a9bc", vista, true), fissi: `<g transform="translate(26 0)">${bancone}</g>` + forno + cappelli, luce: sh("circle", { cx: 351, cy: 178, r: 46, fill: "url(#casaAlone)" }) };
+  },
+  cameretta(u) {
+    let pois = ""; for (let y = 34; y < 190; y += 34) for (let x = (y / 34 % 2) * 20 + 10; x < 400; x += 40) pois += sh("circle", { cx: x, cy: y, r: 2.4, fill: "#cfd0f0" });
+    let assi = ""; for (let x = 0; x <= 400; x += 50) assi += `M${x} 199 L${x - (x - 200) * .25} 280 `; assi += "M0 226 H400 M0 254 H400";
+    const palazzi = [[148, 70, 22, 44], [172, 56, 18, 58], [192, 78, 22, 36], [216, 62, 20, 52], [238, 74, 24, 40]];
+    let finestrelle = ""; palazzi.forEach(([x, y, w, h], k) => { for (let j = 0; j < 4; j++) for (let i = 0; i < 3; i++) if ((i * 3 + j * 5 + k) % 3 !== 0 && y + 8 + j * 10 < 112) finestrelle += sh("rect", { x: x + 4 + i * 6, y: y + 8 + j * 10, width: 3.4, height: 4.6, rx: .8, fill: "#ffe28a" }); });
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#a79de6" })}${sh("rect", { x: 140, y: 62, width: 120, height: 52, fill: "#f2b8cc" })}${sh("circle", { cx: 174, cy: 40, r: 8, fill: "#fff3c4" })}${stella(222, 34, 3, "#fff6d6", "#fff6d6", 1)}${stella(200, 50, 2.4, "#fff6d6", "#fff6d6", 1)}${stella(244, 52, 2.4, "#fff6d6", "#fff6d6", 1)}
+      ${palazzi.map(([x, y, w, h]) => sh("rect", { x, y, width: w, height: h + 4, fill: "#5f5a9e" })).join("")}${sh("path", { d: "M172 56 L181 47 L190 56Z M216 62 L226 53 L236 62Z", fill: "#4a4585" })}${sh("rect", { x: 228, y: 50, width: 3, height: 7, fill: "#4a4585" })}${sh("path", { d: "M198 78 V68 M198 70 l-4 -2 M198 70 l4 -2", stroke: "#4a4585", "stroke-width": 1.4, fill: "none" })}${finestrelle}`;
+    const letto = `${sh("rect", { x: 0, y: 160, width: 9, height: 52, rx: 3, fill: "#c79a6b", stroke: "#a6784a", "stroke-width": 2 })}${sh("rect", { x: 4, y: 202, width: 98, height: 10, rx: 3, fill: "#c79a6b", stroke: "#a6784a", "stroke-width": 2 })}
+      ${sh("rect", { x: 8, y: 182, width: 94, height: 24, rx: 10, fill: "#9fd4ef", stroke: "#6fb0d6", "stroke-width": 2.2 })}${sh("path", { d: "M42 183 V205 M68 183 V205", stroke: "#fff", "stroke-width": 3, opacity: .7 })}${stella(86, 194, 6)}
+      ${sh("rect", { x: 12, y: 170, width: 30, height: 16, rx: 8, fill: "#fff", stroke: "#dfe7f2", "stroke-width": 2 })}${sh("path", { d: "M18 176 q6 -3 12 0", stroke: "#dfe7f2", "stroke-width": 1.6, fill: "none" })}`;
+    const neon = `${sh("path", { d: "M36 22 A18 18 0 1 0 38 60 A14 14 0 1 1 36 22Z", fill: "none", stroke: "#ff7aa8", "stroke-width": 3.2, "stroke-linejoin": "round" })}${sh("path", { d: "M36 22 A18 18 0 1 0 38 60 A14 14 0 1 1 36 22Z", fill: "none", stroke: "#fff", "stroke-width": 1, opacity: .7 })}${stella(44, 34, 4.2, "none", "#ff7aa8", 2)}${sh("path", { d: "M26 62 V70 M38 62 V70", stroke: "#b8b3dd", "stroke-width": 1.4 })}`;
+    return { base: stanza("#dfe0f8", pois, "#ebd2b0", sh("path", { d: assi, stroke: "#d4b88f", "stroke-width": 2, fill: "none" }), "#c9c6ee", "#aeaae0"),
+      finestra: finestra(u, "arco", "#f6f2ff", "#aeaae0", vista, true), fissi: `<g transform="translate(132 0) scale(-1 1)">${letto}</g>` + neon, luce: sh("circle", { cx: 32, cy: 42, r: 30, fill: "#ff9db5", opacity: .28 }) };
+  },
+  baita(u) {
+    let assi = ""; for (let x = 25; x < 400; x += 25) assi += `M${x} 0 V190 `;
+    let tavole = ""; for (let y = 216; y < 280; y += 20) tavole += `M0 ${y} H400 `; for (let x = 0; x <= 400; x += 64) tavole += `M${x} 199 L${x - (x - 200) * .3} 280 `;
+    const travi = `${sh("rect", { x: 0, y: 0, width: 400, height: 14, fill: "#a8693f", stroke: "#8a5230", "stroke-width": 1.5 })}${sh("path", { d: "M0 14 L40 14 L0 54Z M400 14 L360 14 L400 54Z", fill: "#a8693f", stroke: "#8a5230", "stroke-width": 1.5, "stroke-linejoin": "round" })}`;
+    const pino = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">${sh("rect", { x: -2, y: 0, width: 4, height: 8, fill: "#8e6440" })}${sh("path", { d: "M0 -34 L14 -10 H6 L16 4 H-16 L-6 -10 H-14Z", fill: "#5aa17a", stroke: "#3f7f5c", "stroke-width": 1.4, "stroke-linejoin": "round" })}${sh("path", { d: "M0 -34 L6 -22 Q0 -19 -6 -22Z M-9 -8 Q-2 -5 5 -8 L6 -10 H-6Z", fill: "#fff" })}</g>`;
+    let neve = ""; [[150, 24], [166, 44], [184, 30], [204, 50], [222, 26], [240, 42], [156, 70], [232, 66], [196, 18], [176, 60]].forEach(([x, y]) => { neve += sh("circle", { cx: x, cy: y, r: 1.8, fill: "#fff" }); });
+    const vista = `${sh("rect", { x: 140, y: 14, width: 120, height: 100, fill: "#cfe6fb" })}${sh("path", { d: "M140 88 L168 46 L186 70 L212 32 L246 84 L260 68 V114 H140Z", fill: "#b3c4e6", stroke: "#97aad6", "stroke-width": 1.6, "stroke-linejoin": "round" })}
+      ${sh("path", { d: "M168 46 L157 63 L164 60 L169 66 L175 59 L180 62Z M212 32 L198 54 L206 50 L212 57 L219 49 L226 54Z", fill: "#fff", stroke: "#e3ecf8", "stroke-width": 1, "stroke-linejoin": "round" })}
+      ${sh("path", { d: "M140 98 Q190 84 260 96 V114 H140Z", fill: "#fff", stroke: "#e3ecf8", "stroke-width": 1.6 })}${pino(166, 98, .8)}${pino(232, 98, .9)}${neve}`;
+    const stufa = `${sh("rect", { x: 340, y: 14, width: 12, height: 112, fill: "#8b8197", stroke: "#6b6477", "stroke-width": 2 })}${sh("rect", { x: 336, y: 108, width: 20, height: 8, rx: 2, fill: "#6b6477" })}
+      ${sh("rect", { x: 312, y: 150, width: 70, height: 60, rx: 12, fill: "#ff8f8f", stroke: "#d95b6a", "stroke-width": 2.6 })}${sh("rect", { x: 308, y: 142, width: 78, height: 10, rx: 5, fill: "#8b8197", stroke: "#6b6477", "stroke-width": 2 })}
+      ${sh("rect", { x: 326, y: 162, width: 42, height: 32, rx: 8, fill: "#4a2f3a", stroke: "#d95b6a", "stroke-width": 2.2 })}
+      <g class="cs-fuoco">${sh("path", { d: "M334 192 Q332 178 340 170 Q342 180 346 176 Q346 168 352 164 Q352 178 358 184 Q360 190 356 192 Z", fill: "#ffab5c", stroke: "#f08a3c", "stroke-width": 1.4 })}${sh("path", { d: "M341 192 Q340 184 345 180 Q347 186 351 184 Q352 190 350 192Z", fill: "#ffe28a" })}</g>
+      ${sh("rect", { x: 316, y: 208, width: 9, height: 6, rx: 2, fill: "#6b6477" })}${sh("rect", { x: 370, y: 208, width: 9, height: 6, rx: 2, fill: "#6b6477" })}
+      ${sh("ellipse", { cx: 334, cy: 132, rx: 12, ry: 9, fill: "#c9b2ff", stroke: "#a38be0", "stroke-width": 2 })}${sh("path", { d: "M345 128 L354 120", stroke: "#a38be0", "stroke-width": 4, "stroke-linecap": "round" })}${sh("path", { d: "M325 124 H343", stroke: "#a38be0", "stroke-width": 3, "stroke-linecap": "round" })}${sh("path", { d: "M334 118 q-4 -6 0 -10 M341 117 q-4 -6 0 -10", stroke: "#cfc6c0", "stroke-width": 2, fill: "none", "stroke-linecap": "round", class: "cs-vapore" })}`;
+    const panca = `${sh("rect", { x: 2, y: 190, width: 98, height: 9, rx: 3, fill: "#c79a6b", stroke: "#a6784a", "stroke-width": 2 })}${sh("path", { d: "M12 199 V212 M90 199 V212", stroke: "#a6784a", "stroke-width": 4, "stroke-linecap": "round" })}
+      ${sh("rect", { x: 8, y: 170, width: 40, height: 21, rx: 6, fill: "#ff9b8a", stroke: "#e07a6a", "stroke-width": 2 })}${sh("path", { d: "M20 171 V190 M34 171 V190 M9 180 H47", stroke: "#fff", "stroke-width": 2.4, opacity: .8 })}
+      ${sh("rect", { x: 44, y: 176 , width: 46, height: 15, rx: 6, fill: "#9fd4ef", stroke: "#6fb0d6", "stroke-width": 2 })}${sh("path", { d: "M56 177 V190 M70 177 V190 M45 183 H89", stroke: "#fff", "stroke-width": 2.2, opacity: .75 })}
+      ${sh("rect", { x: 20, y: 160, width: 38, height: 11, rx: 5.5, fill: "#fff0c8", stroke: "#e8c76a", "stroke-width": 2 })}`;
+    const lanterna = `${sh("path", { d: "M118 14 V30", stroke: "#6b6477", "stroke-width": 2 })}${sh("rect", { x: 109, y: 30, width: 18, height: 4, rx: 2, fill: "#6b6477" })}${sh("rect", { x: 111, y: 34, width: 14, height: 20, rx: 4, fill: "#ffe08a", stroke: "#e8bf5a", "stroke-width": 2 })}${sh("rect", { x: 109, y: 54, width: 18, height: 4, rx: 2, fill: "#6b6477" })}${sh("path", { d: "M118 36 V52", stroke: "#fff", "stroke-width": 1.6, opacity: .7 })}`;
+    return { base: stanza("#d49a68", sh("path", { d: assi, stroke: "#b67c4c", "stroke-width": 2.4 }) + travi, "#c7986a", sh("path", { d: tavole, stroke: "#a97a4e", "stroke-width": 2 }), "#8e6440", "#74502f"),
+      finestra: finestra(u, "quadra", "#f4e2c8", "#a8693f", vista, true), fissi: lanterna + stufa + `<g transform="translate(32 0)">${panca}</g>`,
+      luce: sh("circle", { cx: 347, cy: 180, r: 50, fill: "url(#casaAlone)" }) + sh("circle", { cx: 118, cy: 44, r: 28, fill: "url(#casaAlone)" }) };
   }
 };
 // Stanza semplice per le casette che non hanno (ancora) un disegno loro
@@ -3044,12 +3210,13 @@ const STRATI = ["parete", "dietro", "tappeto", "davanti"];
 
 let casaN = 0;
 // La scena intera: stanza, finestra, oggetti fissi, mobili accesi, luci di sera, mascotte appoggiata a terra
-function scenaCasa(id, { masc = CUSTOM.mascotte, mobili = null, conMascotte = true, sagoma = false, label = "", uovo = false } = {}) {
+const colora = (m, s, v) => { const A = COLORI_MOBILI[m]; return !v || !A || !A[v] ? s : s.replace(/#[0-9a-f]{6}/gi, (h) => { const i = A[0].indexOf(h.toLowerCase()); return i < 0 ? h : A[v][i]; }); };
+function scenaCasa(id, { masc = CUSTOM.mascotte, mobili = null, conMascotte = true, sagoma = false, label = "", uovo = false, colori = CUSTOM.casa.colori } = {}) {
   const c = casaDi(id) || CASETTE[0], u = "c" + (++casaN);
   const dis = (DISEGNI_CASA[c[0]] || ((uu) => casaSemplice(c, uu)))(u);
   if (sagoma) return `<svg class="casa-svg sagoma" viewBox="0 0 400 280" aria-hidden="true">${sh("rect", { width: 400, height: 280, rx: 18, fill: "currentColor", opacity: .08 })}${sh("rect", { y: 196, width: 400, height: 84, fill: "currentColor", opacity: .06 })}<g class="sagoma-g">${dis.finestra}${dis.fissi}</g></svg>`;
   const accesi = (mobili || mobiliAccesi()).filter((m) => DISEGNI_MOBILI[m]);
-  const strato = (s) => accesi.filter((m) => DISEGNI_MOBILI[m].strato === s).map((m) => `<g class="mob mob-${m}">${DISEGNI_MOBILI[m].d()[0]}</g>`).join("");
+  const strato = (s) => accesi.filter((m) => DISEGNI_MOBILI[m].strato === s).map((m) => `<g class="mob mob-${m}">${colora(m, DISEGNI_MOBILI[m].d()[0], colori[m] || 0)}</g>`).join("");
   const fd = conMascotte ? festaCasa() : null; // decorazione di festa: nel posto libero tra libreria e mascotte
   const luci = accesi.map((m) => DISEGNI_MOBILI[m].d()[1] || "").join("") + (dis.luce || "") + (fd ? fd[1] : "");
   let ms = "";
@@ -3063,7 +3230,7 @@ function scenaCasa(id, { masc = CUSTOM.mascotte, mobili = null, conMascotte = tr
 }
 function mobiliAccesi() { const avuti = mobiliAvuti(); return MOBILI.map((m) => m[0]).filter((m) => avuti.includes(m) && !CUSTOM.casa.spenti.includes(m)); }
 // icona di un mobile da solo (per l'elenco)
-const iconaMobile = (m, chiuso) => `<svg class="mob-ico${chiuso ? " chiuso" : ""}" viewBox="${DISEGNI_MOBILI[m].box}" aria-hidden="true">${DISEGNI_MOBILI[m].d()[0]}</svg>`;
+const iconaMobile = (m, chiuso) => `<svg class="mob-ico${chiuso ? " chiuso" : ""}" viewBox="${DISEGNI_MOBILI[m].box}" aria-hidden="true">${colora(m, DISEGNI_MOBILI[m].d()[0], chiuso ? 0 : CUSTOM.casa.colori[m] || 0)}</svg>`;
 
 /* ---------- Pagina ---------- */
 function openCasa() { if ($("#sheet").classList.contains("on")) closeSheet(); state.tab = "casa"; render(); window.scrollTo({ top: 0 }); }
@@ -3082,7 +3249,9 @@ function viewCasa() {
     <div class="casa-mobili">${MOBILI.map(([id, nome, soglia]) => {
       if (!avuti.includes(id)) return `<div class="pin-toggle mob-riga chiuso">${iconaMobile(id, true)}<span><b>${nome}</b><small>Tra ${soglia - b} ${soglia - b === 1 ? nomeCibo[0] : nomeCibo[1]}</small></span></div>`;
       const on = !CUSTOM.casa.spenti.includes(id);
-      return `<button class="pin-toggle mob-riga ${on ? "on" : ""}" data-act="casa-mobile" data-v="${id}" aria-pressed="${on}">${iconaMobile(id)}<span><b>${nome}</b><small>${on ? "In casa" : "Messo via"}</small></span><span class="sw2"></span></button>`;
+      const sc = CUSTOM.casa.colori[id] || 0;
+      const pallini = [0, 1, 2].map((i) => `<button type="button" class="mob-colore${i === sc ? " on" : ""}" data-act="casa-colore" data-v="${id}:${i}" aria-pressed="${i === sc}" aria-label="Colore ${i + 1} di ${nome}" style="--c:${COLORI_MOBILI[id][i][0]}"><span></span></button>`).join("");
+      return `<div class="mob-item"><button class="pin-toggle mob-riga ${on ? "on" : ""}" data-act="casa-mobile" data-v="${id}" aria-pressed="${on}">${iconaMobile(id)}<span><b>${nome}</b><small>${on ? "In casa" : "Messo via"}</small></span><span class="sw2"></span></button><div class="mob-colori" role="group" aria-label="Colori di ${nome}">${pallini}</div></div>`;
     }).join("")}</div>
     <p class="hint casa-hint">I mobili arrivano in regalo spuntando le cose fatte. Le casette nuove si aprono con i giorni attivi della serie.</p>`;
   return `<div class="sec" style="margin-top:0"><h2><span class="emo">🏡 </span>La casetta di ${esc(MN())}</h2></div>
@@ -4219,6 +4388,7 @@ document.addEventListener("click", async (e) => {
     case "open-casa": openCasa(); break;
     case "casa-vai": if (casaDi(v) && casetteAperte().includes(v)) await saveCustom({ casa: { ...CUSTOM.casa, scelta: v } }); openCasa(); break;
     case "casa-scegli": if (casaDi(v) && casetteAperte().includes(v)) { await saveCustom({ casa: { ...CUSTOM.casa, scelta: v } }); cheer(1200); } break;
+    case "casa-colore": { const m = /^([a-z]+):([0-2])$/.exec(String(v)), mid = m && m[1], n = m && Number(m[2]); if (m && mobiliAvuti().includes(mid)) await saveCustom({ casa: { ...CUSTOM.casa, colori: { ...CUSTOM.casa.colori, [mid]: n } } }); break; }
     case "casa-mobile": if (mobiliAvuti().includes(v)) { const sp = CUSTOM.casa.spenti; await saveCustom({ casa: { ...CUSTOM.casa, spenti: sp.includes(v) ? sp.filter((x) => x !== v) : [...sp, v] } }); } break;
     case "casa-poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(); break; }
     // concentrazione
@@ -4249,6 +4419,7 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
+    case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
     case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(); break; }
     case "uovo": festaUovo(v, el); break;
@@ -4283,6 +4454,12 @@ document.addEventListener("click", async (e) => {
     case "ciclo-togli": if (cicloDraft) { cicloDraft.ciclo.splice(+v, 1); disegnaCiclo(); } break;
     case "ciclo-salva": salvaCiclo(); break;
     case "ciclo-cancella": salvaCiclo(true); break;
+    case "fiori-apri": if (mod("umore")) { fioriAperto = true; closeSheet(); apriGiardino(); } break;
+    case "fiori-modo": case "fiori-scegli": {
+      if (!mod("umore")) break; // modulo Umore spento: la scelta non esiste, l'azione si ignora
+      const nuovo = act === "fiori-modo" ? { ...CUSTOM.fiori, modo: v } : { modo: "uno", fiore: v };
+      if (act === "fiori-modo" ? (v === "uno" || v === "umore") : FIORI_UNO.includes(v)) { fioriAperto = true; const y = $("#sheet").scrollTop; await saveCustom({ fiori: nuovo }); if (giardinoMese) { apriGiardino(giardinoMese); $("#sheet").scrollTop = y; } }
+      break; }
     case "giardino-fiore": if (RE_YMD.test(id || "")) apriUmore(id, true); break;
     case "giardino-apri": apriGiardino(new Date(state.calMonth.getFullYear(), state.calMonth.getMonth(), 1)); break;
     case "giardino-move": { const g = giardinoMese; const n = new Date(g.getFullYear(), g.getMonth() + (+v), 1); if (monthKey(n) <= monthKey(new Date())) apriGiardino(n); break; }
@@ -4492,15 +4669,15 @@ function clearLocal() {
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
-  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; LS.set("mochi.custom", c); }
-  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "" });
+  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; LS.set("mochi.custom", c); }
+  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "" });
 }
 function setLoginMode(m) {
   loginMode = m;
   $("#login").classList.remove("hidden"); $("#app").classList.add("hidden"); $("#nav").classList.add("hidden");
   const T = {
     login:   ["Ciao!", `${MN()} custodisce le tue cose.<br>Entra per vederle.`, "Entra"],
-    signup:  ["Benvenuta!", "Crea il tuo spazio personale.<br>Le tue cose le vedi solo tu.", "Crea account"],
+    signup:  [gen("Che bello averti qui!", "Benvenuta!", "Benvenuto!"), "Crea il tuo spazio personale.<br>Le tue cose le vedi solo tu.", "Crea account"],
     forgot:  ["Niente panico", "Scrivi la tua email,<br>ti mando un link per una nuova password.", "Inviami il link"],
     newpass: ["Nuova password", "Scegline una di almeno 8 caratteri.", "Salva e entra"]
   }[m];

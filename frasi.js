@@ -1,5 +1,6 @@
 // Frasi motivazionali di Mochi: una al giorno sotto il saluto, toccandola ne esce un'altra.
 // Sono frasi originali; per aggiungerne basta scrivere una nuova riga tra virgolette.
+// Se una frase ha il genere (stanca/stanco) si scrive come ["neutra", "per lei", "per lui"]: chi non sceglie i pronomi legge la prima.
 window.MOCHI_FRASI = [
   "Una cosa alla volta è comunque un passo avanti.",
   "Non devi fare tutto oggi. Solo la prossima cosa.",
@@ -23,7 +24,7 @@ window.MOCHI_FRASI = [
   "Ogni spunta è un piccolo applauso.",
   "Anche Mochi a volte è un po' molle. Va bene così.",
   "Un buon caffè, un respiro e via.",
-  "La lista è lunga, ma tu sei più tosta.",
+  ["La lista è lunga, ma tu hai più grinta.", "La lista è lunga, ma tu sei più tosta.", "La lista è lunga, ma tu sei più tosto."],
   "Le cose fatte con il sorriso pesano la metà.",
   "Domani ringrazierai la te di oggi.",
   "Prima le cose importanti, poi quelle urgenti di qualcun altro.",
@@ -32,9 +33,9 @@ window.MOCHI_FRASI = [
   "Il disordine di oggi è il progetto di domani.",
   "Piccoli passi, grandi giornate.",
   "Brilla anche se nessuno guarda.",
-  "Oggi è un buon giorno per essere orgogliosa di te.",
+  ["Oggi è un buon giorno per riconoscere quanto vali.", "Oggi è un buon giorno per essere orgogliosa di te.", "Oggi è un buon giorno per essere orgoglioso di te."],
   "Hai già fatto più di quanto pensi.",
-  "Se ti senti stanca, riposa. Non mollare.",
+  ["Se la stanchezza si fa sentire, riposa. Non mollare.", "Se ti senti stanca, riposa. Non mollare.", "Se ti senti stanco, riposa. Non mollare."],
   "Le idee migliori arrivano quando le scrivi.",
   "Una cosa fatta libera spazio per una cosa bella.",
   "Il coraggio a volte è solo cominciare.",
