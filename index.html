@@ -1219,6 +1219,35 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 .rp-righe li small{display:block;font-size:13px;color:var(--ink2)}
 :root[data-stile="quaderno"] .riepilogo-card{border-radius:var(--r-paper);box-shadow:var(--edge);border:1.5px solid var(--ink-a)}
 :root[data-stile="cartone"] .riepilogo-card{border:2px solid var(--tratto-l);box-shadow:none}
+/* ---- Feste: cappellini, ghirlandina, decorazioni della casetta e sorprese (solo decorazione) ---- */
+.top{position:relative}
+.top.con-festa{padding-top:20px}
+.festa-deco{position:absolute;left:-8px;right:-8px;top:-6px;height:28px;pointer-events:none;overflow:hidden}
+.festa-deco svg{display:block}
+.fd-luce{animation:lucina 3.6s ease-in-out infinite}
+.fd-fluttua,.fd-pipistrello{transform-box:fill-box;transform-origin:center;animation:fdSu 4.2s ease-in-out infinite}
+.fd-fluttua.f2{animation-delay:-2.1s}
+.fd-pipistrello{animation-duration:2.6s}
+.fd-fiamma{transform-box:fill-box;transform-origin:50% 100%;animation:fdFiamma 1.3s ease-in-out infinite}
+@keyframes fdSu{50%{transform:translateY(-3px)}}
+@keyframes fdFiamma{50%{transform:scale(.88,1.14)}}
+.uovo-nasc{position:absolute;z-index:2;width:26px;height:32px;padding:0;border:0;background:none;cursor:pointer;opacity:.92;filter:drop-shadow(0 2px 3px rgba(0,0,0,.14))}
+.uovo-nasc svg{width:100%;height:100%;display:block}
+.uovo-nasc.u-oggi{right:22px;bottom:12px}
+.uovo-nasc.u-agenda{right:8px;bottom:-16px}
+.uovo-nasc.u-bacheca{right:10px;bottom:-26px}
+.uovo-nasc.u-menu{position:static;display:block;margin:4px 18px 0 auto}
+.uovo-casa{cursor:pointer}
+.festa-cade{position:fixed;top:-34px;z-index:120;pointer-events:none;animation:festaCade 2.2s ease-in forwards}
+@keyframes festaCade{to{transform:translateY(112vh) rotate(260deg)}}
+.mascotte.festa-giro{animation:festaGiro 1.4s ease}
+@keyframes festaGiro{25%{transform:translateY(-14px) rotate(-14deg) scale(1.08)}60%{transform:translateY(-8px) rotate(380deg)}}
+.regali button .e .ric-ico{width:46px;height:40px;display:block}
+.compl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.compl select{width:auto;padding:8px 12px}
+@media (prefers-reduced-motion: no-preference){ .uovo-nasc{animation:uovoSbircia 5s ease-in-out infinite} }
+@keyframes uovoSbircia{0%,88%,100%{transform:none}92%{transform:rotate(-12deg)}96%{transform:rotate(10deg)}}
+@media (prefers-reduced-motion: reduce){ .fd-luce,.fd-fluttua,.fd-pipistrello,.fd-fiamma,.mascotte.festa-giro,.festa-cade{animation:none} .festa-cade{display:none} }
 </style>
 </head>
 <body>

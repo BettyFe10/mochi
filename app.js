@@ -219,16 +219,18 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null) {
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
       CUSTOM = cleanCustom({ nome_app: md.nome_app, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
         moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
         // casetta: scelta e mobili spenti dall'account, sblocchi uniti (non si perdono mai)
-        casa: md.casa ? unisciCasa(md.casa, CUSTOM.casa) : CUSTOM.casa, spesa_reparti: md.spesa_reparti ?? CUSTOM.spesa_reparti });
+        casa: md.casa ? unisciCasa(md.casa, CUSTOM.casa) : CUSTOM.casa, spesa_reparti: md.spesa_reparti ?? CUSTOM.spesa_reparti,
+        // compleanno dall'account (se c'è); ricordi delle feste uniti come la casetta: non si perdono mai
+        compleanno: md.compleanno ?? CUSTOM.compleanno, ricordi: unisciRicordi(md.ricordi, CUSTOM.ricordi) });
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -381,6 +383,60 @@ const TRAGUARDI = [
   { id: "corona", n: 100, e: "👑", nome: "Corona" },
   { id: "arcobaleno", n: 200, e: "🌈", nome: "Arcobaleno" }
 ];
+/* =========================================================
+   LE FESTE (dati e calendario)
+   Nei giorni di festa la mascotte indossa un cappellino, la casetta si decora e in giro c'è qualche sorpresa.
+   Le feste decorano soltanto: non cambiano i dati e si spengono da Impostazioni → Cosa vuoi usare.
+   ========================================================= */
+// base = quale decorazione usa (il Capodanno usa quella del Natale); acc = ricordo che si indossa
+const FESTE = {
+  natale: { nome: "Natale", e: "🎄", acc: "r-natale", pioggia: ["❄️", "🎄", "⭐", "🎁"], effetto: "neve", frasi: ["Buon Natale! Che sia un giorno soffice come un mochi 🎄", "Tante belle feste da {m}! Una cioccolata calda e una cosa fatta: perfetto ☕"] },
+  capodanno: { nome: "Capodanno", e: "🥂", acc: "r-natale", base: "natale", pioggia: ["🎆", "✨", "🥂", "🎉"], effetto: "neve", frasi: ["Buon anno! Che sia pieno di cose belle e di tanti bocconcini 🥂"] },
+  sanvalentino: { nome: "San Valentino", e: "💗", acc: "r-cuore", pioggia: ["💗", "💕", "💖", "🌹"], effetto: "cuori", frasi: ["Oggi ti mando un cuoricino: sei una persona speciale 💗", "{m} ti vuole bene, e oggi lo dice con un fiocco rosso 🎀"] },
+  pasqua: { nome: "Pasqua", e: "🐣", acc: "r-orecchie", pioggia: ["🥚", "🐣", "🌷", "🐰"], effetto: "petali", frasi: ["Buona Pasqua! Dicono che in giro per l'app si nascondano degli ovetti 🥚", "{m} ha messo le orecchie da coniglietto: buona Pasqua! 🐰"] },
+  halloween: { nome: "Halloween", e: "🎃", acc: "r-strega", pioggia: ["🎃", "🦇", "👻", "🍬"], effetto: null, frasi: ["Dolcetto o scherzetto? Oggi {m} fa la streghetta 🎃", "Buon Halloween! Un pipistrellino sbircia in giro 🦇"] },
+  agosto: { nome: "Estate", e: "☀️", acc: "r-paglia", pioggia: ["☀️", "🍦", "🌊", "🍉"], effetto: "sole", frasi: ["Che bella estate! Un gelato e una cosa fatta, e la giornata è perfetta 🍦", "{m} ha il cappello di paglia: buone vacanze! 🏖️"] },
+  compleanno: { nome: "Compleanno", e: "🎂", acc: "r-festa", pioggia: ["🎈", "🎉", "🎂", "🎁"], effetto: null, frasi: ["Tanti auguri! Oggi è il tuo giorno e {m} fa festa con te 🎂"] }
+};
+// Ricordi: accessori delle feste, si sbloccano con le sorprese e restano per sempre tra gli accessori
+const RICORDI = [
+  { id: "r-natale", nome: "Cappellino di Natale", festa: "natale" }, { id: "r-cuore", nome: "Fiocco rosso", festa: "sanvalentino" },
+  { id: "r-orecchie", nome: "Orecchie da coniglietto", festa: "pasqua" }, { id: "r-strega", nome: "Cappello da streghetta", festa: "halloween" },
+  { id: "r-paglia", nome: "Cappello di paglia", festa: "agosto" }, { id: "r-festa", nome: "Cappellino da festa", festa: "compleanno" },
+  { id: "r-ovetti", nome: "Corona di ovetti", festa: "pasqua" }
+];
+const festaBase = (f) => FESTE[f]?.base || f;
+const bisestile = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+// Pasqua (calendario gregoriano, algoritmo di Gauss/Meeus): giorno e mese per un anno
+function pasquaDi(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mese = Math.floor((h + l - 7 * m + 114) / 31), giorno = ((h + l - 7 * m + 114) % 31) + 1;
+  return { mese, giorno };
+}
+// Il compleanno è solo "MM-GG" (senza anno): qualsiasi altra cosa vale "niente"
+function cleanCompleanno(v) {
+  if (typeof v !== "string") return "";
+  const x = /^(\d{2})-(\d{2})$/.exec(v); if (!x) return "";
+  const m = +x[1], g = +x[2];
+  return m >= 1 && m <= 12 && g >= 1 && g <= new Date(2024, m, 0).getDate() ? v : "";
+}
+// Funzione pura: che festa è in quella data? (null = nessuna). Il compleanno, se c'è, vince su tutte.
+function festaDi(data, compleanno = "") {
+  const d = data instanceof Date ? data : new Date(data);
+  if (isNaN(d)) return null;
+  const y = d.getFullYear(), m = d.getMonth() + 1, g = d.getDate();
+  let c = cleanCompleanno(compleanno);
+  if (c === "02-29" && !bisestile(y)) c = "02-28";
+  if (c && c === `${pad(m)}-${pad(g)}`) return "compleanno";
+  if ((m === 12 && g === 31) || (m === 1 && g === 1)) return "capodanno";
+  if (m === 12 || (m === 1 && g <= 6)) return "natale";
+  if (m === 2 && g >= 10 && g <= 15) return "sanvalentino";
+  if ((m === 10 && g >= 25) || (m === 11 && g === 1)) return "halloween";
+  if (m === 8 && g <= 20) return "agosto";
+  const p = pasquaDi(y), da = Math.round((Date.UTC(y, m - 1, g) - Date.UTC(y, p.mese - 1, p.giorno)) / 864e5);
+  return da >= -3 && da <= 1 ? "pasqua" : null; // da 3 giorni prima fino a Pasquetta
+}
 // Temi di colore: [id, nome, colore chiaro, colore scuro] (i colori veri sono nel CSS di index.html)
 const PALETTE = [
   ["fragola", "Fragola", "#ff8fb1", "#e85d8a", "🍓"], ["matcha", "Matcha", "#7cc79a", "#3f9a6b", "🍵"],
@@ -412,7 +468,8 @@ const MODULI = [
   ["liste", "👭", "Liste condivise", "Liste da usare insieme ad altre persone", true, true],
   ["biscotto", "🥠", "Biscotto della fortuna", "Una frase da aprire ogni mattina", true],
   ["pancino", "🍣", "Il pancino", "La mascotte mangia le cose che fai e riceve regali", true],
-  ["stagioni", "❄️", "Stagioni", "Neve, pioggia, sole o foglie sullo sfondo", false]
+  ["stagioni", "❄️", "Stagioni", "Neve, pioggia, sole o foglie sullo sfondo", false],
+  ["feste", "🎉", "Feste", "Cappellini, decorazioni e sorprese a Natale, Pasqua, Halloween e nei compleanni", true]
 ];
 /* La casetta: dati (i disegni e la pagina sono più sotto, sezione "LA CASETTA") */
 // [id, nome, emoji, giorni attivi per sbloccarla (0 = subito), mascotte di casa, colori per la stanza semplice [muro, pavimento]]
@@ -451,11 +508,14 @@ const STAGIONI = [["auto", "🗓️", "Segue la stagione"], ["neve", "❄️", "
 // Suoni dentro l'app (creati dal codice, nessun file): notifiche con l'app aperta, cose fatte, biscotto
 const SUONI = [["campanella", "🔔", "Campana"], ["bolla", "🫧", "Bolla"], ["xilofono", "🎵", "Xilofono"], ["gocce", "💧", "Gocce"], ["spenti", "🔕", "Spenti"]];
 const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
-  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true };
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [] };
+// Ricordi delle feste: solo id conosciuti, niente doppioni (arrivano anche dall'account: mai fidarsi)
+const cleanRicordi = (a) => [...new Set((Array.isArray(a) ? a : []).filter((x) => typeof x === "string" && RICORDI.some((r) => r.id === x)))];
+const unisciRicordi = (a, b) => [...new Set([...cleanRicordi(a), ...cleanRicordi(b)])];
 function cleanCustom(c) {
   c = c && typeof c === "object" ? c : {};
   const nome = typeof c.nome_app === "string" ? c.nome_app.replace(/[<>]/g, "").trim().slice(0, 24) : "";
-  const acc = typeof c.accessorio === "string" && (c.accessorio === "auto" || c.accessorio === "none" || TRAGUARDI.some((t) => t.id === c.accessorio)) ? c.accessorio : "auto";
+  const acc = typeof c.accessorio === "string" && (c.accessorio === "auto" || c.accessorio === "none" || TRAGUARDI.some((t) => t.id === c.accessorio) || RICORDI.some((r) => r.id === c.accessorio)) ? c.accessorio : "auto";
   const colore = typeof c.colore === "string" && PALETTE.some((x) => x[0] === c.colore) ? c.colore : "fragola";
   const font = typeof c.font === "string" && FONTI.some((x) => x[0] === c.font) ? c.font : "morbido";
   const stile = typeof c.stile === "string" && STILI.some((x) => x[0] === c.stile) ? c.stile : "morbido";
@@ -464,7 +524,7 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
 // Il modulo è acceso? (quelli che richiedono un account sono spenti in modalità prova)
@@ -495,9 +555,10 @@ function applyCustom() {
   setLink("icon", `icons/${CUSTOM.mascotte}.svg`);
   syncBarColor();
   stagioniAggiorna();
+  festaTesta();
   for (const id of ["topMascot", "loginMascot"]) {
     const el = document.getElementById(id);
-    const key = CUSTOM.mascotte + "|" + (accWorn()?.id || "");
+    const key = CUSTOM.mascotte + "|" + (accWorn()?.id || "") + "|" + (festaCappello() || "");
     if (el && el.dataset.m !== key) { el.innerHTML = mascot(); el.dataset.m = key; }
   }
 }
@@ -538,18 +599,30 @@ function accWorn() {
   const tot = bocconcini().length;
   const got = TRAGUARDI.filter((t) => tot >= t.n);
   if (CUSTOM.accessorio === "none") return null;
-  if (CUSTOM.accessorio !== "auto") { const t = got.find((x) => x.id === CUSTOM.accessorio); if (t) return t; }
+  if (CUSTOM.accessorio !== "auto") {
+    if (RICORDI.some((r) => r.id === CUSTOM.accessorio)) { if (CUSTOM.ricordi.includes(CUSTOM.accessorio)) return { id: CUSTOM.accessorio, ricordo: true }; }
+    else { const t = got.find((x) => x.id === CUSTOM.accessorio); if (t) return t; }
+  }
   return got[got.length - 1] || null;
 }
 // L'accessorio sta DENTRO il corpo della mascotte: respira e saltella insieme a lei.
 // Posizione scelta per ogni personaggio, appoggiata sulla testa (coordinate del disegno).
 const ACC_POS = { mochi: [322, 182, 62], nigi: [150, 200, 62], bolla: [250, 196, 58] };
 function withAcc(svgStr, id) {
-  const a = accWorn(); if (!a) return svgStr;
-  const [x, y, fs] = ACC_POS[id] || ACC_POS.mochi;
-  const t = `<text class="acc" x="${x}" y="${y}" font-size="${fs}" text-anchor="middle">${a.e}</text>`;
+  const a = accWorn(), fc = festaCappello(id);
+  // il cappellino della festa vince su quello dei ricordi; l'accessorio scelto resta, spostato di lato se serve
+  let cap = fc || (a?.ricordo ? a.id : null);
+  if (cap === "r-orecchie" && ORECCHIE_SUE.includes(id)) cap = "r-ovetti"; // ha già le orecchie lunghe: un solo paio (anche col ricordo indossato)
+  let t = "";
+  if (a && !a.ricordo) {
+    let [x, y, fs] = ACC_POS[id] || ACC_POS.mochi;
+    if (fc) { const hx = (CAPPELLI_POS[id] || CAPPELLI_POS.mochi)[0]; if (Math.abs(x - hx) < 75) { x = hx + 88; y += 6; fs = Math.min(fs, 50); } }
+    t = `<text class="acc" x="${x}" y="${y}" font-size="${fs}" text-anchor="middle">${a.e}</text>`;
+  }
+  const c = cap ? cappelloSvg(cap, id) : "";
+  if (!t && !c) return svgStr;
   // il disegno termina chiudendo il gruppo del corpo: inserisco l'accessorio appena prima
-  return svgStr.replace(/<\/g>\s*<\/svg>$/, `${t}</g></svg>`);
+  return svgStr.replace(/<\/g>\s*<\/svg>$/, `${t}${c}</g></svg>`);
 }
 function umore(oggi) {
   return oggi >= 5 ? ["Al settimo cielo", "🌈"] : oggi >= 3 ? ["Felicissimo", "💗"] : oggi >= 1 ? ["Contento", "😊"] : ["Tranquillo", "🍵"];
@@ -588,6 +661,10 @@ function openPancino() {
       ? `<button class="${worn === t.id ? "on" : ""}" data-act="wear" data-v="${t.id}"><span class="e">${t.e}</span><b>${t.nome}</b><small>${worn === t.id ? "Lo indossa" : "Tocca per metterlo"}</small></button>`
       : `<button class="lock" disabled><span class="e">${t.e}</span><b>${t.nome}</b><small>a ${t.n} bocconcini</small></button>`).join("")}
       <button class="${worn === "none" ? "on" : ""}" data-act="wear" data-v="none"><span class="e">🫧</span><b>Niente</b><small>Al naturale</small></button></div>
+    ${mod("feste") || CUSTOM.ricordi.length ? `<div class="sec"><h2>Ricordi delle feste</h2><span class="count">${CUSTOM.ricordi.length}/${RICORDI.length}</span></div>
+    <div class="regali">${RICORDI.map((r) => CUSTOM.ricordi.includes(r.id)
+      ? `<button class="${worn === r.id ? "on" : ""}" data-act="wear" data-v="${r.id}"><span class="e"><svg class="ric-ico" viewBox="-70 -112 140 124" aria-hidden="true">${CAPPELLI[r.id]}</svg></span><b>${r.nome}</b><small>${worn === r.id ? "Lo indossa" : "Tocca per metterlo"}</small></button>`
+      : `<button class="lock" disabled><span class="e">🎁</span><b>???</b><small>Si trova in una festa</small></button>`).join("")}</div>` : ""}
     <p class="hint" style="margin:10px 4px 14px">Ogni cosa che spunti è un bocconcino. ${esc(MN())} non ha mai fame e non si offende: festeggia solo quello che fai.</p>
     ${mod("casa") ? `<button class="more" data-act="open-casa">🏡 Vai alla casetta di ${esc(MN())}</button>` : ""}
     <div class="actions"><button class="btn primary" data-act="close">Ciao ${esc(MN())} 💗</button></div>`);
@@ -945,6 +1022,7 @@ function render() {
   el.innerHTML = `<div class="view">${v}</div>`;
   document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
   document.querySelectorAll(".nav .side-admin").forEach((b) => b.classList.toggle("hidden", !isAdmin));
+  festaDopoRender();
   // voci della barra laterale: solo con account (online-only) e/o solo se il modulo è acceso (data-mod)
   document.querySelectorAll(".nav .online-only, .nav [data-mod]").forEach((b) => b.classList.toggle("hidden", (b.classList.contains("online-only") && !ONLINE_MODE) || (!!b.dataset.mod && !mod(b.dataset.mod))));
 }
@@ -1180,6 +1258,7 @@ async function saveDraft() {
   closeSheet(); render();
   await store.save(d);
   if (isNew) {
+    if (d.kind !== "event") festaParola(d.title);
     setTimeout(() => cheer(1200), 250);
     toast(d.kind === "note" ? "Appunto salvato 📝" : d.due_date ? `Fatto! Te lo ricordo ${niceDate(d.due_date).toLowerCase()}${d.due_time ? " alle " + d.due_time : ""} 🌸` : "Salvato! 🍣");
     if (d.remind_at && ONLINE_MODE) maybeAskPush();
@@ -1278,6 +1357,11 @@ function openSettings() {
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="moduli">${MODULI.filter((m) => !m[5] || ONLINE_MODE).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>
       ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
+    ${mod("feste") ? `<div class="setrow col" id="setCompl"><div><b>Il tuo compleanno</b><small>Facoltativo: solo giorno e mese, niente anno. Quel giorno ${esc(MN())} ti fa gli auguri${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
+      <div class="compl">${(() => { const [mm, gg] = CUSTOM.compleanno ? CUSTOM.compleanno.split("-").map(Number) : [0, 0];
+        return `<select class="input" id="cGiorno" aria-label="Giorno del compleanno"><option value="">Giorno</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${gg === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select>
+        <select class="input" id="cMese" aria-label="Mese del compleanno"><option value="">Mese</option>${MESI.map((n, i) => `<option value="${i + 1}" ${mm === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("")}</select>`; })()}
+        ${CUSTOM.compleanno ? `<button class="fbtn" data-act="compleanno-togli">Togli</button>` : ""}</div></div>` : ""}
     <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
       <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     <div class="setrow"><div><b>Chiaro o scuro</b><small>Automatico segue il telefono</small></div>
@@ -1300,6 +1384,13 @@ function openSettings() {
     `<div class="setrow"><div><b>Modalità prova</b><small>I dati restano solo su questo dispositivo</small></div></div>`}
     <div class="actions"><button class="btn" data-act="close">Chiudi</button></div>`);
   $("#themeSel").addEventListener("change", (e) => setTheme(e.target.value));
+  const salvaCompleanno = async () => {
+    const g = $("#cGiorno")?.value, m = $("#cMese")?.value; if (!g || !m) return;
+    const c = cleanCompleanno(`${pad(+m)}-${pad(+g)}`);
+    if (!c) { toast("Quel giorno non esiste in quel mese 📅"); return; }
+    await saveCustom({ compleanno: c }); riapriImpostazioni(); toast("Compleanno salvato 🎂");
+  };
+  $("#cGiorno")?.addEventListener("change", salvaCompleanno); $("#cMese")?.addEventListener("change", salvaCompleanno);
   if (PUSH_READY && (perm === "granted" || perm === "default")) refreshPushRow();
 }
 
@@ -1404,6 +1495,7 @@ function maybeShowInstallHint() {
 const NOVITA = {
   titolo: "Novità in Mochi!",
   punti: [
+    ["feste", "🎉", "<b>Feste</b>: a Natale, Capodanno, San Valentino, Pasqua, Halloween e in estate la mascotte si veste a festa e la casetta si decora, da sola. Se aggiungi il tuo compleanno in Impostazioni, ti fa gli auguri. In giro ci sono anche sorprese nascoste... Si spegne da Impostazioni → Cosa vuoi usare.", "feste"],
     ["spesa-smart", "🛒", "<b>Lista della spesa intelligente</b>: nelle liste da spuntare della spesa ti suggerisco le cose che compri di solito e le metto in ordine per reparto, come il giro del supermercato."],
     ["riepilogo", "🌙", "<b>Riepilogo della domenica</b>: la domenica sera i numeri della tua settimana (cose fatte, giorni attivi, turni e spese), con il confronto con quella prima.", "riepilogo"],
     ["casette", "🏡", "<b>La casetta</b>: la tua mascotte ha una casa tutta sua. I mobili arrivano in regalo spuntando le cose fatte, le casette nuove si aprono con i giorni attivi. La trovi nel menu (o tieni premuta la mascotte in alto).", "casa"],
@@ -2681,11 +2773,11 @@ const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i +
 const giu = (r) => { if (r.error) throw r.error; return r; };
 // Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
 // (gli sblocchi della casetta si uniscono sempre: non si perdono mai)
-const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa"].some((k) => md[k] != null); };
+const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi"].some((k) => md[k] != null); };
 async function portaPreferenze() {
   const copia = LS.get("mochi.ospite.custom", null); if (!copia) return; // solo la copia dell'ospite, mai le preferenze di chi è entrato
   const ospite = cleanCustom(copia);
-  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa) } : { ...ospite });
+  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi) } : { ...ospite });
   LS.set("mochi.custom", CUSTOM); applyCustom();
   await store.saveCustom(CUSTOM); // se non riesce, l'errore ferma il passaggio: la copia resta e si può riprovare
 }
@@ -2935,20 +3027,21 @@ const STRATI = ["parete", "dietro", "tappeto", "davanti"];
 
 let casaN = 0;
 // La scena intera: stanza, finestra, oggetti fissi, mobili accesi, luci di sera, mascotte appoggiata a terra
-function scenaCasa(id, { masc = CUSTOM.mascotte, mobili = null, conMascotte = true, sagoma = false, label = "" } = {}) {
+function scenaCasa(id, { masc = CUSTOM.mascotte, mobili = null, conMascotte = true, sagoma = false, label = "", uovo = false } = {}) {
   const c = casaDi(id) || CASETTE[0], u = "c" + (++casaN);
   const dis = (DISEGNI_CASA[c[0]] || ((uu) => casaSemplice(c, uu)))(u);
   if (sagoma) return `<svg class="casa-svg sagoma" viewBox="0 0 400 280" aria-hidden="true">${sh("rect", { width: 400, height: 280, rx: 18, fill: "currentColor", opacity: .08 })}${sh("rect", { y: 196, width: 400, height: 84, fill: "currentColor", opacity: .06 })}<g class="sagoma-g">${dis.finestra}${dis.fissi}</g></svg>`;
   const accesi = (mobili || mobiliAccesi()).filter((m) => DISEGNI_MOBILI[m]);
   const strato = (s) => accesi.filter((m) => DISEGNI_MOBILI[m].strato === s).map((m) => `<g class="mob mob-${m}">${DISEGNI_MOBILI[m].d()[0]}</g>`).join("");
-  const luci = accesi.map((m) => DISEGNI_MOBILI[m].d()[1] || "").join("") + (dis.luce || "");
+  const fd = conMascotte ? festaCasa() : null; // decorazione di festa: nel posto libero tra libreria e mascotte
+  const luci = accesi.map((m) => DISEGNI_MOBILI[m].d()[1] || "").join("") + (dis.luce || "") + (fd ? fd[1] : "");
   let ms = "";
   if (conMascotte) {
     const vb = (MASC.list[masc] || MASC.list.mochi).viewBox;
     ms = `<g class="casa-masc" data-act="casa-poke">${withAcc(MASC.svg(masc), masc).replace("<svg ", `<svg x="128" y="112" width="144" height="156" preserveAspectRatio="xMidYMax meet" `).replace(/viewBox="[^"]*"/, `viewBox="${vb}"`)}</g>`;
   }
   return `<svg class="casa-svg" viewBox="0 0 400 280" role="img" aria-label="${esc(label || c[1])}" xmlns="http://www.w3.org/2000/svg">
-    <g class="cs-stanza">${dis.base}${dis.finestra}${dis.fissi}${strato("parete")}${strato("dietro")}${strato("tappeto")}</g>
+    <g class="cs-stanza">${dis.base}${dis.finestra}${dis.fissi}${strato("parete")}${strato("dietro")}${fd ? `<g class="festa-casa">${fd[0]}</g>` : ""}${strato("tappeto")}${uovo && uovoVisibile("casa") ? uovoCasaSvg() : ""}</g>
     <g class="cs-luci">${luci}</g>${ms}<g class="cs-stanza">${strato("davanti")}</g></svg>`;
 }
 function mobiliAccesi() { const avuti = mobiliAvuti(); return MOBILI.map((m) => m[0]).filter((m) => avuti.includes(m) && !CUSTOM.casa.spenti.includes(m)); }
@@ -2960,7 +3053,7 @@ function openCasa() { if ($("#sheet").classList.contains("on")) closeSheet(); st
 function viewCasa() {
   const scelta = casaScelta(), c = casaDi(scelta), aperte = casetteAperte(), avuti = mobiliAvuti(), tot = serie().totali, b = bocconciniTot();
   const accesi = mobiliAccesi();
-  const scena = `<div class="casa-scena">${scenaCasa(scelta, { label: `${c[1]}: ${MN()} è a casa${accesi.length ? `, con ${accesi.length} ${accesi.length === 1 ? "mobile" : "mobili"}` : ""}. Tocca la mascotte per salutarla` })}</div>`;
+  const scena = `<div class="casa-scena">${scenaCasa(scelta, { uovo: true, label: `${c[1]}: ${MN()} è a casa${accesi.length ? `, con ${accesi.length} ${accesi.length === 1 ? "mobile" : "mobili"}` : ""}. Tocca la mascotte per salutarla` })}</div>`;
   const nomeCibo = mod("pancino") ? ["bocconcino", "bocconcini"] : ["cosa fatta", "cose fatte"];
   const scelte = `<div class="sec"><h2>Le casette</h2><span class="count">${aperte.length}/${CASETTE.length}</span></div>
     <div class="casa-scelte">${CASETTE.map((x) => {
@@ -3393,8 +3486,8 @@ function nuovaParticella(tipo, sparsa) {
   if (tipo === "pioggia") return { x: rnd(-40, w), y: sparsa ? rnd(0, h) : rnd(-60, -10), v: rnd(7, 10), l: rnd(10, 18) };
   if (tipo === "sole") return { x: rnd(0, w), y: rnd(0, h), r: rnd(2.6, 5), f: rnd(0, 6.28), v: rnd(.15, .35) };
   if (tipo === "neve") return { x: rnd(0, w), y, r: rnd(1.4, 3.4), v: rnd(.4, 1), f: rnd(0, 6.28), o: rnd(.4, 1.2) };
-  const COL = tipo === "foglie" ? ["#e8a25a", "#d9763d", "#c9a24a", "#b5653a"] : ["#ffb7c9", "#ffc8d8", "#f7a1bb", "#ffd9e4"];
-  return { x: rnd(0, w), y, r: tipo === "foglie" ? rnd(5, 8) : rnd(3.5, 5.5), v: tipo === "foglie" ? rnd(.6, 1.2) : rnd(.45, .9), f: rnd(0, 6.28), o: rnd(.6, 1.6), a: rnd(0, 6.28), va: rnd(-.04, .04), c: COL[Math.floor(Math.random() * COL.length)] };
+  const COL = tipo === "foglie" ? ["#e8a25a", "#d9763d", "#c9a24a", "#b5653a"] : tipo === "cuori" ? ["#ff8fb1", "#ff6f8f", "#ffb3c6", "#f7a1bb"] : ["#ffb7c9", "#ffc8d8", "#f7a1bb", "#ffd9e4"];
+  return { x: rnd(0, w), y, r: tipo === "foglie" ? rnd(5, 8) : tipo === "cuori" ? rnd(4, 7) : rnd(3.5, 5.5), v: tipo === "foglie" ? rnd(.6, 1.2) : rnd(.45, .9), f: rnd(0, 6.28), o: rnd(.6, 1.6), a: rnd(0, 6.28), va: rnd(-.04, .04), c: COL[Math.floor(Math.random() * COL.length)] };
 }
 function stagioniMisura() {
   const cv = $("#stagioni"); if (!cv) return;
@@ -3403,11 +3496,14 @@ function stagioniMisura() {
 }
 function stagioniAggiorna() {
   const cv = $("#stagioni"); if (!cv) return;
-  const tipo = mod("stagioni") && !menoMoto() && !$("#app").classList.contains("hidden") ? stagioneDiOggi() : null;
+  // le stagioni, se accese; altrimenti un'ombra di effetto per la festa (solo nello stile Morbido); o una sorpresa breve
+  const fe = festaOggi(), festaEff = fe && CUSTOM.stile === "morbido" ? FESTE[fe].effetto : null;
+  const tipo = !menoMoto() && !$("#app").classList.contains("hidden") ? burstAttivo() || (mod("stagioni") ? stagioneDiOggi() : festaEff) : null;
+  const leggero = !burstAttivo() && !mod("stagioni");
   if (!tipo) { cancelAnimationFrame(stag.raf); stag.raf = 0; stag.tipo = null; stag.p = []; cv.classList.remove("on"); cv.getContext("2d")?.clearRect(0, 0, cv.width, cv.height); return; }
   if (tipo !== stag.tipo || !stag.p.length) {
     stagioniMisura(); stag.tipo = tipo;
-    const n = Math.round(Math.min(34, Math.max(12, (stag.w * stag.h) / 26000)) * (tipo === "pioggia" ? 1.4 : tipo === "sole" ? .9 : 1));
+    const n = Math.round(Math.min(34, Math.max(12, (stag.w * stag.h) / 26000)) * (tipo === "pioggia" ? 1.4 : tipo === "sole" ? .9 : 1) * (leggero ? .6 : 1));
     stag.p = Array.from({ length: n }, () => nuovaParticella(tipo, true));
   }
   cv.classList.add("on");
@@ -3449,9 +3545,10 @@ function stagioniFrame(now) {
       c.beginPath(); c.arc(p.x, p.y, p.r, 0, 6.283); c.fill();
     } else {
       p.a += p.va * k;
-      c.save(); c.translate(p.x, p.y); c.rotate(p.a + Math.sin(p.f) * .5); c.globalAlpha = scuro ? .6 : .7; c.fillStyle = p.c;
+      c.save(); c.translate(p.x, p.y); c.rotate(tipo === "cuori" ? Math.sin(p.f) * .4 : p.a + Math.sin(p.f) * .5); c.globalAlpha = scuro ? .6 : .7; c.fillStyle = p.c;
       c.beginPath();
       if (tipo === "foglie") { c.moveTo(0, -p.r); c.quadraticCurveTo(p.r * .9, 0, 0, p.r); c.quadraticCurveTo(-p.r * .9, 0, 0, -p.r); }
+      else if (tipo === "cuori") { const r = p.r; c.moveTo(0, r * .9); c.bezierCurveTo(-r * 1.6, -r * .2, -r * .9, -r * 1.3, 0, -r * .45); c.bezierCurveTo(r * .9, -r * 1.3, r * 1.6, -r * .2, 0, r * .9); }
       else c.ellipse(0, 0, p.r, p.r * .62, 0, 0, 6.283);
       c.fill(); c.restore();
     }
@@ -3461,6 +3558,270 @@ function stagioniFrame(now) {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { stag.last = 0; stagioniAggiorna(); } else { cancelAnimationFrame(stag.raf); stag.raf = 0; } });
 addEventListener("resize", () => { if (stag.tipo) { stagioniMisura(); stag.p.forEach((p) => { if (p.x > stag.w) p.x = rnd(0, stag.w); if (p.y > stag.h) p.y = rnd(0, stag.h); }); } });
 matchMedia("(prefers-reduced-motion: reduce)").addEventListener?.("change", () => stagioniAggiorna());
+
+/* =========================================================
+   LE FESTE (disegni e sorprese)
+   Tutto è SVG fatto dal codice, nello stile delle mascotte: forme tonde, pastello, contorno più scuro.
+   I cappellini si appoggiano sulla testa (punto d'appoggio per ogni mascotte), la decorazione della casetta ha
+   un posto fisso (x 76-126, y 104-224 della stanza) dove non c'è nessun mobile.
+   ========================================================= */
+// Cappellini: origine = centro della testa, sopra = y negativo. Niente id: si possono mettere più volte nella pagina.
+const CAPPELLI = {
+  "r-natale": `<path d="M-46 -4 C-46 -52 -8 -86 24 -80 C46 -76 60 -56 58 -34 C56 -22 54 -12 50 -4 Z" fill="#ef5a6f" stroke="#c63f58" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-30 -38 C-22 -56 -8 -67 8 -71" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" opacity=".45"/>
+    <rect x="-54" y="-18" width="108" height="23" rx="11.5" fill="#fff" stroke="#e6dbe0" stroke-width="4"/>
+    <circle cx="58" cy="-30" r="13" fill="#fff" stroke="#e6dbe0" stroke-width="4"/>`,
+  "r-cuore": `<path d="M-2 -12 C-16 -40 -54 -42 -56 -20 C-56 0 -22 0 -2 -12 Z" fill="#ff6f8f" stroke="#d94a6c" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M2 -12 C16 -40 54 -42 56 -20 C56 0 22 0 2 -12 Z" fill="#ff6f8f" stroke="#d94a6c" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-40 -26 C-34 -34 -24 -34 -18 -28 M40 -26 C34 -34 24 -34 18 -28" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".55"/>
+    <circle cx="0" cy="-12" r="11" fill="#ff8fa9" stroke="#d94a6c" stroke-width="5"/>`,
+  "r-orecchie": `<g transform="translate(-32 6) rotate(-13)"><path d="M-15 0 C-23 -32 -19 -80 -2 -96 C15 -80 19 -32 15 0 Z" fill="#fff7f9" stroke="#e8c6d2" stroke-width="5" stroke-linejoin="round"/><path d="M-7 -8 C-11 -30 -9 -62 -2 -76 C5 -62 9 -30 7 -8 Z" fill="#ffc4d4"/></g>
+    <g transform="translate(32 6) rotate(13)"><path d="M-15 0 C-23 -32 -19 -80 -2 -96 C15 -80 19 -32 15 0 Z" fill="#fff7f9" stroke="#e8c6d2" stroke-width="5" stroke-linejoin="round"/><path d="M-7 -8 C-11 -30 -9 -62 -2 -76 C5 -62 9 -30 7 -8 Z" fill="#ffc4d4"/></g>`,
+  "r-strega": `<ellipse cx="0" cy="-4" rx="58" ry="13" fill="#8f73d6" stroke="#6f55b8" stroke-width="5"/>
+    <path d="M-32 -8 C-30 -40 -16 -60 2 -76 C12 -86 34 -84 38 -72 C26 -74 22 -66 24 -52 C26 -34 30 -20 32 -8 Z" fill="#a58be6" stroke="#6f55b8" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-31 -16 C-14 -9 14 -9 31 -16 L 30 -30 C 14 -23 -14 -23 -30 -30 Z" fill="#ffab6b" stroke="#e0834a" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="-7" y="-27" width="14" height="14" rx="3" fill="#ffe28a" stroke="#e8bf5a" stroke-width="3"/>
+    <path d="M-20 -52 C-16 -62 -10 -66 -4 -68" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".4"/>`,
+  "r-paglia": `<ellipse cx="0" cy="-6" rx="64" ry="14" fill="#f8dc8e" stroke="#d9ab4f" stroke-width="5"/>
+    <path d="M-36 -8 C-38 -54 38 -54 36 -8 Z" fill="#fae6a4" stroke="#d9ab4f" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-36 -14 C-14 -6 14 -6 36 -14 L 36 -27 C 14 -19 -14 -19 -36 -27 Z" fill="#ff8fa3" stroke="#e0637e" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M-14 -46 V-30 M0 -48 V-28 M14 -46 V-30" stroke="#d9ab4f" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+    <circle cx="30" cy="-23" r="5" fill="#fff"/><circle cx="30" cy="-23" r="2" fill="#ffd76a"/>`,
+  "r-festa": `<path d="M-32 0 L2 -90 L36 0 Z" fill="#ffd76a" stroke="#e8b640" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-20 -30 L 20 -44 M-9 -58 L 12 -66" stroke="#ff8fb1" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="-6" cy="-14" r="4" fill="#9fd4ef"/><circle cx="18" cy="-18" r="4" fill="#ff8fb1"/><circle cx="2" cy="-76" r="3" fill="#9fd4ef"/>
+    <ellipse cx="2" cy="1" rx="37" ry="6.5" fill="#ff8fb1" stroke="#e0637e" stroke-width="4"/>
+    <circle cx="2" cy="-94" r="10" fill="#fff" stroke="#e6dbe0" stroke-width="4"/>`,
+  "r-ovetti": `<path d="M-52 2 Q0 -12 52 2 L52 -10 Q0 -24 -52 -10 Z" fill="#b7e39a" stroke="#6fb874" stroke-width="4" stroke-linejoin="round"/>
+    ${[["#ff9db5", -42, -17], ["#9fd4ef", -21, -24], ["#ffe28a", 0, -27], ["#c9b2ff", 21, -24], ["#b7e39a", 42, -17]].map(([c, x, y]) => `<ellipse cx="${x}" cy="${y - 11}" rx="10" ry="13" fill="${c}" stroke="rgba(74,47,58,.3)" stroke-width="3"/><path d="M${x - 9} ${y - 10} l4.5 -4 l4.5 4 l4.5 -4 l4.5 4" stroke="#fff" stroke-width="3" fill="none" stroke-linejoin="round" opacity=".85"/>`).join("")}`
+};
+// Dove si appoggia il cappellino su ogni mascotte: [x, y, rotazione, scala] (coordinate del disegno)
+const CAPPELLI_POS = {
+  mochi: [200, 122, -8, 1.1], nigi: [205, 153, -8, 1.1], bolla: [250, 170, 0, 1], miso: [250, 152, 0, 1.05], bambu: [205, 158, -8, 1.1],
+  daifuku: [250, 162, 0, 1.05], tamago: [205, 162, -8, 1.05], kame: [250, 132, 0, 1.05], saltello: [250, 160, 0, 1.05], castagna: [250, 152, 0, 1.1],
+  yuzu: [205, 188, -8, 1.1], marimo: [250, 144, 0, 1.05], sakura: [250, 168, 0, 1.1], nori: [250, 168, 0, 1.1], zucchero: [215, 130, -6, 1.05]
+};
+const cappelloSvg = (cid, masc) => {
+  if (!Object.prototype.hasOwnProperty.call(CAPPELLI, cid)) return "";
+  const [x, y, r, s] = CAPPELLI_POS[masc] || CAPPELLI_POS.mochi;
+  return `<g class="acc-festa" transform="translate(${x} ${y}) rotate(${r}) scale(${s})">${CAPPELLI[cid]}</g>`;
+};
+// Quale cappellino indossa la mascotte per la festa di oggi (se il modulo è acceso)
+let FESTA_FORZATA = null; // solo per le prove in locale (?festa=natale su localhost): decora, non cambia nessun dato
+try { if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) { const f = new URLSearchParams(location.search).get("festa"); if (f && Object.prototype.hasOwnProperty.call(FESTE, f)) FESTA_FORZATA = f; } } catch {}
+const festaOggi = () => (mod("feste") ? FESTA_FORZATA || festaDi(new Date(), CUSTOM.compleanno) : null);
+// a Pasqua le mascotte che hanno già le orecchie lunghe (coniglietti, canguro, unicorno) portano la corona di ovetti: niente doppie orecchie
+const ORECCHIE_SUE = ["bolla", "daifuku", "saltello", "zucchero"];
+const festaCappello = (masc = CUSTOM.mascotte) => { const f = festaOggi(); if (!f) return null; const a = FESTE[f].acc; return a === "r-orecchie" && ORECCHIE_SUE.includes(masc) ? "r-ovetti" : a; };
+const festaFrase = (f) => { const a = FESTE[f].frasi; return a[Math.floor((Date.now() / 864e5)) % a.length].replace("{m}", MN()); };
+
+/* ---------- La casetta: una decorazione per festa, sempre nello stesso posto libero ---------- */
+const cuoreD = (x, y, s) => `M${x} ${y + s * .9}C${x - s * 1.6} ${y - s * .2} ${x - s * .9} ${y - s * 1.3} ${x} ${y - s * .45}C${x + s * .9} ${y - s * 1.3} ${x + s * 1.6} ${y - s * .2} ${x} ${y + s * .9}Z`;
+const DECORI = {
+  natale() {
+    const luci = [[96, 132, "#ffd76a"], [108, 140, "#ff9db5"], [92, 160, "#9fd4ef"], [110, 166, "#ffd76a"], [88, 190, "#ff9db5"], [102, 196, "#9fd4ef"], [116, 192, "#ffd76a"]];
+    return [`<rect x="97" y="212" width="8" height="11" rx="2" fill="#b98862" stroke="#8a6244" stroke-width="2"/>
+      <path d="M101 164 L77 216 Q101 223 125 216 Z" fill="#6fc28b" stroke="#4a9a68" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M101 138 L81 184 Q101 190 121 184 Z" fill="#7fd09a" stroke="#4a9a68" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M101 114 L85 156 Q101 161 117 156 Z" fill="#8fdba8" stroke="#4a9a68" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M101 105 l2.6 5.4 l5.9 .8 l-4.3 4.2 l1 5.9 l-5.2 -2.8 l-5.2 2.8 l1 -5.9 l-4.3 -4.2 l5.9 -.8 Z" fill="#ffe28a" stroke="#f0c24e" stroke-width="1.8" stroke-linejoin="round"/>
+      ${luci.map(([x, y, c]) => `<circle class="fd-luce" cx="${x}" cy="${y}" r="3.2" fill="${c}" stroke="rgba(74,47,58,.25)" stroke-width="1"/>`).join("")}
+      <rect x="79" y="205" width="17" height="15" rx="3" fill="#ff9db5" stroke="#e57a98" stroke-width="2"/><path d="M87.5 205 V220 M79 212.5 H96" stroke="#fff" stroke-width="2.4"/><path d="M87.5 205 q-6 -7 -2 -8 q4 0 2 8 q-2 -8 2 -8 q4 1 -2 8" fill="#fff" stroke="#e57a98" stroke-width="1.2"/>
+      <rect x="106" y="209" width="15" height="12" rx="3" fill="#9fd4ef" stroke="#6fb0d6" stroke-width="2"/><path d="M113.5 209 V221 M106 215 H121" stroke="#fff" stroke-width="2.2"/>`,
+      luci.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="9" fill="url(#casaAlone)"/>`).join("")];
+  },
+  sanvalentino() {
+    return [`<path d="M92 150 Q96 180 100 206 M112 142 Q106 176 102 206" stroke="#c9a2b0" stroke-width="1.6" fill="none"/>
+      <path class="fd-fluttua" d="${cuoreD(92, 136, 12)}" fill="#ff6f8f" stroke="#d94a6c" stroke-width="2.4" stroke-linejoin="round"/>
+      <path class="fd-fluttua f2" d="${cuoreD(112, 128, 11)}" fill="#ffb3c6" stroke="#f0839f" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M86 128 q3 -5 8 -4" stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".7"/>
+      <rect x="86" y="206" width="30" height="17" rx="4" fill="#ff8fa9" stroke="#d94a6c" stroke-width="2.4"/><path d="M101 206 V223" stroke="#fff" stroke-width="3"/>
+      <path d="M101 206 q-9 -9 -4 -10 q6 0 4 10 q-2 -10 4 -10 q5 1 -4 10" fill="#fff" stroke="#d94a6c" stroke-width="1.4" stroke-linejoin="round"/>`, ""];
+  },
+  pasqua() {
+    const uova = [["#ff9db5", 90, 196], ["#9fd4ef", 103, 193], ["#ffe28a", 116, 197]];
+    return [`${uova.map(([c, x, y]) => `<ellipse cx="${x}" cy="${y}" rx="7.5" ry="10" fill="${c}" stroke="rgba(74,47,58,.3)" stroke-width="2"/><path d="M${x - 7} ${y} l3.5 -3 l3.5 3 l3.5 -3 l3.5 3" stroke="#fff" stroke-width="2" fill="none" stroke-linejoin="round" opacity=".9"/>`).join("")}
+      <path d="M82 206 Q80 196 86 198 M120 206 Q124 196 118 198 M96 204 Q95 196 99 199" stroke="#6fb874" stroke-width="3" stroke-linecap="round" fill="none"/>
+      <path d="M78 204 L124 204 L119 222 Q118 224 115 224 L87 224 Q84 224 83 222 Z" fill="#e8c08a" stroke="#c4955a" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M80 211 H122 M82 217 H120 M92 205 V223 M101 205 V224 M110 205 V223" stroke="#cf9f62" stroke-width="1.5"/>
+      <path d="M81 204 Q101 168 121 204" stroke="#c4955a" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+      <path d="M101 181 q-9 -8 -4 -10 q6 0 4 10 q-2 -10 4 -10 q5 2 -4 10" fill="#ff9db5" stroke="#e57a98" stroke-width="1.4" stroke-linejoin="round"/>
+      <ellipse cx="86" cy="216" rx="4.4" ry="5.6" fill="#c9b2ff" stroke="rgba(74,47,58,.3)" stroke-width="2" transform="rotate(-18 86 216)"/>`, ""];
+  },
+  halloween() {
+    return [`<g class="fd-pipistrello"><path d="M101 128 C95 122 86 122 80 128 C84 128 86 131 88 134 C90 132 93 132 95 135 C97 133 99 133 101 135 C103 133 105 133 107 135 C109 132 112 132 114 134 C116 131 118 128 122 128 C116 122 107 122 101 128 Z" fill="#6a5a8e" stroke="#4a3d6b" stroke-width="2.4" stroke-linejoin="round"/><ellipse cx="101" cy="132" rx="5.5" ry="6.5" fill="#6a5a8e" stroke="#4a3d6b" stroke-width="2.4"/><path d="M98 126 l-1 -5 l4 3 l4 -3 l-1 5" fill="#6a5a8e" stroke="#4a3d6b" stroke-width="2" stroke-linejoin="round"/><circle cx="99.2" cy="132" r="1.2" fill="#ffe28a"/><circle cx="102.8" cy="132" r="1.2" fill="#ffe28a"/></g>
+      <ellipse cx="116" cy="215" rx="8" ry="8" fill="#ffb066" stroke="#d9772a" stroke-width="2.4"/><path d="M116 207 V203" stroke="#6fb874" stroke-width="3" stroke-linecap="round"/><path d="M111 214 q2 -2 4 0 M118 214 q2 -2 4 0" stroke="#4a2f3a" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <ellipse cx="89" cy="206" rx="10.5" ry="15" fill="#ff9d4f" stroke="#d9772a" stroke-width="2.6"/>
+      <ellipse cx="101" cy="206" rx="12" ry="16.5" fill="#ffa95f" stroke="#d9772a" stroke-width="2.6"/>
+      <path d="M101 190 Q100 183 106 180 Q105 187 108 190" fill="#8fd18a" stroke="#5aa564" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M91 202 L96 196 L99 203 Z M103 203 L106 196 L111 202 Z" fill="#ffe28a" stroke="#d9772a" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M92 211 Q101 220 110 211 Q101 215 92 211 Z" fill="#ffe28a" stroke="#d9772a" stroke-width="1.6" stroke-linejoin="round"/>`,
+      `<circle cx="101" cy="207" r="17" fill="url(#casaAlone)"/>`];
+  },
+  agosto() {
+    return [`<path d="M101 224 V134" stroke="#c9a27a" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M76 142 C78 112 124 112 126 142 Q119 136 113 142 Q107 136 101 142 Q95 136 89 142 Q83 136 76 142 Z" fill="#ff9a85" stroke="#e07a65" stroke-width="2.8" stroke-linejoin="round"/>
+      <path d="M101 117 L89 141 Q95 135 101 141 Z M101 117 L113 141 Q107 135 101 141 Z" fill="#fff" opacity=".92"/>
+      <circle cx="101" cy="115" r="3" fill="#ffd76a" stroke="#e8b640" stroke-width="1.6"/>
+      <circle cx="110" cy="209" r="11.5" fill="none" stroke="#ff8fb1" stroke-width="7"/><circle cx="110" cy="209" r="11.5" fill="none" stroke="#fff" stroke-width="7" stroke-dasharray="9 9"/><circle cx="110" cy="209" r="15" fill="none" stroke="rgba(74,47,58,.22)" stroke-width="1.4"/><circle cx="110" cy="209" r="8" fill="none" stroke="rgba(74,47,58,.22)" stroke-width="1.4"/>
+      <path d="M82 222 Q90 216 96 222" stroke="#f2cf8a" stroke-width="5" stroke-linecap="round" fill="none"/>`, ""];
+  },
+  compleanno() {
+    return [`<path d="M88 146 Q92 176 82 206 M114 138 Q108 172 120 206" stroke="#c9a2b0" stroke-width="1.6" fill="none"/>
+      <ellipse class="fd-fluttua" cx="88" cy="134" rx="10" ry="12.5" fill="#ff8fb1" stroke="#e0637e" stroke-width="2.4"/><path class="fd-fluttua" d="M84 128 q2 -4 6 -4" stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".7"/>
+      <ellipse class="fd-fluttua f2" cx="114" cy="126" rx="10" ry="12.5" fill="#9fd4ef" stroke="#6fb0d6" stroke-width="2.4"/><path class="fd-fluttua f2" d="M110 120 q2 -4 6 -4" stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".7"/>
+      <rect x="78" y="207" width="46" height="5" rx="2.5" fill="#e0bb8b" stroke="#c4955a" stroke-width="2"/><path d="M84 212 V224 M118 212 V224" stroke="#c4955a" stroke-width="3.4" stroke-linecap="round"/>
+      <rect x="84" y="191" width="34" height="16" rx="4" fill="#ffd1dc" stroke="#f2a9bc" stroke-width="2.2"/>
+      <path d="M84 196 q4.2 5 8.5 0 q4.2 5 8.5 0 q4.2 5 8.5 0 q4.2 5 8.5 0" fill="#fff" stroke="#f2a9bc" stroke-width="1.8"/>
+      <rect x="92" y="177" width="18" height="14" rx="4" fill="#fff" stroke="#f2a9bc" stroke-width="2.2"/><path d="M92 182 q4.5 5 9 0 q4.5 5 9 0" fill="#ffd1dc" stroke="#f2a9bc" stroke-width="1.6"/>
+      <rect x="99" y="164" width="4" height="13" rx="1.6" fill="#9fd4ef" stroke="#6fb0d6" stroke-width="1.4"/>
+      <ellipse class="fd-fiamma" cx="101" cy="160" rx="3.2" ry="5.2" fill="#ffd76a" stroke="#f0a83a" stroke-width="1.4"/>`,
+      `<circle cx="101" cy="160" r="12" fill="url(#casaAlone)"/>`];
+  }
+};
+// Decorazione della casetta per la festa di oggi: [disegno, luci della sera] oppure null
+const festaCasa = () => { const f = festaOggi(); return f ? DECORI[festaBase(f)]() : null; };
+// Ovetto nascosto in una casetta (Pasqua): piccolo, sul pavimento
+const uovoCasaSvg = () => `<g class="uovo-casa" data-act="uovo" data-v="casa" role="button" tabindex="0" aria-label="Un ovetto nascosto! Toccalo"><ellipse cx="288" cy="268" rx="9" ry="11.5" fill="#ffe28a" stroke="rgba(74,47,58,.35)" stroke-width="2"/><path d="M279.5 268 l4.2 -3.6 l4.2 3.6 l4.2 -3.6 l4.2 3.6" stroke="#ff9db5" stroke-width="2.6" fill="none" stroke-linejoin="round"/></g>`;
+
+/* ---------- Intestazione: una ghirlandina che cambia con la festa ---------- */
+const GHIRLANDE = {
+  natale: [["lampadina", "#ef5a6f"], ["lampadina", "#ffd76a"], ["lampadina", "#6fc28b"]],
+  sanvalentino: [["cuore", "#ff6f8f"], ["cuore", "#ffb3c6"]],
+  pasqua: [["uovo", "#ff9db5"], ["uovo", "#9fd4ef"], ["uovo", "#ffe28a"], ["uovo", "#b7e39a"]],
+  halloween: [["zucca", "#ffa24d"], ["pipistrello", "#6a5a8e"]],
+  agosto: [["bandierina", "#ff9a85"], ["bandierina", "#ffd76a"], ["bandierina", "#7fd0d8"]],
+  compleanno: [["bandierina", "#ff8fb1"], ["bandierina", "#ffd76a"], ["bandierina", "#9fd4ef"], ["bandierina", "#b7e39a"]]
+};
+function ghirlandaSvg(f) {
+  const el = GHIRLANDE[festaBase(f)]; if (!el) return "";
+  const W = 54, tot = el.length * W;
+  const pezzo = ([t, c], i) => {
+    const x = i * W + W / 2, y = 11;
+    if (t === "lampadina") return `<rect x="${x - 2.5}" y="${y}" width="5" height="4" rx="1" fill="#b99a8a"/><ellipse class="fd-luce" cx="${x}" cy="${y + 10}" rx="4.4" ry="6" fill="${c}" stroke="rgba(74,47,58,.3)" stroke-width="1.2"/>`;
+    if (t === "cuore") return `<path d="${cuoreD(x, y + 8, 6.5)}" fill="${c}" stroke="rgba(74,47,58,.28)" stroke-width="1.2" stroke-linejoin="round"/>`;
+    if (t === "uovo") return `<ellipse cx="${x}" cy="${y + 10}" rx="5" ry="6.6" fill="${c}" stroke="rgba(74,47,58,.3)" stroke-width="1.2"/><path d="M${x - 4.6} ${y + 10} l2.3 -2 l2.3 2 l2.3 -2 l2.3 2" stroke="#fff" stroke-width="1.5" fill="none" opacity=".9"/>`;
+    if (t === "zucca") return `<path d="M${x} ${y} v3" stroke="#6fb874" stroke-width="2"/><ellipse cx="${x}" cy="${y + 10}" rx="7" ry="6.2" fill="${c}" stroke="#d9772a" stroke-width="1.4"/><path d="M${x - 3} ${y + 9} l1.6 -2 l1.4 2 z M${x + 1.5} ${y + 9} l1.6 -2 l1.4 2 z" fill="#4a2f3a"/><path d="M${x - 3} ${y + 12} q3 2.4 6 0" stroke="#4a2f3a" stroke-width="1.2" fill="none"/>`;
+    if (t === "pipistrello") return `<path d="M${x} ${y + 6} C${x - 4} ${y + 1} ${x - 10} ${y + 2} ${x - 13} ${y + 6} C${x - 10} ${y + 6} ${x - 9} ${y + 8} ${x - 8} ${y + 10} C${x - 6} ${y + 8} ${x - 4} ${y + 8} ${x - 2.5} ${y + 10} C${x - 1} ${y + 8} ${x + 1} ${y + 8} ${x + 2.5} ${y + 10} C${x + 4} ${y + 8} ${x + 6} ${y + 8} ${x + 8} ${y + 10} C${x + 9} ${y + 8} ${x + 10} ${y + 6} ${x + 13} ${y + 6} C${x + 10} ${y + 2} ${x + 4} ${y + 1} ${x} ${y + 6} Z" fill="${c}" stroke="#4a3d6b" stroke-width="1.2" stroke-linejoin="round"/>`;
+    return `<path d="M${x - 7} ${y - 1} L${x + 7} ${y - 1} L${x} ${y + 14} Z" fill="${c}" stroke="rgba(74,47,58,.28)" stroke-width="1.2" stroke-linejoin="round"/>`; // bandierina
+  };
+  const corda = Array.from({ length: el.length }, (_, i) => `<path d="M${i * W} 3 Q${i * W + W / 2} 19 ${(i + 1) * W} 3" stroke="#b99a8a" stroke-width="1.6" fill="none"/>`).join("");
+  return `<svg width="100%" height="28" aria-hidden="true" focusable="false"><defs><pattern id="fgPat" width="${tot}" height="28" patternUnits="userSpaceOnUse">${corda}${el.map(pezzo).join("")}</pattern></defs><rect width="100%" height="28" fill="url(#fgPat)"/></svg>`;
+}
+let festaTestaChiave = "";
+function festaTesta() {
+  const top = document.querySelector("header.top"); if (!top) return;
+  const f = festaOggi(), k = f ? f + "|" + (GHIRLANDE[festaBase(f)] ? 1 : 0) : "";
+  if (k === festaTestaChiave) return;
+  festaTestaChiave = k;
+  let d = top.querySelector(".festa-deco");
+  top.classList.toggle("con-festa", !!(f && GHIRLANDE[festaBase(f)]));
+  if (!f || !GHIRLANDE[festaBase(f)]) { d?.remove(); return; }
+  if (!d) { d = document.createElement("div"); d.className = "festa-deco"; d.setAttribute("aria-hidden", "true"); top.prepend(d); }
+  d.innerHTML = ghirlandaSvg(f);
+}
+
+/* ---------- Sorprese ---------- */
+// Pioggia di emoji della festa (ferma se il telefono chiede meno animazioni)
+function pioggiaFesta(f, n = 16) {
+  if (menoMoto()) return;
+  const em = FESTE[f].pioggia;
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement("span");
+    s.className = "festa-cade"; s.textContent = em[i % em.length];
+    s.style.left = Math.round(Math.random() * 92 + 2) + "vw"; s.style.animationDelay = (Math.random() * .7).toFixed(2) + "s"; s.style.fontSize = Math.round(18 + Math.random() * 14) + "px";
+    document.body.appendChild(s); setTimeout(() => s.remove(), 2600);
+  }
+}
+// Fuochini: piccole esplosioni di coriandoli in punti diversi dello schermo
+function fuochini(n = 4) {
+  if (menoMoto()) return;
+  for (let i = 0; i < n; i++) setTimeout(() => confetti(innerWidth * (.2 + Math.random() * .6), innerHeight * (.18 + Math.random() * .3), 26), i * 380);
+}
+// Nevicata (o altro) per un attimo, anche se le stagioni sono spente
+let burstFino = 0, burstTipo = null;
+function effettoBreve(tipo, ms = 5500) {
+  if (tipo === "coriandoli") { confetti(innerWidth / 2, innerHeight * .3, 40); fuochini(2); return; }
+  if (menoMoto()) { toast("✨ Una sorpresa!"); return; }
+  burstTipo = tipo; burstFino = Date.now() + ms;
+  stagioniAggiorna();
+  setTimeout(stagioniAggiorna, ms + 60);
+}
+const burstAttivo = () => (Date.now() < burstFino ? burstTipo : null);
+// Il ricordo si sblocca una volta sola e resta per sempre (sincronizzato nell'account)
+async function sbloccaRicordo(id) {
+  const r = RICORDI.find((x) => x.id === id); if (!r || CUSTOM.ricordi.includes(id)) return false;
+  await saveCustom({ ricordi: [...CUSTOM.ricordi, id] });
+  setTimeout(() => toast(`🎁 Un ricordo per ${MN()}: ${r.nome.toLowerCase()}! Lo trovi nel pancino`), 400);
+  return true;
+}
+// Cinque tocchi veloci sulla mascotte in un giorno di festa: festa speciale e il cappellino diventa un ricordo
+let toccoFesta = { n: 0, t: 0 };
+function festaTocco() {
+  const f = festaOggi(); if (!f) return;
+  const ora = Date.now();
+  toccoFesta = { n: ora - toccoFesta.t < 1600 ? toccoFesta.n + 1 : 1, t: ora };
+  if (toccoFesta.n < 5) return;
+  toccoFesta = { n: 0, t: 0 };
+  document.querySelectorAll(".mascotte").forEach((m) => { m.classList.add("festa-giro"); setTimeout(() => m.classList.remove("festa-giro"), 1500); });
+  cheer(1800); pioggiaFesta(f); confetti(innerWidth / 2, innerHeight * .3, 30); suona("notifica");
+  if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+  sbloccaRicordo(FESTE[f].acc);
+}
+// Parole magiche scritte in una cosa da fare: un piccolo effetto nei giorni giusti
+const PAROLE_FESTA = { natale: [/auguri/i, "neve"], capodanno: [/auguri|buon anno/i, "neve"], sanvalentino: [/amore|ti amo|cuore/i, "cuori"], pasqua: [/pasqua|ovetto|uovo/i, "petali"],
+  halloween: [/dolcetto|scherzetto|zucca/i, "foglie"], agosto: [/mare|ferragosto|gelato/i, "sole"], compleanno: [/compleanno|auguri/i, "coriandoli"] };
+function festaParola(titolo) {
+  const f = festaOggi(), p = f && PAROLE_FESTA[f];
+  if (p && typeof titolo === "string" && p[0].test(titolo)) setTimeout(() => { effettoBreve(p[1]); cheer(1500); }, 500);
+}
+// Caccia agli ovetti di Pasqua: cinque nascosti in giro, trovarli tutti regala la corona di ovetti
+const UOVA = ["oggi", "agenda", "bacheca", "casa", "menu"];
+const uovaChiave = () => "mochi.feste.uova." + (store.user?.id || "local") + "." + new Date().getFullYear();
+const uovaTrovate = () => { const a = LS.get(uovaChiave(), []); return Array.isArray(a) ? a.filter((x) => UOVA.includes(x)) : []; };
+const uovoVisibile = (dove) => festaOggi() === "pasqua" && !uovaTrovate().includes(dove);
+const uovoBtn = (dove) => `<button class="uovo-nasc u-${dove}" data-act="uovo" data-v="${dove}" aria-label="Un ovetto nascosto! Toccalo"><svg viewBox="0 0 24 30" aria-hidden="true"><ellipse cx="12" cy="17" rx="9.5" ry="12" fill="${{ oggi: "#ff9db5", agenda: "#9fd4ef", bacheca: "#ffe28a", menu: "#c9b2ff" }[dove] || "#b7e39a"}" stroke="rgba(74,47,58,.35)" stroke-width="2"/><path d="M3.5 17 l4.2 -3.6 l4.2 3.6 l4.2 -3.6 l4.2 3.6" stroke="#fff" stroke-width="2.6" fill="none" stroke-linejoin="round"/></svg></button>`;
+// Dopo ogni disegno della pagina: mette l'ovetto nel suo angolo (tranne la casetta, che lo ha dentro la scena)
+function festaDopoRender() {
+  festaTesta();
+  const v = $("#view .view"); if (!v) return;
+  const dove = { oggi: "oggi", agenda: "agenda", appunti: "bacheca", menu: "menu" }[state.tab];
+  if (!dove || !uovoVisibile(dove)) return;
+  const host = dove === "bacheca" ? ($(".notes", v) || v) : dove === "agenda" ? ($(".col-main", v) || v) : v; // Oggi e Menu: in fondo alla pagina
+  if (getComputedStyle(host).position === "static") host.style.position = "relative";
+  host.insertAdjacentHTML("beforeend", uovoBtn(dove));
+}
+async function festaUovo(dove, el) {
+  if (!UOVA.includes(dove) || !uovoVisibile(dove)) return;
+  const r = el.getBoundingClientRect();
+  const nuove = [...uovaTrovate(), dove]; LS.set(uovaChiave(), nuove);
+  confetti(r.left + r.width / 2, r.top + r.height / 2, 14); heartAt(el); cheer(1200); if (navigator.vibrate) navigator.vibrate(15);
+  render();
+  if (nuove.length < UOVA.length) { toast(nuove.length === 1 ? "🥚 Hai trovato un ovetto! Ce ne sono 5 nascosti in giro per l'app" : `🥚 Ovetto ${nuove.length} su ${UOVA.length}!`); return; }
+  const nuovo = !CUSTOM.ricordi.includes("r-ovetti");
+  setTimeout(() => whenSheetFree(() => {
+    openSheet(`<div class="recap"><div class="mbox">${mascot("happy")}</div><h2 class="fred">Li hai trovati tutti! 🥚</h2>
+      <div class="say">${nuovo ? `Cinque ovetti su cinque. ${esc(MN())} ti regala la corona di ovetti: resta sua per sempre e la trovi nel pancino.` : "Cinque ovetti su cinque, anche quest'anno: che occhio!"}</div></div>
+      <div class="actions"><button class="btn primary" data-act="close">Che bello!</button></div>`);
+    confetti(innerWidth / 2, innerHeight * .35, 50); fuochini(3); suona("notifica");
+  }), 500);
+  if (nuovo) await sbloccaRicordo("r-ovetti");
+}
+// All'apertura: auguri della mascotte, una sola volta al giorno per ogni festa
+function festeApri() {
+  const f = festaOggi(); if (!f) return;
+  const k = `mochi.feste.visto.${store.user?.id || "local"}.${todayStr()}.${f}`;
+  if (LS.get(k, 0)) return;
+  LS.set(k, 1);
+  setTimeout(() => {
+    if (f === "compleanno" || f === "capodanno") whenSheetFree(() => {
+      openSheet(`<div class="recap"><div class="mbox">${mascot("happy")}</div><h2 class="fred">${f === "compleanno" ? "Buon compleanno!" : "Buon anno!"} ${FESTE[f].e}</h2>
+        <div class="say">${esc(festaFrase(f))}</div></div><div class="actions"><button class="btn primary" data-act="close">Grazie ${esc(MN())} 💗</button></div>`);
+      confetti(innerWidth / 2, innerHeight * .3, 50); fuochini(f === "capodanno" ? 5 : 3); cheer(2400); suona("notifica");
+    });
+    else toast(festaFrase(f));
+  }, 2200);
+}
 
 /* =========================================================
    SUONI (dentro l'app)
@@ -3842,7 +4203,7 @@ document.addEventListener("click", async (e) => {
     case "casa-vai": if (casaDi(v) && casetteAperte().includes(v)) await saveCustom({ casa: { ...CUSTOM.casa, scelta: v } }); openCasa(); break;
     case "casa-scegli": if (casaDi(v) && casetteAperte().includes(v)) { await saveCustom({ casa: { ...CUSTOM.casa, scelta: v } }); cheer(1200); } break;
     case "casa-mobile": if (mobiliAvuti().includes(v)) { const sp = CUSTOM.casa.spenti; await saveCustom({ casa: { ...CUSTOM.casa, spenti: sp.includes(v) ? sp.filter((x) => x !== v) : [...sp, v] } }); } break;
-    case "casa-poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); break; }
+    case "casa-poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(); break; }
     // concentrazione
     case "focus-durata": if (FOCUS_DURATE.includes(+v)) { focusPrep.min = +v; LS.set("mochi.focus.durata", +v); render(); } break;
     case "focus-pausa-dopo": focusPrep.pausaDopo = !focusPrep.pausaDopo; LS.set("mochi.focus.pausaDopo", focusPrep.pausaDopo); render(); break;
@@ -3872,7 +4233,9 @@ document.addEventListener("click", async (e) => {
     }
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
-    case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); break; }
+    case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(); break; }
+    case "uovo": festaUovo(v, el); break;
+    case "compleanno-togli": await saveCustom({ compleanno: "" }); riapriImpostazioni(); toast("Compleanno tolto"); break;
     case "open-custom": openMascotPicker(); break;
     case "open-pancino": openPancino(); break;
     case "open-consiglio": openConsiglio(); if (ONLINE_MODE) store.mieiConsigli().then((r) => { mieiMsg = r.filter((m) => m && typeof m.testo === "string"); if ($("#cTesto")) openConsiglio(); }).catch(() => {}); break;
@@ -4066,7 +4429,7 @@ async function boot() {
   if (!ONLINE_MODE) { showApp(); await loadAndRender(); maybeShowInstallHint();
     // ospite con un link d'invito: l'invito resta da parte (lo propongo dopo l'accesso)
     eseguiAzione();
-    if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); maybeBiscotto(); return; }
+    if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); maybeBiscotto(); festeApri(); return; }
 
   // Modalità online: mostra subito la cache, poi verifica la sessione
   let logged = false;
@@ -4087,6 +4450,7 @@ async function startOnline() {
   eseguiAzione();
   maybeShowNovita();
   maybeBiscotto();
+  festeApri();
   proponiPassaggio();
   resyncPush();
   checkAdmin();
@@ -4111,8 +4475,8 @@ function clearLocal() {
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
-  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; LS.set("mochi.custom", c); }
-  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA });
+  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; LS.set("mochi.custom", c); }
+  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "" });
 }
 function setLoginMode(m) {
   loginMode = m;
