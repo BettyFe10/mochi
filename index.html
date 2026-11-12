@@ -53,6 +53,20 @@
 .emojis button.on{border-color:var(--pink-d);background:var(--pink-l)}
 .codice{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:800;letter-spacing:2px;text-align:center;background:var(--pink-l);color:var(--acc-t);border-radius:16px;padding:14px;user-select:all}
 .setrow.col{flex-direction:column;align-items:stretch;gap:8px}
+/* impostazioni a gruppi (fisarmonica) */
+.sgrp{margin:0 0 var(--s3);border-radius:var(--r-l);background:var(--bg2);border:1px solid var(--line)}
+.sgrp-h{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:10px 14px;text-align:left;border-radius:inherit;color:var(--ink)}
+.sgrp-e{font-size:24px;line-height:1;flex:0 0 auto;width:30px;text-align:center}
+.sgrp-t{flex:1;min-width:0}
+.sgrp-t b{display:block;font-size:16px}
+.sgrp-t small{display:block;color:var(--ink2);font-size:13px;line-height:1.35;margin-top:2px;overflow-wrap:anywhere}
+.sgrp-ch{flex:0 0 auto;font-size:26px;line-height:1;color:var(--ink2);transform:rotate(90deg);transition:transform .2s ease}
+.sgrp.open .sgrp-ch{transform:rotate(-90deg)}
+.sgrp.open .sgrp-h{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.sgrp-b{padding:0 14px 6px;border-top:1px solid var(--line)}
+.sgrp-b[hidden]{display:none}
+.sgrp-h:focus-visible{outline:3px solid var(--pink);outline-offset:-3px}
+@media (prefers-reduced-motion: reduce){.sgrp-ch{transition:none}}
 .fonts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
 .fonts button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border-radius:14px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
 .fonts button .aa{font-size:24px;line-height:1.1}
@@ -139,6 +153,8 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
 .desk-only-i{display:none}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
 .mtile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:var(--s4);border-radius:var(--r-xl) var(--r-l) var(--r-xl) var(--r-l);background:var(--card);box-shadow:var(--shadow);border:2px solid transparent;color:var(--ink)}
+.msec{font-size:12.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);margin:22px 4px 8px;line-height:1.2}
+.msec:first-of-type{margin-top:6px}
 .mtile:active{transform:scale(.97)}
 .mtile .e{font-size:28px;line-height:1.1;margin-bottom:4px}
 .mtile b{font-size:15.5px}
@@ -340,6 +356,8 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
   .nav .side.on{background:var(--pink-l);color:var(--acc-t)}
   .nav .side.hidden{display:none}
   .nav .side-sep{height:1px;background:var(--line);margin:10px 8px}
+  .nav .side-head{padding:14px 14px 4px;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);opacity:.85}
+  .nav .side-head.hidden{display:none}
   .nav{top:0;right:auto;bottom:0;width:248px;padding:24px 16px;pointer-events:auto;background:var(--card);box-shadow:4px 0 24px rgba(var(--acc-rgb),.08)}
   /* con tutte le funzioni accese le voci non entrano in altezza: la barra scorre per conto suo */
   .nav{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
@@ -712,6 +730,11 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="quaderno"] .pc-bar i{border-radius:3px;background:var(--pink)}
 :root[data-stile="quaderno"] .week7 i{background:var(--pink);border-radius:4px 4px 2px 2px}
 :root[data-stile="quaderno"] .mtile{background:var(--card)}
+:root[data-stile="quaderno"] .msec{font-family:var(--fh);font-size:20px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink)}
+:root[data-stile="quaderno"][data-font] .msec{font-weight:700;font-size:15px}
+:root[data-stile="quaderno"] .sgrp{background:var(--card);border-radius:12px 10px 13px 9px}
+:root[data-stile="quaderno"] .sgrp-t b{font-family:var(--fh);font-size:20px;font-weight:400}
+:root[data-stile="quaderno"][data-font] .sgrp-t b{font-weight:700;font-size:16px}
 :root[data-stile="quaderno"] .mtile b{font-family:var(--fh);font-size:20px;font-weight:400}
 :root[data-stile="quaderno"][data-font] .mtile b{font-weight:700;font-size:16px}
 
@@ -912,6 +935,7 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="morbido"] .input:focus{ border-color:var(--pink-d) }
 :root[data-stile="morbido"] .areas button{ border-color:var(--line) }
 :root[data-stile="morbido"] .mtile{ border-radius:20px }
+:root[data-stile="morbido"] .sgrp{ border-radius:20px; border-color:transparent; box-shadow:var(--sh1,none) }
 :root[data-stile="morbido"] .umore-card{ border-radius:18px }
 :root[data-stile="morbido"] :is(.pancino,.sp-tot){ border-radius:20px }
 :root[data-stile="morbido"] .ore-mese{ border-radius:18px }
@@ -1072,6 +1096,9 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="cartone"] .mtile:nth-child(4n+3) .e{ background:var(--prato) }
 :root[data-stile="cartone"] .mtile:nth-child(4n) .e{ background:var(--pesca) }
 :root[data-stile="cartone"] .mtile:active{ transform:scale(.98) }
+:root[data-stile="cartone"] .msec{ color:var(--ink) }
+:root[data-stile="cartone"] .sgrp{ background:var(--card); border:2px solid var(--tratto-m); border-radius:var(--r-l) }
+:root[data-stile="cartone"] .sgrp-b{ border-top:2px solid var(--tratto-m) }
 
 /* --- Finestre: bordo d'inchiostro in alto, maniglia scura --- */
 :root[data-stile="cartone"] .sheet{ border:2px solid var(--tratto-m); border-bottom:0; box-shadow:none }
@@ -1321,6 +1348,9 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="sobrio"] .sd.fatto.oggi{border-color:var(--sob-fill)}
 /* titoli di sezione, etichette e contatori */
 :root[data-stile="sobrio"] .sec h2{font-size:19px}
+:root[data-stile="sobrio"] .msec{font-size:12px;letter-spacing:.06em}
+:root[data-stile="sobrio"] .sgrp{border-radius:var(--r-l);background:var(--card)}
+:root[data-stile="sobrio"] .sgrp-e{display:none}
 :root[data-stile="sobrio"] .sec .count{border-radius:5px;background:var(--pink-l);color:var(--acc-t);padding:3px 9px}
 :root[data-stile="sobrio"] .chip{border-radius:5px}
 :root[data-stile="sobrio"] .chip.st-chip{border-radius:5px}
@@ -1411,6 +1441,32 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 /* palette nuove in Quaderno: il giorno scelto ha il testo scuro (il rosa/azzurro chiaro non regge il bianco) */
 :root[data-stile="quaderno"]:is([data-palette="notte"],[data-palette="bosco"],[data-palette="grafite"]) .day.sel{color:var(--on-acc)}
 :root[data-stile="quaderno"]:is([data-palette="notte"],[data-palette="bosco"],[data-palette="grafite"]) .day.sel .dots i{background:var(--on-acc)}
+/* ---------- finestre: niente sbordo (iOS Safari: larghezza minima intrinseca di date/time) ---------- */
+.field{min-width:0}
+.row>.field{flex:1 1 0;min-width:0}
+.seg>*{min-width:0}
+@media (max-width:400px){.seg button{font-size:12.5px;padding-left:1px;padding-right:1px}}
+input.input[type=date],input.input[type=time],input.input[type=datetime-local]{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;-webkit-min-logical-width:0;text-align:left}
+input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-webkit-date-and-time-value,input.input[type=datetime-local]::-webkit-date-and-time-value{text-align:left;min-height:1.2em}
+.sheet{overflow-x:hidden}
+.sheet>*:not(.sheet-bar):not(.actions){max-width:100%}
+.sheet .row{min-width:0}
+.sheet .actions>*{min-width:0}
+/* Menu telefono compatto: tessere basse (emoji a sinistra, titolo e riga di descrizione a destra), intestazioni sottili, ultima tessera dispari su tutta la riga */
+@media (max-width:1023px){
+  #view .mgrid{gap:8px}
+  #view .mtile{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"e t" "e d";column-gap:10px;row-gap:1px;align-items:center;padding:8px 12px;min-height:58px}
+  #view .mtile .e{grid-area:e;margin:0;font-size:24px;width:auto;height:auto;border:0;background:none;display:block}
+  :root[data-stile="cartone"] #view .mtile .e{width:38px;height:38px;display:grid;place-items:center;border:2px solid var(--tratto-m);background:var(--pink-l);font-size:20px;margin:0}
+  :root[data-stile="cartone"] #view .mtile:nth-child(4n+2) .e{background:var(--sole)}
+  :root[data-stile="cartone"] #view .mtile:nth-child(4n+3) .e{background:var(--prato)}
+  :root[data-stile="cartone"] #view .mtile:nth-child(4n) .e{background:var(--pesca)}
+  #view .mtile b{grid-area:t;font-size:14.5px;line-height:1.2}
+  #view .mtile small{grid-area:d;font-size:12px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #view .mgrid>.mtile:last-child:nth-child(odd){grid-column:1/-1}
+  #view .msec{margin:14px 4px 6px}
+  #view .msec:first-of-type{margin-top:2px}
+}
 </style>
 </head>
 <body>
@@ -1492,6 +1548,7 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 <nav class="nav hidden" id="nav">
   <div class="bar">
     <div class="brand desk-only"><span id="brandName">Mochi</span><small>le mie cose</small></div>
+    <div class="side-head desk-only" role="presentation">Ogni giorno</div>
     <button class="tab on" data-tab="oggi"><span class="i"><span class="emo">🌸</span><svg class="ico q" aria-hidden="true"><use href="#i-oggi"/></svg></span>Oggi</button>
     <button class="tab" data-tab="todo"><span class="i"><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span>Da fare</button>
     <button class="plus" data-act="new" aria-label="Aggiungi" title="Nuova voce (N)"><span class="pl">+</span><span class="desk-only">Aggiungi</span></button>
@@ -1502,13 +1559,15 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
     <button class="side desk-only online-only" data-mod="ricorrenti" data-act="open-ricorrenti" data-tab="ricorrenti"><span class="i"><span class="emo">🔁</span><svg class="ico q" aria-hidden="true"><use href="#i-ricorrenti"/></svg></span>Ricorrenti</button>
     <button class="side desk-only" data-mod="turni" data-tab="turni"><span class="i"><span class="emo">💼</span><svg class="ico q" aria-hidden="true"><use href="#i-turni"/></svg></span>Turni di lavoro</button>
     <button class="side desk-only" data-mod="spese" data-tab="spese"><span class="i"><span class="emo">👛</span><svg class="ico q" aria-hidden="true"><use href="#i-spese"/></svg></span>Spese</button>
-    <button class="side desk-only" data-mod="casa" data-tab="casa"><span class="i"><span class="emo">🏡</span><svg class="ico q" aria-hidden="true"><use href="#i-casa"/></svg></span>La casetta</button>
+    <div class="side-head desk-only" role="presentation">Benessere e gioco</div>
     <button class="side desk-only" data-mod="focus" data-tab="focus"><span class="i"><span class="emo">🪴</span><svg class="ico q" aria-hidden="true"><use href="#i-focus"/></svg></span>Concentrazione</button>
-    <div class="side-sep desk-only"></div>
-    <button class="side desk-only" data-act="open-recap"><span class="i"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recap"/></svg></span>Recap del mese</button>
     <button class="side desk-only" data-mod="umore" data-act="giardino-apri"><span class="i"><span class="emo">🌷</span><svg class="ico q" aria-hidden="true"><use href="#i-fiore"/></svg></span>Il giardino del mese</button>
     <button class="side desk-only" data-mod="biscotto" data-act="open-biscotto"><span class="i"><span class="emo">🥠</span><svg class="ico q" aria-hidden="true"><use href="#i-biscotto"/></svg></span>Biscotto del giorno</button>
     <button class="side desk-only" data-mod="pancino" data-act="open-pancino"><span class="i"><span class="emo">🍣</span><svg class="ico q" aria-hidden="true"><use href="#i-pancino"/></svg></span>Il pancino</button>
+    <button class="side desk-only" data-mod="casa" data-tab="casa"><span class="i"><span class="emo">🏡</span><svg class="ico q" aria-hidden="true"><use href="#i-casa"/></svg></span>La casetta</button>
+    <div class="side-head desk-only" role="presentation">Riepiloghi</div>
+    <button class="side desk-only" data-act="open-recap"><span class="i"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recap"/></svg></span>Recap del mese</button>
+    <div class="side-head desk-only" role="presentation">Aiuto</div>
     <button class="side desk-only online-only" data-act="open-consiglio"><span class="i"><span class="emo">💌</span><svg class="ico q" aria-hidden="true"><use href="#i-consiglia"/></svg></span>Consiglia</button>
     <button class="side side-admin desk-only hidden" data-act="open-inbox"><span class="i"><span class="emo">📬</span><svg class="ico q" aria-hidden="true"><use href="#i-messaggi"/></svg></span>Messaggi ricevuti</button>
     <button class="side desk-only" data-act="open-settings"><span class="i"><span class="emo">⚙️</span><svg class="ico q" aria-hidden="true"><use href="#i-impostazioni"/></svg></span>Impostazioni</button>

@@ -943,24 +943,29 @@ function bachecaStile(id) {
 // Menu completo (su telefono: dal pulsante ☰ in alto; su computer è già tutto nella barra a sinistra)
 function viewMenu() {
   const voce = (attr, e, t, d) => `<button class="mtile" ${attr}><span class="e">${e}</span><b>${t}</b><small>${d}</small></button>`;
+  // Sezioni sempre aperte, ordinate per scopo; una sezione senza voci (moduli spenti) non compare
+  const sez = (titolo, voci) => { const h = voci.join("").trim(); return h ? `<h3 class="msec">${titolo}</h3><div class="mgrid">${h}</div>` : ""; };
   return `<div class="sec" style="margin-top:0"><h2>Menu</h2></div>
-    <div class="mgrid">
-      ${voce('data-tab="appunti"', "📝", "Appunti", "Idee, liste, cose da tenere")}
-      ${mod("spese") ? voce('data-tab="spese"', "👛", "Spese", (() => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; })()) : ""}
-      ${mod("casa") ? voce('data-tab="casa"', "🏡", "La casetta", (() => { const n = mobiliAvuti().length; return n ? `${n} ${n === 1 ? "mobile" : "mobili"} in regalo` : "La casa di " + esc(MN()); })()) : ""}
-      ${mod("focus") ? voce('data-tab="focus"', "🪴", "Concentrazione", (() => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; })()) : ""}
-      ${mod("liste") ? voce('data-act="open-liste"', "👭", "Liste condivise", state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") : ""}
-      ${mod("ricorrenti") ? voce('data-act="open-ricorrenti"', "🔁", "Ricorrenti", "Bevi acqua, fai una pausa...") : ""}
-      ${mod("turni") ? voce('data-tab="turni"', "💼", "Turni di lavoro", turniAttivi() ? (() => { const o = oreMese(new Date()); return `${fmtOre(o.min)} questo mese`; })() : "Il calendario del lavoro") : ""}
-      ${mod("biscotto") ? voce('data-act="open-biscotto"', "🥠", "Biscotto del giorno", "La frase di oggi") : ""}
-      ${mod("umore") ? voce('data-act="giardino-apri"', "🌷", "Il giardino del mese", "Le tue giornate in fiori") : ""}
-      ${voce('data-act="open-recap"', "🎀", "Recap del mese", "Com'è andato il mese")}
-      ${mod("pancino") ? voce('data-act="open-pancino"', "🍣", `Il pancino di ${esc(MN())}`, "Bocconcini e regali") : ""}
-      ${ONLINE_MODE ? voce('data-act="open-consiglio"', "💌", "Consiglia", "Scrivi alla sviluppatrice") : ""}
-      ${isAdmin ? voce('data-act="open-inbox"', "📬", "Messaggi ricevuti", adminUnread ? `${adminUnread} da leggere` : "Tutti letti") : ""}
-      ${voce('data-act="open-settings"', "⚙️", "Impostazioni", "Colori, cosa usare, suoni")}
-    </div>`;
+    ${sez("Ogni giorno", [
+voce('data-tab="appunti"', "📝", "Appunti", "Idee, liste, cose da tenere"),
+mod("spese") ? voce('data-tab="spese"', "👛", "Spese", (() => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; })()) : "",
+mod("turni") ? voce('data-tab="turni"', "💼", "Turni di lavoro", turniAttivi() ? (() => { const o = oreMese(new Date()); return `${fmtOre(o.min)} questo mese`; })() : "Il calendario del lavoro") : "",
+mod("liste") ? voce('data-act="open-liste"', "👭", "Liste condivise", state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") : "",
+mod("ricorrenti") ? voce('data-act="open-ricorrenti"', "🔁", "Ricorrenti", "Bevi acqua, fai una pausa...") : ""])}
+    ${sez("Benessere e gioco", [
+mod("focus") ? voce('data-tab="focus"', "🪴", "Concentrazione", (() => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; })()) : "",
+mod("umore") ? voce('data-act="giardino-apri"', "🌷", "Il giardino del mese", "Le tue giornate in fiori") : "",
+mod("biscotto") ? voce('data-act="open-biscotto"', "🥠", "Biscotto del giorno", "La frase di oggi") : "",
+mod("pancino") ? voce('data-act="open-pancino"', "🍣", `Il pancino di ${esc(MN())}`, "Bocconcini e regali") : "",
+mod("casa") ? voce('data-tab="casa"', "🏡", "La casetta", (() => { const n = mobiliAvuti().length; return n ? `${n} ${n === 1 ? "mobile" : "mobili"} in regalo` : "La casa di " + esc(MN()); })()) : ""])}
+    ${sez("Riepiloghi", [
+voce('data-act="open-recap"', "🎀", "Recap del mese", "Com'è andato il mese")])}
+    ${sez("Aiuto", [
+ONLINE_MODE ? voce('data-act="open-consiglio"', "💌", "Consiglia", "Scrivi alla sviluppatrice") : "",
+isAdmin ? voce('data-act="open-inbox"', "📬", "Messaggi ricevuti", adminUnread ? `${adminUnread} da leggere` : "Tutti letti") : "",
+voce('data-act="open-settings"', "⚙️", "Impostazioni", "Colori, cosa usare, suoni")])}`;
 }
+
 // Ordine dei post-it: prima i fissati, poi l'ordine scelto trascinando; quelli nuovi (senza posizione) in cima
 function ordineNote(a, b) {
   if (b.pinned !== a.pinned) return b.pinned - a.pinned;
@@ -1069,6 +1074,8 @@ function render() {
   festaDopoRender();
   // voci della barra laterale: solo con account (online-only) e/o solo se il modulo è acceso (data-mod)
   document.querySelectorAll(".nav .online-only, .nav [data-mod]").forEach((b) => b.classList.toggle("hidden", (b.classList.contains("online-only") && !ONLINE_MODE) || (!!b.dataset.mod && !mod(b.dataset.mod))));
+  // Intestazioni della barra laterale: spariscono se tutte le voci della sezione sono nascoste
+  document.querySelectorAll(".nav .side-head").forEach((h) => { let n = h.nextElementSibling, vis = false; while (n && !n.classList.contains("side-head")) { if ((n.classList.contains("side") || n.classList.contains("tab")) && !n.classList.contains("hidden")) vis = true; n = n.nextElementSibling; } h.classList.toggle("hidden", !vis); });
 }
 
 /* =========================================================
@@ -1391,28 +1398,54 @@ function maybeAutoRecap() {
 /* =========================================================
    IMPOSTAZIONI E NOTIFICHE
    ========================================================= */
-function openSettings() {
+/* Impostazioni a gruppi (fisarmonica): un solo gruppo aperto, ricordato solo nella sessione (niente nei dati) */
+let sgAperto = null;
+function sgApri(id, e, t, r) {
+  const o = sgAperto === id;
+  return `<section class="sgrp${o ? " open" : ""}" data-g="${id}"><button type="button" class="sgrp-h" id="sgh-${id}" data-act="sg-toggle" data-v="${id}" aria-expanded="${o}" aria-controls="sgp-${id}"><span class="sgrp-e" aria-hidden="true">${e}</span><span class="sgrp-t"><b>${t}</b><small>${r}</small></span><span class="sgrp-ch" aria-hidden="true">›</span></button><div class="sgrp-b" id="sgp-${id}" role="region" aria-labelledby="sgh-${id}"${o ? "" : " hidden"}>`;
+}
+const SG_FINE = `</div></section>`;
+function riassuntoProfilo() { const p = PRONOMI.find((x) => x[0] === CUSTOM.pronomi); return esc(CUSTOM.nome_app) + ", " + esc(MN()) + (CUSTOM.pronomi && p ? ", " + esc(p[1].toLowerCase()) : ""); }
+function riassuntoUsare() { const l = MODULI.filter((m) => !m[5] || ONLINE_MODE); const n = l.filter((m) => mod(m[0])).length; return n === l.length ? `Tutto acceso (${n})` : `${n} su ${l.length} accesi`; }
+function riassuntoAspetto() { const st = STILI.find((x) => x[0] === CUSTOM.stile), co = PALETTE.find((x) => x[0] === CUSTOM.colore), fo = FONTI.find((x) => x[0] === CUSTOM.font); return `Stile ${esc(st ? st[1] : "")}, colori ${esc(co ? co[1] : "")}, carattere ${esc(fo ? fo[1].replace(/^Dello/, "dello") : "")}`; }
+function riassuntoDati() { return ONLINE_MODE ? "Recap, backup, privacy, account" : OSPITE ? "Recap, backup, privacy, esci" : "Recap e backup"; }
+function sgToggle(id) {
+  sgAperto = sgAperto === id ? null : id;
+  document.querySelectorAll("#sheet .sgrp").forEach((g) => { const o = g.dataset.g === sgAperto; g.classList.toggle("open", o); g.querySelector(".sgrp-h").setAttribute("aria-expanded", String(o)); g.querySelector(".sgrp-b").hidden = !o; });
+  if (sgAperto) document.getElementById("sgh-" + id)?.scrollIntoView({ block: "nearest" });
+}
+function openSettings(gruppo) {
+  if (gruppo) sgAperto = gruppo;
   const perm = "Notification" in window ? Notification.permission : "unsupported";
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   const theme = document.documentElement.dataset.theme || "auto";
+  const rName = ONLINE_MODE ? `<div class="setrow"><div><b>Il tuo nome</b><small>${esc(NOME || "Non impostato")} · ${esc(store.user?.email || "")}</small></div><button class="fbtn" data-act="set-name">Cambia</button></div>` : "";
+  const rDati = ONLINE_MODE ? `<div class="setrow"><div><b>Esci</b><small>Su questo dispositivo</small></div><button class="fbtn" data-act="logout">Esci</button></div>
+    <div class="setrow"><div><b>Privacy</b><small>Come vengono trattati i tuoi dati</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
+    <div class="setrow"><div><b style="color:var(--danger)">Elimina account</b><small>Cancella per sempre account e dati</small></div><button class="fbtn" style="color:var(--danger)" data-act="delete-account">Elimina</button></div>` : OSPITE ? `<div class="setrow"><div><b>Privacy</b><small>Come ospite le tue cose restano su questo dispositivo</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
+    <div class="setrow"><div><b>Esci</b><small>Dalla modalità ospite</small></div><button class="fbtn" data-act="ospite-esci">Esci</button></div>` : `<div class="setrow"><div><b>Modalità prova</b><small>I dati restano solo su questo dispositivo</small></div></div>`;
   openSheet(`
     <h2><span class="mbox">${mascot()}</span>Impostazioni</h2>
     ${OSPITE ? schedaOspite() : ""}${ONLINE_MODE ? rigaPassaggio() : ""}
     <div class="setrow" id="pushRow">${pushRowHtml(!ONLINE_MODE ? "offline" : !PUSH_READY ? "soon" : perm === "unsupported" ? (!standalone && /iPhone|iPad/.test(navigator.userAgent) ? "home" : "unsupported") : perm === "denied" ? "denied" : "checking")}</div>
+    ${sgApri("profilo", "👤", "Profilo", riassuntoProfilo())}
     <div class="setrow"><div><b>Nome e mascotte</b><small>${esc(CUSTOM.nome_app)} · ${esc(MN())}</small></div><button class="fbtn on" data-act="open-custom">Cambia</button></div>
     <div class="setrow col" id="setPron"><div><b>I tuoi pronomi</b><small>Facoltativo. Servono solo ad adattare i testi dell'app a te (ad esempio "orgogliosa" o "orgoglioso"). Restano privati: non li vede nessun altro e non cambiano nient'altro. Se non scegli, uso parole neutre. Li cambi o li togli quando vuoi${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}.</small></div>
       <div class="filters" style="flex-wrap:wrap" role="group" aria-label="I tuoi pronomi">${PRONOMI.map(([k, n]) => `<button class="fbtn ${CUSTOM.pronomi === k ? "on" : ""}" data-act="pick-pronomi" data-v="${k || "non"}" aria-pressed="${CUSTOM.pronomi === k}">${n}</button>`).join("")}</div></div>
-    <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
-      <div class="moduli">${MODULI.filter((m) => !m[5] || ONLINE_MODE).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>
-      ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
     ${mod("feste") ? `<div class="setrow col" id="setCompl"><div><b>Il tuo compleanno</b><small>Facoltativo: solo giorno e mese, niente anno. Quel giorno ${esc(MN())} ti fa gli auguri${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="compl">${(() => { const [mm, gg] = CUSTOM.compleanno ? CUSTOM.compleanno.split("-").map(Number) : [0, 0];
         return `<select class="input" id="cGiorno" aria-label="Giorno del compleanno"><option value="">Giorno</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${gg === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select>
         <select class="input" id="cMese" aria-label="Mese del compleanno"><option value="">Mese</option>${MESI.map((n, i) => `<option value="${i + 1}" ${mm === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("")}</select>`; })()}
         ${CUSTOM.compleanno ? `<button class="fbtn" data-act="compleanno-togli">Togli</button>` : ""}</div></div>` : ""}
+    ${rName}
+    ${SG_FINE}
+    ${sgApri("usare", "🧩", "Cosa vuoi usare", riassuntoUsare())}
+    <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
+      <div class="moduli">${MODULI.filter((m) => !m[5] || ONLINE_MODE).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>
+      ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
     ${mod("umore") ? `<div class="setrow"><div><b>I fiori del giardino</b><small>${riassuntoFiori()}</small></div><button class="fbtn on" data-act="fiori-apri">Scegli</button></div>` : ""}
-    <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
-      <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
+    ${SG_FINE}
+    ${sgApri("aspetto", "🎨", "Aspetto e suoni", riassuntoAspetto())}
     <div class="setrow"><div><b>Chiaro o scuro</b><small>Automatico segue il telefono</small></div>
       <select class="input" style="width:auto;padding:8px 12px" id="themeSel">
         <option value="auto" ${theme === "auto" ? "selected" : ""}>Auto</option><option value="light" ${theme === "light" ? "selected" : ""}>Chiaro</option><option value="dark" ${theme === "dark" ? "selected" : ""}>Scuro</option></select></div>
@@ -1422,15 +1455,14 @@ function openSettings() {
       <div class="palettes">${PALETTE.map(([id, nome, a, b, e]) => `<button class="${CUSTOM.colore === id ? "on" : ""}" data-act="pick-palette" data-v="${id}" aria-label="${nome}" title="${nome}"><span class="sw" style="background:linear-gradient(145deg,${a}55,${b}88)">${e}</span><small>${nome}</small></button>`).join("")}</div></div>
     <div class="setrow col"><div><b>Carattere</b><small>${esc(FONTI.find((x) => x[0] === CUSTOM.font)[1])}${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="fonts">${FONTI.map(([id, nome, fam]) => `<button class="${CUSTOM.font === id ? "on" : ""}" data-act="pick-font" data-v="${id}"><span class="aa" style="font-family:${fam}">Aa</span><small>${nome}</small></button>`).join("")}</div></div>
+    <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
+      <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
+    ${SG_FINE}
+    ${sgApri("dati", "🗂️", "I tuoi dati", riassuntoDati())}
     <div class="setrow"><div><b>Recap mensile</b><small>Il riassunto del mese con ${MN()}</small></div><button class="fbtn" data-act="open-recap">Apri</button></div>
     <div class="setrow"><div><b>Backup</b><small>Scarica tutte le tue cose in un file</small></div><button class="fbtn" data-act="export">Scarica</button></div>
-    ${ONLINE_MODE ? `<div class="setrow"><div><b>Il tuo nome</b><small>${esc(NOME || "Non impostato")} · ${esc(store.user?.email || "")}</small></div><button class="fbtn" data-act="set-name">Cambia</button></div>
-    <div class="setrow"><div><b>Esci</b><small>Su questo dispositivo</small></div><button class="fbtn" data-act="logout">Esci</button></div>
-    <div class="setrow"><div><b>Privacy</b><small>Come vengono trattati i tuoi dati</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
-    <div class="setrow"><div><b style="color:var(--danger)">Elimina account</b><small>Cancella per sempre account e dati</small></div><button class="fbtn" style="color:var(--danger)" data-act="delete-account">Elimina</button></div>` :
-    OSPITE ? `<div class="setrow"><div><b>Privacy</b><small>Come ospite le tue cose restano su questo dispositivo</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
-    <div class="setrow"><div><b>Esci</b><small>Dalla modalità ospite</small></div><button class="fbtn" data-act="ospite-esci">Esci</button></div>` :
-    `<div class="setrow"><div><b>Modalità prova</b><small>I dati restano solo su questo dispositivo</small></div></div>`}
+    ${rDati}
+    ${SG_FINE}
     <div class="actions"><button class="btn" data-act="close">Chiudi</button></div>`);
   $("#themeSel").addEventListener("change", (e) => setTheme(e.target.value));
   const salvaCompleanno = async () => {
@@ -4551,6 +4583,7 @@ document.addEventListener("click", async (e) => {
     case "cal-jump": { state.calSel = v; const d = parseYmd(v); state.calMonth = new Date(d.getFullYear(), d.getMonth(), 1); state.tab = "agenda"; render(); window.scrollTo({ top: 0 }); break; }
     case "open-recap": openRecap(); break;
     case "recap-move": { const m = state.recapMonth; const n = new Date(m.getFullYear(), m.getMonth() + +v, 1); if (n <= new Date()) openRecap(n); break; }
+    case "sg-toggle": sgToggle(v); break;
     case "open-settings": openSettings(); break;
     case "enable-push": enablePush(); break;
     case "disable-push": disablePush(); break;
