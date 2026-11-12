@@ -150,6 +150,7 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
 
 /* ---------- layout a due colonne (pagine Oggi e Agenda) ---------- */
 .desk-only{display:none}
+.nav .tab.desk-only{display:none}
 .desk-only-i{display:none}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
 .mtile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:var(--s4);border-radius:var(--r-xl) var(--r-l) var(--r-xl) var(--r-l);background:var(--card);box-shadow:var(--shadow);border:2px solid transparent;color:var(--ink)}
@@ -236,8 +237,9 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
 /* intestazione fissa della finestra: ha altezza e sfondo propri, il contenuto scorre sotto di lei e mai sotto la X */
 .sheet-bar{position:sticky;top:-10px;z-index:4;height:48px;margin:-10px -20px 0;padding:0 12px 0 20px;background:var(--card);display:flex;align-items:center;justify-content:flex-end}
 .grab{position:absolute;left:50%;top:9px;transform:translateX(-50%);width:44px;height:5px;border-radius:9px;background:var(--line);margin:0}
-.sheet-x{flex:none;position:relative;margin:0;width:44px;height:44px;border-radius:50%;border:0;background:var(--pink-l);color:var(--ink2);font-size:16px;font-weight:800;cursor:pointer;z-index:2;display:grid;place-items:center}
+.sheet-x{flex:none;position:relative;margin:0;width:48px;height:48px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;border-radius:50%;border:0;background:var(--pink-l);color:var(--ink2);font-size:16px;font-weight:800;cursor:pointer;z-index:2;display:grid;place-items:center}
 .sheet-x:hover{color:var(--acc-t)}
+.sheet-x::after{content:"";position:absolute;inset:-6px}
 /* Pancino della mascotte */
 .mascotte .acc{pointer-events:none}
 .pancino{display:flex;gap:var(--s3);align-items:center;width:100%;text-align:left;background:var(--card);border:2px solid var(--pink-l);border-radius:var(--r-xl);padding:var(--s3) var(--s4);margin:var(--s4) 0 0;box-shadow:var(--shadow);cursor:pointer;color:inherit;font:inherit}
@@ -349,6 +351,8 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
 @media (min-width:1024px){
   .desk-only{display:block}
   .mob-only{display:none}
+  .nav .tab.desk-only{display:flex}
+  .nav .tab.mob-only{display:none}
   .desk-only-i{display:grid}
   .nav .side{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 14px;font-size:14.5px;font-weight:700;color:var(--ink2);border-radius:14px;text-align:left}
   .nav .side .i{font-size:18px}
@@ -1620,7 +1624,6 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
       <button class="motto" id="motto" data-act="motto" title="Un'altra frase"></button>
     </div>
     <button class="iconbtn" data-act="open-recap" title="Recap del mese" aria-label="Recap del mese"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recapbtn"/></svg></button>
-    <button class="iconbtn mob-only" data-tab="menu" title="Menu" aria-label="Menu"><span class="emo">☰</span><svg class="ico q" aria-hidden="true"><use href="#i-menu"/></svg></button>
     <button class="iconbtn desk-only-i" data-act="open-settings" title="Impostazioni" aria-label="Impostazioni"><span class="emo">⚙️</span><svg class="ico q" aria-hidden="true"><use href="#i-impostazioni"/></svg></button>
   </header>
   <main id="view"></main>
@@ -1634,7 +1637,8 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
     <button class="tab" data-tab="todo"><span class="i"><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span>Da fare</button>
     <button class="plus" data-act="new" aria-label="Aggiungi" title="Nuova voce (N)"><span class="pl">+</span><span class="desk-only">Aggiungi</span></button>
     <button class="tab" data-tab="agenda"><span class="i"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>Agenda</button>
-    <button class="tab" data-tab="appunti"><span class="i"><span class="emo">📝</span><svg class="ico q" aria-hidden="true"><use href="#i-appunti"/></svg></span>Appunti</button>
+    <button class="tab desk-only" data-tab="appunti"><span class="i"><span class="emo">📝</span><svg class="ico q" aria-hidden="true"><use href="#i-appunti"/></svg></span>Appunti</button>
+    <button class="tab mob-only" data-tab="menu"><span class="i"><span class="emo">☰</span><svg class="ico q" aria-hidden="true"><use href="#i-menu"/></svg></span>Menu</button>
     <!-- Su computer la barra a sinistra contiene tutto il menu -->
     <button class="side desk-only online-only" data-mod="liste" data-tab="liste"><span class="i"><span class="emo">👭</span><svg class="ico q" aria-hidden="true"><use href="#i-liste"/></svg></span>Liste condivise</button>
     <button class="side desk-only online-only" data-mod="ricorrenti" data-act="open-ricorrenti" data-tab="ricorrenti"><span class="i"><span class="emo">🔁</span><svg class="ico q" aria-hidden="true"><use href="#i-ricorrenti"/></svg></span>Ricorrenti</button>
