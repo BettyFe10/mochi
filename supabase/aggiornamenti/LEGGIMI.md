@@ -20,3 +20,6 @@ Da lanciare con la versione "Spesa intelligente + Riepilogo della domenica" (pri
 
 Da lanciare con la versione "Pet" (prima di pubblicarla):
 - `15-pet.sql`: tabella `pet_registro` (spunte della routine e storico dei pesi del pet, solo tue; limite 5000 righe)
+
+Da lanciare con la versione "Più animali" (v35, prima di pubblicarla. Va lanciato INSIEME alla pubblicazione: la v34 già aperta sui telefoni non salva più peso e routine dopo lo script):
+- `16-animali.sql`: tabella `pet_animali` (fino a 5 animali per persona), `animale_id` su `pet_registro`, `items` e `spese`, funzione `pet_elimina_animale`. Migra la scheda attuale in un animale e i tag della v33 in animale_id. Nessun animale "principale" salvato: il primo creato è il default. Si può rilanciare.

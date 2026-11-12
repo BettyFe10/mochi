@@ -1,5 +1,4 @@
 // Frasi motivazionali di Mochi: una al giorno sotto il saluto, toccandola ne esce un'altra.
-// Sono frasi originali; per aggiungerne basta scrivere una nuova riga tra virgolette.
 // Se una frase ha il genere (stanca/stanco) si scrive come ["neutra", "per lei", "per lui"]: chi non sceglie i pronomi legge la prima.
 
 window.MOCHI_FRASI = [
@@ -14,7 +13,7 @@ window.MOCHI_FRASI = [
   "Oggi vale anche solo provarci.",
   "Le cose grandi sono fatte di cose piccole messe in fila.",
   "Una pausa non è tempo perso: è benzina.",
-  "Sii gentile con te come lo saresti con un'amica.",
+  "Trattati con la stessa gentilezza che riserveresti a una persona cara.",
   "Quello che ieri sembrava enorme oggi è nella lista.",
   "Ricordare le cose ora è compito mio. Tu pensa a vivere.",
   "Un passo storto resta comunque un passo.",
@@ -79,7 +78,7 @@ window.MOCHI_FRASI = [
   "Non dimenticare di sorridere anche quando spunti una casella noiosa.",
   "Se il piano A non funziona, per fortuna ci sono altre 25 lettere.",
   "Un messaggio gentile può essere il momento migliore della giornata di qualcuno.",
-  ["Oggi non fare tutto di corsa. Nessun cronometro ti sta rincorrendo.", "Oggi non fare tutto di corsa. Non sei inseguita da un cronometro.", "Oggi non fare tutto di corsa. Non sei inseguito da un cronometro."],
+  ["Oggi non fare tutto di corsa. Non ti insegue un cronometro.", "Oggi non fare tutto di corsa. Non sei inseguita da un cronometro.", "Oggi non fare tutto di corsa. Non sei inseguito da un cronometro."],
   "Anche cinque minuti per te possono cambiare il tono della giornata.",
   "Non sottovalutare il potere di una scrivania ordinata e una playlist giusta.",
   "Le cose da fare aumentano, ma anche le tue capacità. Pareggio!",
@@ -144,5 +143,6 @@ window.MOCHI_FRASI = [
   "Oggi potrebbe succedere qualcosa di bello. Tieni gli occhi aperti!",
   "Non dimenticare: anche i piccoli passi fanno rumore quando spunti la lista.",
   "La giornata è tutta da scrivere. Mochi intanto ha già fatto la sua parte.",
-  "Se oggi non va tutto secondo i piani, almeno c'è sempre il piano biscotto."
+  "Se oggi non va tutto secondo i piani, almeno c'è sempre il piano B.",
+  "Se leggi questo mi sa che è proprio il tuo giorno fortunato! La Dev ti ringrazia per aver aperto l'app e ti augura una giornata piena di cose belle.",
 ];

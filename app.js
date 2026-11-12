@@ -174,6 +174,7 @@ function normalize(raw) {
     posizione: Number.isFinite(raw.posizione) && Math.abs(raw.posizione) < 1e15 ? raw.posizione : null,
     lista_id: typeof raw.lista_id === "string" && RE_ID.test(raw.lista_id) ? raw.lista_id : null,
     sottotask: cleanSottotask(raw.sottotask),
+    animale_id: typeof raw.animale_id === "string" && RE_ID.test(raw.animale_id) ? raw.animale_id : null,
     user_id: typeof raw.user_id === "string" && RE_ID.test(raw.user_id) ? raw.user_id : null,
     done_by: typeof raw.done_by === "string" && RE_ID.test(raw.done_by) ? raw.done_by : null,
     created_at: isIso(raw.created_at) ? raw.created_at : new Date().toISOString(),
@@ -294,8 +295,8 @@ const SupaStore = {
   // noSub: il database non ha ancora la colonna "sottotask" (aggiornamento 11 non lanciato): si salva senza, così il resto funziona
   noSub: false,
   clean(it) {
-    const { id, kind, title, body, area, due_date, due_time, remind, remind_at, reminded, done, done_at, color, pinned, created_at, updated_at, lista_id, posizione } = it;
-    const row = { id, kind, title, body, area, due_date, due_time, remind, remind_at, reminded, done, done_at, color, pinned, created_at, updated_at, lista_id: lista_id || null, posizione: Number.isFinite(posizione) ? posizione : null };
+    const { id, kind, title, body, area, due_date, due_time, remind, remind_at, reminded, done, done_at, color, pinned, created_at, updated_at, lista_id, posizione, animale_id } = it;
+    const row = { id, kind, title, body, area, due_date, due_time, remind, remind_at, reminded, done, done_at, color, pinned, created_at, updated_at, lista_id: lista_id || null, animale_id: animale_id || null, posizione: Number.isFinite(posizione) ? posizione : null };
     if (!this.noSub) { const st = cleanSottotask(it.sottotask); row.sottotask = st.length ? st : null; }
     return row;
   },
@@ -1243,7 +1244,7 @@ function openEditor(it, isNew) {
   // _autoRemind: il promemoria lo sceglie Mochi finché l'utente non lo cambia a mano
   // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
   const pm = petMarca(it);
-  draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor, tag: pm.tag } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
+  draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
   advanced = !isNew || draft.kind === "note";
   drawEditor();
   setTimeout(() => { const i = $("#fTitle"); if (i && isNew) i.focus(); }, 250);
@@ -2578,14 +2579,15 @@ function cleanSpesa(r) {
   const id = typeof r.id === "string" && RE_ID.test(r.id) ? r.id : null;
   const c = Number(r.importo_cent);
   if (!id || !validYmd(r.giorno) || !Number.isInteger(c) || c < 1 || c > MAX_CENT) return null;
-  return { id, giorno: r.giorno, importo_cent: c, categoria: catSpesa(str(r.categoria))[0], nota: taglia(str(r.nota).trim(), 120), created_at: isIso(r.created_at) ? r.created_at : "" };
+  const animale_id = typeof r.animale_id === "string" && /^[0-9a-f-]{36}$/i.test(r.animale_id) ? r.animale_id : null;
+  return { id, giorno: r.giorno, importo_cent: c, categoria: catSpesa(str(r.categoria))[0], nota: taglia(str(r.nota).trim(), 120), created_at: isIso(r.created_at) ? r.created_at : "", animale_id };
 }
 const cleanBudget = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= MAX_CENT ? n : null; };
 const SpeseStore = {
   async carica() {
     if (!ONLINE_MODE) { const o = LS.get("mochi.spese", {}) || {}; return { voci: (Array.isArray(o.voci) ? o.voci : []).map(cleanSpesa).filter(Boolean).slice(0, 5000), budget: cleanBudget(o.budget) }; }
     const [a, b] = await Promise.all([
-      store.sb.from("spese").select("id,giorno,importo_cent,categoria,nota,created_at").order("giorno", { ascending: false }).limit(5000),
+      store.sb.from("spese").select("id,giorno,importo_cent,categoria,nota,created_at,animale_id").order("giorno", { ascending: false }).limit(5000),
       store.sb.from("spese_impostazioni").select("budget_cent").maybeSingle()
     ]);
     if (a.error) throw a.error; if (b.error) throw b.error;
@@ -2595,7 +2597,7 @@ const SpeseStore = {
   // Restituisce la spesa salvata (una nuova riceve l'id dal database)
   async salva(sp, nuova) {
     if (!ONLINE_MODE) return sp;
-    const row = { giorno: sp.giorno, importo_cent: sp.importo_cent, categoria: sp.categoria, nota: sp.nota || null };
+    const row = { giorno: sp.giorno, importo_cent: sp.importo_cent, categoria: sp.categoria, nota: sp.nota || null, animale_id: sp.animale_id || null };
     if (nuova) {
       const { data, error } = await store.sb.from("spese").insert(row).select("id,created_at").single();
       if (error) throw error;
@@ -2660,16 +2662,16 @@ function apriSpesa(sp, cat) {
   const ultima = LS.get("mochi.spesa.cat", "spesa");
   spesaDraft = sp ? { ...sp, _nuova: false } : { id: null, giorno: todayStr(), importo_cent: null, categoria: cat ? catSpesa(cat)[0] : catSpesa(ultima)[0], nota: "", _nuova: true, _daPet: !!cat };
   const d = spesaDraft, oggi = todayStr(), ieri = ymd(addDays(new Date(), -1));
-  // tag dell'animale (solo con il pet acceso e due o più nomi): il nome va in testa alla nota, qui si sceglie a parte
-  d._petTag = null;
-  if (mod("pet") && petMulti()) { d._petTag = sp ? petSpesaTag(d.nota) : cat ? petFiltroOk() : ""; if (d._petTag) d.nota = d.nota.slice(d._petTag.length + PET_SEP.length); }
+  // Animali (v35): nelle spese del pet, solo con più di un animale. Lista: [id], [""] = per tutti, o più id (spesa nuova divisa)
+  d._animali = null;
+  if (mod("pet") && petMulti() && (d._nuova ? (cat || d.categoria === PET_CAT_SPESA) : true)) d._animali = sp ? [sp.animale_id || ""] : [petFiltroOk() || petSelId()];
   openSheet(`<h2><span class="mbox">${mascot()}</span>${d._nuova ? "Nuova spesa" : "Modifica spesa"}</h2>
     <div class="field sp-imp"><input class="input big" id="sImporto" inputmode="decimal" enterkeyhint="done" placeholder="0,00" maxlength="14" autocomplete="off" value="${d.importo_cent ? fmtImporto(d.importo_cent) : ""}" aria-label="Importo in euro"><span class="eur">€</span></div>
     <div class="field"><label>Categoria</label><div class="sp-pick">${CATEGORIE_SPESA.map(([k, e, n, c]) => `<button class="${d.categoria === k ? "on" : ""}" style="--cc:${c}" data-act="spesa-cat" data-v="${k}"><span class="e">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     <div class="field"><label>Quando</label><div class="sp-quando">
       <button class="fbtn ${d.giorno === oggi ? "on" : ""}" data-act="spesa-giorno" data-v="${oggi}">Oggi</button><button class="fbtn ${d.giorno === ieri ? "on" : ""}" data-act="spesa-giorno" data-v="${ieri}">Ieri</button>
       <input class="input" type="date" id="sGiorno" value="${d.giorno}" min="2000-01-01" max="2100-12-31" aria-label="Giorno"></div></div>
-    ${d._petTag !== null ? `<div class="field" id="sPetTag" ${d.categoria === PET_CAT_SPESA ? "" : "hidden"}><label id="sPtL">Per chi?</label><div class="pet-dt" role="group" aria-labelledby="sPtL">${petTagHtml(d._petTag, "spesa-pet-tag", "Tutti")}</div></div>` : ""}
+    ${d._animali !== null ? `<div class="field" id="sPetTag" ${d.categoria === PET_CAT_SPESA ? "" : "hidden"}><label id="sPtL">Per chi?</label><div class="pet-dt" role="group" aria-labelledby="sPtL">${petSpesaChips(d._animali)}</div><small class="small" id="sPtH">${d._nuova && d._animali.filter(Boolean).length > 1 ? petDivisioneTesto(d._animali.filter(Boolean).length) : ""}</small></div>` : ""}
     <div class="field"><label>Nota, se vuoi</label><input class="input" id="sNota" maxlength="120" placeholder="Es. pizza con le amiche" autocomplete="off" value="${esc(d.nota)}"></div>
     <div class="actions">${d._nuova ? "" : `<button class="btn danger" data-act="spesa-elimina" aria-label="Elimina">🗑</button>`}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="spesa-salva">Salva</button></div>`);
   const imp = $("#sImporto");
@@ -2677,26 +2679,37 @@ function apriSpesa(sp, cat) {
   $("#sGiorno").addEventListener("input", (e) => { spesaDraft.giorno = e.target.value; document.querySelectorAll(".sp-quando .fbtn").forEach((b) => b.classList.toggle("on", b.dataset.v === e.target.value)); });
   if (d._nuova) setTimeout(() => imp.focus(), 250);
 }
+const petDivisioneTesto = (n) => `Si divide in ${n} parti uguali (il centesimo in più va alla prima).`;
+const petSpesaChips = (sel) => ["", ...ANIMALI.map((a) => a.id)].map((id) => `<button type="button" class="fbtn ${sel.includes(id) ? "on" : ""}" data-act="spesa-animale" data-v="${esc(id)}" aria-pressed="${sel.includes(id)}">${id ? esc(petNomeDi(id)) : "Per tutti"}</button>`).join("");
 async function salvaSpesa(btn) {
   const d = spesaDraft; if (!d) return;
   const cent = parseImporto($("#sImporto")?.value);
   if (cent === null) { toast(/\d/.test($("#sImporto")?.value || "") ? "Importo non valido: es. 12,50 (massimo 999.999,99 €)" : "Scrivi quanto hai speso, es. 12,50"); $("#sImporto")?.focus(); return; }
   const giorno = $("#sGiorno")?.value || d.giorno;
   if (!validYmd(giorno) || giorno < "2000-01-01" || giorno > "2100-12-31") { toast("Controlla il giorno 📅"); return; }
-  const sp = { id: d.id, giorno, importo_cent: cent, categoria: catSpesa(d.categoria)[0], nota: taglia(((d._petTag && d.categoria === PET_CAT_SPESA ? d._petTag + PET_SEP : "") + ($("#sNota")?.value || "").trim()).trim(), 120), created_at: d.created_at || new Date().toISOString() };
-  if (d._nuova) sp.id = uid();
+  const categoria = catSpesa(d.categoria)[0], nota = taglia(($("#sNota")?.value || "").trim(), 120);
+  // Animali: una spesa nuova si può dividere tra più animali (parti uguali, il centesimo in più alla prima); "per tutti" = senza animale
+  const ids = d._animali && categoria === PET_CAT_SPESA ? d._animali.filter(Boolean) : [];
+  const parti = ids.length > 1 && d._nuova
+    ? ids.map((aid, i) => ({ aid, cent: Math.floor(cent / ids.length) + (i === 0 ? cent % ids.length : 0) }))
+    : [{ aid: ids[0] || null, cent }];
   if (btn) btn.disabled = true;
-  const prima = state.spese.voci;
+  const prima = state.spese.voci; const salvate = [];
   try {
-    const salvata = await SpeseStore.salva(sp, d._nuova);
-    state.spese.voci = d._nuova ? [salvata, ...prima] : prima.map((v) => (v.id === d.id ? salvata : v));
+    for (const p of parti) {
+      const sp = { id: d._nuova ? uid() : d.id, giorno, importo_cent: p.cent, categoria, nota, created_at: d.created_at || new Date().toISOString(), animale_id: p.aid };
+      salvate.push(await SpeseStore.salva(sp, d._nuova));
+    }
+    state.spese.voci = d._nuova ? [...salvate, ...prima] : prima.map((v) => (v.id === d.id ? salvate[0] : v));
     if (!ONLINE_MODE) SpeseStore._local();
-    LS.set("mochi.speseCache", state.spese); if (!d._daPet) LS.set("mochi.spesa.cat", sp.categoria);
+    LS.set("mochi.speseCache", state.spese); if (!d._daPet) LS.set("mochi.spesa.cat", categoria);
     state.speseMese = new Date(+giorno.slice(0, 4), +giorno.slice(5, 7) - 1, 1);
     closeSheet(); render();
-    toast(d._nuova ? `${catSpesa(sp.categoria)[1]} ${euro(cent)} segnati` : "Spesa aggiornata");
+    toast(!d._nuova ? "Spesa aggiornata" : parti.length > 1 ? `Spesa divisa tra ${parti.length} animali 🐾` : `${catSpesa(categoria)[1]} ${euro(cent)} segnati`);
   } catch (e) {
-    state.spese.voci = prima; if (btn) btn.disabled = false;
+    // a metà di una divisione alcune parti possono essere già andate: si rilegge dal server invece di tornare indietro a mano
+    if (salvate.length && ONLINE_MODE) { try { await caricaSpese(); } catch {} } else state.spese.voci = prima;
+    if (btn) btn.disabled = false;
     toast(/limite/i.test(e?.message || "") ? "Hai raggiunto il limite di 5000 spese" : /fetch|network|Failed/i.test(e?.message || "") ? "Sei offline: riprova tra poco" : "Non sono riuscita a salvarla");
   }
 }
@@ -3100,9 +3113,11 @@ async function eseguiPassaggio(btn) {
     // 5) giorni attivi della serie
     if (d.giorni.length) await GiorniStore.aggiungi(d.giorni);
     // 5b) routine e pesi del pet (quelli già nell'account restano come sono)
-    if (d.pet.length) await portaPetOspite(d.pet);
     // 6) preferenze (colori, stile, mascotte, moduli, casetta)
     await portaPreferenze();
+    // 5c) il pet: prima l'animale principale nell'account, poi routine e pesi (che vanno a lui)
+    if (petPresente(CUSTOM.pet)) await animaleSincronizza(CUSTOM.pet);
+    if (d.pet.length) await portaPetOspite(d.pet);
     // tutto arrivato: solo adesso si svuota il dispositivo
     finePassaggio();
     closeSheet(); await loadAndRender();
@@ -3134,9 +3149,12 @@ const petTitolo = () => (CUSTOM.pet.nome ? "Il mio " + CUSTOM.pet.nome : "Il mio
 const petMinGiorno = () => ymd(addDays(new Date(), -1800));
 const petGiornoOk = (g) => validYmd(g) && g >= petMinGiorno() && g <= todayStr();
 const petRound2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-const petK = (r) => `${r.tipo}|${r.giorno}|${r.chiave}`;
+// Animale di una riga: "" (righe vecchie o di un ospite) = il primo animale
+const petAnOf = (r) => r.an || petPrinc();
+const petK = (r) => `${petAnOf(r)}|${r.tipo}|${r.giorno}|${r.chiave}`;
 // Una riga del registro, ripulita (arriva anche dal dispositivo e dal server: mai fidarsi). Non valida = null
-function petPulisciRiga(r) {
+function petPulisciRiga(r) { const x = petPulisciRiga0(r); return x ? { ...x, an: str(r && r.an) } : null; }
+function petPulisciRiga0(r) {
   if (!r || typeof r !== "object") return null;
   const tipo = str(r.tipo), giorno = str(r.giorno).slice(0, 10), chiave = str(r.chiave);
   if (!petGiornoOk(giorno)) return null;
@@ -3153,10 +3171,10 @@ const petUnici = (righe) => [...new Map(righe.map((r) => [petK(r), r])).values()
 function petPulisciOp(o) {
   if (!o || typeof o !== "object") return null;
   const a = o.a === "set" ? "set" : o.a === "del" ? "del" : null; if (!a) return null;
-  const r = petPulisciRiga({ tipo: o.tipo, giorno: o.giorno, chiave: o.chiave, valore: a === "del" ? 1 : o.valore });
+  const r = petPulisciRiga({ tipo: o.tipo, giorno: o.giorno, chiave: o.chiave, valore: a === "del" ? 1 : o.valore, an: o.an });
   return r ? { a, ...r } : null;
 }
-const petApplica = (righe, o) => { const f = righe.filter((r) => petK(r) !== petK(o)); if (o.a === "set") f.push({ tipo: o.tipo, giorno: o.giorno, chiave: o.chiave, valore: o.valore }); return f; };
+const petApplica = (righe, o) => { const f = righe.filter((r) => petK(r) !== petK(o)); if (o.a === "set") f.push({ tipo: o.tipo, giorno: o.giorno, chiave: o.chiave, valore: o.valore, an: o.an }); return f; };
 const petCoda = () => { const q = LS.get(chiaveGiorni("petDaInviare"), []); return (Array.isArray(q) ? q : []).map(petPulisciOp).filter(Boolean).slice(-2000); };
 const petDaLS = (k) => { const a = LS.get(k, []); return petUnici((Array.isArray(a) ? a : []).slice(0, PET_MAX_RIGHE * 2).map(petPulisciRiga).filter(Boolean)).slice(0, PET_MAX_RIGHE); };
 function petSalvaLocale() {
@@ -3177,9 +3195,9 @@ function inviaPet() {
     const k = chiaveGiorni("petDaInviare"), coda = petCoda(); if (!coda.length) return;
     const me = store.user.id, sb = store.sb;
     const manda = async (ops) => {
-      const sets = ops.filter((o) => o.a === "set").map((o) => ({ user_id: me, tipo: o.tipo, giorno: o.giorno, chiave: o.chiave, valore: o.valore }));
-      for (let i = 0; i < sets.length; i += 200) { const { error } = await sb.from("pet_registro").upsert(sets.slice(i, i + 200), { onConflict: "user_id,tipo,giorno,chiave" }); if (error) throw error; }
-      for (const o of ops.filter((x) => x.a === "del")) { const { error } = await sb.from("pet_registro").delete().eq("tipo", o.tipo).eq("giorno", o.giorno).eq("chiave", o.chiave); if (error) throw error; }
+      const sets = ops.filter((o) => o.a === "set").map((o) => ({ user_id: me, animale_id: o.an || petPrinc() || null, tipo: o.tipo, giorno: o.giorno, chiave: o.chiave, valore: o.valore }));
+      for (let i = 0; i < sets.length; i += 200) { const { error } = await sb.from("pet_registro").upsert(sets.slice(i, i + 200), { onConflict: "user_id,tipo,giorno,chiave,animale_id" }); if (error) throw error; }
+      for (const o of ops.filter((x) => x.a === "del")) { let dq = sb.from("pet_registro").delete().eq("tipo", o.tipo).eq("giorno", o.giorno).eq("chiave", o.chiave); const aid = o.an || petPrinc(); if (aid) dq = dq.eq("animale_id", aid); const { error } = await dq; if (error) throw error; }
     };
     const fatte = [];
     try { await manda(coda); fatte.push(...coda); }
@@ -3191,14 +3209,14 @@ function inviaPet() {
         catch (e2) { if (erroreDiRete(e2)) break; if (petRifiutata(e2)) { console.warn("Riga del pet rifiutata dal server, scartata:", o.tipo, o.giorno, e2?.message || e2); fatte.push(o); } }
       }
     }
-    const chiave = (o) => JSON.stringify([o.a, o.tipo, o.giorno, o.chiave, o.valore]), inviate = new Set(fatte.map(chiave));
+    const chiave = (o) => JSON.stringify([o.a, o.an || "", o.tipo, o.giorno, o.chiave, o.valore]), inviate = new Set(fatte.map(chiave));
     LS.set(k, petCoda().filter((o) => !inviate.has(chiave(o)))); // quello aggiunto nel frattempo resta in coda
   }).catch(() => {});
   return invioPet;
 }
 // Imposta o toglie una riga: subito sullo schermo e nel dispositivo, poi (con account) in coda verso il server
 function petImposta(op) {
-  const o = petPulisciOp(op); if (!o) return false;
+  const o = petPulisciOp({ an: petSelId(), ...op }); if (!o) return false;
   petVer++;
   state.pet.righe = petApplica(state.pet.righe, o);
   if (!ONLINE_MODE) {
@@ -3216,8 +3234,8 @@ async function caricaPet() {
   if (!mod("pet")) return false;
   const ver = petVer;
   try {
-    const q = () => store.sb.from("pet_registro").select("tipo,giorno,chiave,valore");
-    const [a, b] = await Promise.all([q().eq("tipo", "routine").eq("giorno", todayStr()), q().eq("tipo", "peso").order("giorno", { ascending: false }).limit(10)]);
+    const q = () => store.sb.from("pet_registro").select("tipo,giorno,chiave,valore,an:animale_id");
+    const [a, b] = await Promise.all([q().eq("tipo", "routine").eq("giorno", todayStr()), q().eq("tipo", "peso").order("giorno", { ascending: false }).limit(60)]);
     if (a.error || b.error) return false;
     if (ver !== petVer) return false; // nel frattempo hai toccato qualcosa: vale quello
     let righe = petUnici([...(a.data || []), ...(b.data || [])].map(petPulisciRiga).filter(Boolean));
@@ -3233,7 +3251,7 @@ async function petTutteLeRighe() {
   try {
     const out = [];
     for (let da = 0; da < PET_MAX_RIGHE + 1000; da += 1000) {
-      const { data, error } = await store.sb.from("pet_registro").select("tipo,giorno,chiave,valore").order("giorno").range(da, da + 999);
+      const { data, error } = await store.sb.from("pet_registro").select("tipo,giorno,chiave,valore,an:animale_id").order("giorno").range(da, da + 999);
       if (error) throw error;
       (data || []).forEach((r) => out.push(r));
       if (!data || data.length < 1000) break;
@@ -3246,13 +3264,15 @@ async function petTutteLeRighe() {
 // Passaggio da ospite: le righe nel dispositivo vanno nell'account; quelle già presenti restano come sono
 async function portaPetOspite(righe) {
   const me = store.user.id;
-  await aBlocchi(righe.map((r) => ({ user_id: me, ...r })), 200, async (b) => giu(await store.sb.from("pet_registro").upsert(b, { onConflict: "user_id,tipo,giorno,chiave", ignoreDuplicates: true })));
+  await aBlocchi(righe.map((r) => ({ user_id: me, animale_id: petPrinc() || null, ...r })), 200, async (b) => giu(await store.sb.from("pet_registro").upsert(b, { onConflict: "user_id,tipo,giorno,chiave,animale_id", ignoreDuplicates: true })));
 }
 // Tolgo il pet: via anche spunte e pesi (prima dal server; se non si riesce non si cancella niente)
-async function petCancellaRegistro() {
+async function petCancellaRegistro(animaleId) {
   if (ONLINE_MODE && store.user) {
     const uid_ = myId(); if (!uid_) throw new Error("utente non trovato");
-    const { error } = await store.sb.from("pet_registro").delete().eq("user_id", uid_).in("tipo", ["routine", "peso"]);
+    let q = store.sb.from("pet_registro").delete().eq("user_id", uid_).in("tipo", ["routine", "peso"]);
+    if (animaleId) q = q.eq("animale_id", animaleId); // solo quelle di questo animale: gli altri restano
+    const { error } = await q;
     if (error) throw error;
     LS.set(chiaveGiorni("petDaInviare"), []);
   }
@@ -3260,8 +3280,10 @@ async function petCancellaRegistro() {
 }
 
 const petVoci = () => { const p = CUSTOM.pet; return p.routine ? p.routine : (PET_ROUTINE_DEF[p.specie || "altro"] || PET_ROUTINE_DEF.altro).map(([id, t]) => ({ id, t })); };
-const petFatte = (g) => new Set(state.pet.righe.filter((r) => r.tipo === "routine" && r.giorno === g).map((r) => r.chiave));
-const petPesi = () => state.pet.righe.filter((r) => r.tipo === "peso").map((r) => ({ giorno: r.giorno, kg: r.valore })).sort((a, b) => (a.giorno < b.giorno ? -1 : 1)).slice(-10);
+// Spunte e pesi dell'animale mostrato nella pagina
+const petMioAnimale = (r) => petAnOf(r) === petSelId();
+const petFatte = (g) => new Set(state.pet.righe.filter((r) => r.tipo === "routine" && r.giorno === g && petMioAnimale(r)).map((r) => r.chiave));
+const petPesi = () => state.pet.righe.filter((r) => r.tipo === "peso" && petMioAnimale(r)).map((r) => ({ giorno: r.giorno, kg: r.valore })).sort((a, b) => (a.giorno < b.giorno ? -1 : 1)).slice(-10);
 const fmtKg = (k) => (+k).toLocaleString("it-IT", { maximumFractionDigits: 2 });
 const petNuovoId = (usati) => { let id; do { id = ("v" + Math.random().toString(36).slice(2, 10) + "00000000").slice(0, 9); } while (usati.includes(id) || !PET_RE_ID.test(id)); return id; };
 // "12,5" o "12.5", da 0,01 a 999,99 kg; più di due decimali si arrotondano
@@ -3306,7 +3328,8 @@ const PET_REP = [["-", "Non si ripete"], ["m1", "Ogni mese"], ["m3", "Ogni 3 mes
 // Tag dell'animale (v33, facoltativo): un secondo blocco subito dopo, "⁣t:Nome⁣". Le versioni vecchie lo lasciano nelle note così com'è.
 const PET_MARCA_RE = /^⁣pet:([a-z]{3,16}):(-|m1|m3|m6|m12|d[0-9]{1,3}):([0-9]{1,2})⁣(?:⁣t:([^⁣\u0000-\u001f<>]{1,40})⁣)?/;
 const petTagOk = (t) => typeof t === "string" && /^[^⁣\u0000-\u001f<>]{1,40}$/.test(t) && t.trim() === t;
-const petMarcaTesto = (m) => `⁣pet:${m.tipo}:${m.rep}:${m.anchor}⁣${petTagOk(m.tag) ? `⁣t:${m.tag}⁣` : ""}`;
+// Dal v35 il marcatore non porta più il nome dell'animale: lo dice animale_id. (I tag vecchi restano letti dal parser e poi si tolgono.)
+const petMarcaTesto = (m) => `⁣pet:${m.tipo}:${m.rep}:${m.anchor}⁣`;
 function petMarca(it) {
   if (!it || it.kind !== "todo" || it.lista_id || typeof it.body !== "string" || it.body.charCodeAt(0) !== 0x2063) return null;
   const m = PET_MARCA_RE.exec(it.body); if (!m || !PET_SCAD_TIPI.some((t) => t[0] === m[1])) return null;
@@ -3331,16 +3354,17 @@ function petProssima(due, rep, anchor, oggi = todayStr()) {
   return validYmd(out) && out <= "2100-12-31" ? out : null;
 }
 const petScadenze = () => state.items.filter((i) => !i.done && petMarca(i)).sort((a, b) => ((a.due_date || "9") + a.title < (b.due_date || "9") + b.title ? -1 : 1));
-// ---- Tag (v33): con due o più nomi (scheda + altri animali) scadenze e spese si dividono per animale. Routine e pesi restano uno.
-const petNomi = () => [CUSTOM.pet.nome, ...(CUSTOM.pet.altri || [])].filter(petTagOk);
-const petMulti = () => petNomi().length >= 2;
+// ---- Animali nella pagina Pet (v35): scadenze e spese hanno animale_id ("" = per tutti / senza animale).
+let PET_SEL = ""; // animale mostrato nella pagina ("" = il primo)
+const petSelId = () => (ANIMALI.some((a) => a.id === PET_SEL) ? PET_SEL : ANIMALI[0]?.id || "");
+const petHa = (id) => ANIMALI.some((a) => a.id === id);
+const petNomeDi = (id) => ANIMALI.find((a) => a.id === id)?.nome || "";
+const petMulti = () => ANIMALI.length >= 2;
 let petFiltro = ""; // "" = tutti
-const petFiltroOk = () => (petMulti() && petNomi().includes(petFiltro) ? petFiltro : "");
-const PET_SEP = " · "; // spese: il nome dell'animale in testa alla nota ("Briciola · crocchette"), visibile anche in Spese
-const petSpesaTag = (nota) => { const n = String(nota || ""); return petNomi().find((t) => n.startsWith(t + PET_SEP) || n === t + PET_SEP.trimEnd()) || ""; }; // "Briciola ·" = solo il nome, senza nota
-const petTagHtml = (attiva, act, tutti, extra) => { const nomi = petNomi(); if (extra && !nomi.includes(extra)) nomi.push(extra);
-  return ["", ...nomi].map((t) => `<button type="button" class="fbtn ${attiva === t ? "on" : ""}" data-act="${act}" data-v="${esc(t)}" aria-pressed="${attiva === t}">${t ? esc(t) : tutti}</button>`).join(""); };
-const petScNome = (tag) => (petMulti() ? tag : CUSTOM.pet.nome);
+const petFiltroOk = () => (petMulti() && petHa(petFiltro) ? petFiltro : "");
+// Chip per scegliere l'animale: la prima ("") è "tutti" (o "per tutti", se la scelta è per le scadenze)
+const petTagHtml = (attiva, act, tutti) => ["", ...ANIMALI.map((a) => a.id)].map((id) => `<button type="button" class="fbtn ${attiva === id ? "on" : ""}" data-act="${act}" data-v="${esc(id)}" aria-pressed="${attiva === id}">${id ? esc(petNomeDi(id)) : tutti}</button>`).join("");
+const petScNome = (id) => petNomeDi(id) || CUSTOM.pet.nome;
 function petScTitolo(tipo, nome = CUSTOM.pet.nome, det = "") {
   const t = PET_SCAD_TIPI.find((x) => x[0] === tipo)?.[1] || "Scadenza", d = taglia(det.trim(), 60);
   if (tipo === "altro") return d ? (nome ? `${d} (${nome})` : d) : (nome ? `Scadenza di ${nome}` : "Scadenza del pet");
@@ -3353,7 +3377,7 @@ function petScStato(it) {
   return { late: false, testo: niceDate(it.due_date) };
 }
 function petScadHtml() {
-  const f = petFiltroOk(), lista = petScadenze().filter((it) => !f || petMarca(it).tag === f), mostra = lista.slice(0, 10);
+  const f = petFiltroOk(), lista = petScadenze().filter((it) => !f || it.animale_id === f), mostra = lista.slice(0, 10);
   return `<div class="sec"><h2>Prossime scadenze</h2><button class="fbtn on" data-act="pet-scad-new">Aggiungi</button></div>
     ${mostra.length ? `<div class="list pet-scads">${mostra.map((it) => { const s = petScStato(it), m = petMarca(it), r = petRepTesto(m.rep);
       return `<div class="pet-scad ${s.late ? "late" : ""}"><button class="check" data-act="pet-scad-fatta" data-id="${esc(it.id)}" aria-label="Segna come fatto: ${esc(it.title)}"></button>
@@ -3366,12 +3390,12 @@ function apriPetScad(id) {
   const it = id ? state.items.find((x) => x.id === id) : null, m = it && petMarca(it);
   if (id && !m) return;
   const dd = it ? it.due_date || todayStr() : todayStr();
-  petScDraft = { id: it ? it.id : null, tipo: m ? m.tipo : "vaccino", tag: m ? m.tag : petFiltroOk() };
+  petScDraft = { id: it ? it.id : null, tipo: m ? m.tipo : "vaccino", tag: it ? it.animale_id || "" : (petFiltroOk() || petSelId()) };
   const rep = m ? (m.rep[0] === "d" ? "d" : m.rep) : "-", n = m && m.rep[0] === "d" ? +m.rep.slice(1) : 30;
   const rem = it ? (["none", "morning", "1440"].includes(it.remind) ? it.remind : "morning") : "morning";
   openSheet(`<h2><span class="mbox">${mascot()}</span>${it ? "Modifica la scadenza" : "Nuova scadenza"}</h2>
     <div class="field"><label id="psTL">Di che cosa si tratta?</label><div class="pet-dt" id="psTipi" role="group" aria-labelledby="psTL">${PET_SCAD_TIPI.map(([k, n2]) => `<button type="button" class="fbtn ${petScDraft.tipo === k ? "on" : ""}" data-act="pet-s-tipo" data-v="${k}" aria-pressed="${petScDraft.tipo === k}">${n2}</button>`).join("")}</div></div>
-    ${petMulti() ? `<div class="field"><label id="psAL">Per chi?</label><div class="pet-dt" id="psTag" role="group" aria-labelledby="psAL">${petTagHtml(petScDraft.tag, "pet-s-tag", "Tutti", petScDraft.tag)}</div></div>` : ""}
+    ${petMulti() ? `<div class="field"><label id="psAL">Per chi?</label><div class="pet-dt" id="psTag" role="group" aria-labelledby="psAL">${petTagHtml(petScDraft.tag, "pet-s-tag", "Per tutti")}</div></div>` : ""}
     <div class="field"><label for="psTit">Titolo</label><input class="input" id="psTit" maxlength="100" autocomplete="off" value="${esc(it ? it.title : petScTitolo(petScDraft.tipo, petScNome(petScDraft.tag)))}"></div>
     <div class="field"><label for="psData">Data</label><input class="input" type="date" id="psData" value="${dd}" min="2000-01-01" max="2100-12-31"></div>
     <div class="field"><label for="psRep">Si ripete?</label><select class="input" id="psRep">${PET_REP.map(([k, l]) => `<option value="${k}" ${rep === k ? "selected" : ""}>${l}</option>`).join("")}</select>
@@ -3388,10 +3412,11 @@ async function salvaPetScad() {
   if (rep === "d") { const n = parseInt($("#psN").value, 10); if (!(n >= 1 && n <= 365)) { toast("Ogni quanti giorni? Da 1 a 365"); $("#psN").focus(); return; } rep = "d" + n; }
   else if (!["-", "m1", "m3", "m6", "m12"].includes(rep)) rep = "-";
   const rem = ["none", "morning", "1440"].includes($("#psRem").value) ? $("#psRem").value : "morning";
-  const marca = { tipo: PET_SCAD_TIPI.some((t) => t[0] === d.tipo) ? d.tipo : "altro", rep, anchor: +data.slice(8, 10), tag: petTagOk(d.tag) ? d.tag : "" };
+  const marca = { tipo: PET_SCAD_TIPI.some((t) => t[0] === d.tipo) ? d.tipo : "altro", rep, anchor: +data.slice(8, 10) };
+  const animale_id = petHa(d.tag) ? d.tag : null;
   let it = d.id ? state.items.find((x) => x.id === d.id) : null; const nuova = !it;
   const resto = it ? (petMarca(it)?.resto ?? it.body) : "";
-  const campi = { title: tit, body: petMarcaTesto(marca) + resto, due_date: data, remind: rem, lista_id: null, kind: "todo", updated_at: new Date().toISOString() };
+  const campi = { title: tit, body: petMarcaTesto(marca) + resto, due_date: data, remind: rem, lista_id: null, kind: "todo", updated_at: new Date().toISOString(), animale_id };
   if (nuova) it = newItem({ ...campi, area: "personale", remind: rem }); else Object.assign(it, campi);
   const prima = it.remind_at; it.remind_at = computeRemind(it); if (it.remind_at !== prima) it.reminded = false;
   if (nuova) state.items.push(it);
@@ -3414,7 +3439,7 @@ async function petProponiProssima(it) {
   await new Promise((r) => setTimeout(r, 450));
   const si = await ask({ title: "Metto la prossima?", text: `${it.title}\nLa prossima sarebbe ${parseYmd(prox).getDate()} ${MESI[parseYmd(prox).getMonth()]} ${parseYmd(prox).getFullYear()} (${petRepTesto(m.rep).toLowerCase()}).`, ok: "Sì, aggiungila" });
   if (!si) return;
-  const n = newItem({ kind: "todo", title: it.title, body: petMarcaTesto({ tipo: m.tipo, rep: m.rep, anchor: m.anchor || +it.due_date.slice(8, 10), tag: m.tag }) + m.resto, due_date: prox, remind: ["none", "morning", "1440"].includes(it.remind) ? it.remind : "morning", lista_id: null, area: "personale" });
+  const n = newItem({ kind: "todo", title: it.title, body: petMarcaTesto({ tipo: m.tipo, rep: m.rep, anchor: m.anchor || +it.due_date.slice(8, 10) }) + m.resto, animale_id: it.animale_id || null, due_date: prox, remind: ["none", "morning", "1440"].includes(it.remind) ? it.remind : "morning", lista_id: null, area: "personale" });
   n.remind_at = computeRemind(n);
   state.items.push(n); render(); await store.save(n); toast("Prossima scadenza aggiunta 🐾");
 }
@@ -3423,7 +3448,7 @@ const PET_CAT_SPESA = "animali";
 function petSpeseHtml() {
   if (!mod("spese")) return "";
   const oggi = new Date(), mk = monthKey(oggi), ak = String(oggi.getFullYear());
-  const f = petFiltroOk(), v = state.spese.voci.filter((x) => x.categoria === PET_CAT_SPESA && (!f || petSpesaTag(x.nota) === f)).sort(ordineSpese);
+  const f = petFiltroOk(), v = state.spese.voci.filter((x) => x.categoria === PET_CAT_SPESA && (!f || x.animale_id === f)).sort(ordineSpese);
   const somma = (k) => v.filter((x) => x.giorno.startsWith(k)).reduce((a, x) => a + x.importo_cent, 0);
   return `<div class="sec"><h2>${f ? `Spese di ${esc(f)}` : "Spese del pet"}</h2><button class="fbtn on" data-act="pet-spesa-nuova">Aggiungi spesa pet</button></div>
     <div class="pet-spese-tot"><div><small>Questo mese</small><b>${euro(somma(mk))}</b></div><div><small>Quest'anno</small><b>${euro(somma(ak))}</b></div></div>
@@ -3440,6 +3465,7 @@ function viewPet() {
   const festa = petCompleannoOggi(p), dataT = petDataTesto(p);
   const telHref = p.tel ? "tel:" + p.tel.replace(/ /g, "") : "";
   return `<div class="sec" style="margin-top:0"><h2>${esc(petTitolo())}</h2></div>
+    ${petSelettoreHtml()}
     <div class="pet-card">
       <div class="pet-ico ${festa ? "festa" : ""}">${petIcona(p.specie)}</div>
       <div class="pet-id"><b>${esc(p.specie ? petSp(p.specie)[1] : "Il mio pet")}</b>${dataT ? `<small>${esc(dataT)}</small>` : ""}</div>
@@ -3460,12 +3486,72 @@ function viewPet() {
     ${p.vet || p.tel ? `<div class="sec"><h2>Veterinario</h2></div><div class="pet-vet">${p.vet ? `<b>${esc(p.vet)}</b>` : ""}${p.tel ? `<a class="pet-tel" href="${esc(telHref)}" aria-label="Chiama${p.vet ? " " + esc(p.vet) : ""} al ${esc(p.tel)}">${esc(p.tel)}</a>` : ""}</div>` : ""}
     ${p.note ? `<div class="sec"><h2>Note</h2></div><p class="pet-note">${esc(p.note)}</p>` : ""}`;
 }
+// ---- Animali (v35): con account stanno in pet_animali (ordinati dal più vecchio). Non c'è un principale salvato:
+// il primo della lista è quello di default (righe vecchie, scheda mostrata a tutta la pagina). CUSTOM.pet ne è lo specchio.
+let ANIMALI = []; // [{ id, nome, specie, dt, g, m, a, vet, tel, note, routine }]
+const ANIMALI_CACHE = "mochi.animaliCache";
+const petPrinc = () => ANIMALI[0]?.id || "";
+// Una riga di pet_animali (ripulita come la scheda; "altri" resta quello di CUSTOM.pet)
+function animaleDaRiga(r) {
+  const { altri, ...p } = cleanPet({ nome: r.nome, specie: r.specie, dt: r.dt, g: r.g, m: r.m, a: r.a, vet: r.vet, tel: r.tel, note: r.note, routine: r.routine });
+  return { id: str(r.id), ...p };
+}
+function specchioPrincipale() {
+  const pr = ANIMALI.find((x) => x.id === petSelId()); if (!pr) return;
+  const { id, ...p } = pr; CUSTOM.pet = cleanPet({ ...CUSTOM.pet, ...p });
+}
+async function caricaAnimali(senzaCreare) {
+  if (!ONLINE_MODE || !store.user) { ANIMALI = []; return; }
+  try {
+    const { data, error } = await store.sb.from("pet_animali").select("id,nome,specie,dt,g,m,a,vet,tel,note,routine").order("created_at");
+    if (error) throw error;
+    ANIMALI = (data || []).slice(0, 5).map(animaleDaRiga);
+    LS.set(ANIMALI_CACHE, ANIMALI);
+    if (!senzaCreare && !ANIMALI.length && petPresente(CUSTOM.pet)) await animaleSincronizza(CUSTOM.pet); // scheda senza riga: la creo (una volta sola)
+    else specchioPrincipale();
+  } catch (e) { ANIMALI = LS.get(ANIMALI_CACHE, []); if (!Array.isArray(ANIMALI)) ANIMALI = []; specchioPrincipale(); }
+}
+// La scheda del principale va in pet_animali (crea la riga se manca). Senza rete resta nel dispositivo e si riprova alla prossima apertura
+async function animaleSincronizza(p) {
+  if (!ONLINE_MODE || !store.user) return;
+  const pr = ANIMALI.find((x) => x.id === petSelId());
+  const campi = { nome: p.nome, specie: p.specie, dt: p.dt, g: p.g, m: p.m, a: p.a, vet: p.vet, tel: p.tel, note: p.note, routine: p.routine ?? null };
+  try {
+    if (pr) { const { error } = await store.sb.from("pet_animali").update(campi).eq("id", pr.id); if (error) throw error; }
+    else { const { error } = await store.sb.from("pet_animali").insert({ ...campi, user_id: store.user.id }); if (error) throw error; }
+    await caricaAnimali(true);
+  } catch (e) { if (!erroreDiRete(e)) console.warn("Animale non salvato nell'account:", e?.message || e); }
+}
+
+// Selettore degli animali nella pagina (solo con account e almeno un animale)
+function petSelettoreHtml() {
+  if (!ONLINE_MODE || !ANIMALI.length) return "";
+  const sel = petSelId();
+  return `<div class="pet-dt pet-animali" role="group" aria-label="Animali">${ANIMALI.map((a) => `<button type="button" class="fbtn ${a.id === sel ? "on" : ""}" data-act="pet-sel" data-v="${esc(a.id)}" aria-pressed="${a.id === sel}">${esc(a.nome || a.specie || "Animale")}</button>`).join("")}${ANIMALI.length < 5 ? `<button type="button" class="fbtn" data-act="pet-nuovo">+ Aggiungi animale</button>` : ""}</div>`;
+}
+function apriNuovoAnimale() {
+  openSheet(`<h2><span class="mbox">${mascot()}</span>Nuovo animale</h2>
+    <div class="field"><label for="naNome">Nome</label><input class="input" id="naNome" maxlength="20" autocomplete="off" placeholder="Es. Micio"></div>
+    <div class="field"><label id="naSpL">Che animale è?</label><div class="sp-pick" id="naSpecie" role="group" aria-labelledby="naSpL">${PET_SPECIE.map(([k, n]) => `<button type="button" data-act="pet-na-specie" data-v="${k}" aria-pressed="false"><span class="e">${petIcona(k)}</span><small>${n}</small></button>`).join("")}</div></div>
+    <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-na-salva">Aggiungi</button></div>`);
+  setTimeout(() => $("#naNome")?.focus(), 250);
+}
+async function salvaNuovoAnimale() {
+  const r = cleanPet({ nome: $("#naNome").value, specie: $("#naSpecie .on")?.dataset.v || "" });
+  if (!petPresente(r)) { toast("Scrivi il nome o scegli che animale è 🐾"); $("#naNome").focus(); return; }
+  try {
+    const { data, error } = await store.sb.from("pet_animali").insert({ nome: r.nome, specie: r.specie, user_id: store.user.id }).select("id").single();
+    if (error) throw error;
+    PET_SEL = String(data.id); closeSheet(); await caricaAnimali(true); render(); toast("Animale aggiunto 🐾");
+  } catch (e) { toast(erroreDiRete(e) ? "Sei offline: riprova tra poco" : /limite/i.test(e?.message || "") ? "Hai raggiunto il limite di 5 animali" : "Non sono riuscita ad aggiungerlo"); }
+}
+
 // ---- Scheda: crea, modifica, rimuovi
 function apriPet() {
   const p = CUSTOM.pet, mesi = MESI.map((n, i) => `<option value="${i + 1}" ${p.m === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("");
   openSheet(`<h2><span class="mbox">${mascot()}</span>${petPresente(p) ? "La scheda del tuo pet" : "Il tuo pet"}</h2>
     <div class="field"><label for="ptNome">Nome</label><input class="input" id="ptNome" maxlength="20" autocomplete="off" placeholder="Es. Briciola" value="${esc(p.nome)}"></div>
-    <div class="field"><label for="ptAltri">Altri animali, se ne hai più di uno</label><input class="input" id="ptAltri" maxlength="130" autocomplete="off" placeholder="Es. Fufi, Nuvola" value="${esc((p.altri || []).join(", "))}" aria-describedby="ptAltriH"><small class="small" id="ptAltriH">Nomi separati da virgola, fino a 5. Servono a dividere scadenze e spese per animale.</small></div>
+    
     <div class="field"><label id="ptSpL">Che animale è?</label><div class="sp-pick" id="ptSpecie" role="group" aria-labelledby="ptSpL">${PET_SPECIE.map(([k, n]) => `<button type="button" class="${p.specie === k ? "on" : ""}" data-act="pet-specie" data-v="${k}" aria-pressed="${p.specie === k}"><span class="e">${petIcona(k)}</span><small>${n}</small></button>`).join("")}</div></div>
     <div class="field"><label id="ptDtL">Una data, se vuoi</label>
       <div class="pet-dt" id="ptDt" role="group" aria-labelledby="ptDtL"><button type="button" class="fbtn ${p.dt !== "a" ? "on" : ""}" data-act="pet-dt" data-v="n" aria-pressed="${p.dt !== "a"}">Compleanno</button><button type="button" class="fbtn ${p.dt === "a" ? "on" : ""}" data-act="pet-dt" data-v="a" aria-pressed="${p.dt === "a"}">Arrivo a casa</button></div>
@@ -3475,7 +3561,7 @@ function apriPet() {
     <div class="field"><label for="ptVet">Veterinario</label><input class="input" id="ptVet" maxlength="40" autocomplete="off" placeholder="Nome dello studio" value="${esc(p.vet)}"></div>
     <div class="field"><label for="ptTel">Telefono del veterinario</label><input class="input" id="ptTel" type="tel" inputmode="tel" maxlength="20" autocomplete="off" placeholder="Es. +39 02 1234567" value="${esc(p.tel)}"></div>
     <div class="field"><label for="ptNote">Note</label><textarea class="input" id="ptNote" rows="3" maxlength="300" placeholder="Allergie, cibo preferito, cose da ricordare">${esc(p.note)}</textarea></div>
-    ${petPresente(p) ? `<button class="more ospite-cancella" data-act="pet-rimuovi">Rimuovi il pet e i suoi dati</button>` : ""}
+    ${petPresente(p) ? `<button class="more ospite-cancella" data-act="pet-rimuovi">Rimuovi questo animale e i suoi dati</button>` : ""}
     <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-salva">Salva</button></div>`);
   if (!petPresente(p)) setTimeout(() => $("#ptNome")?.focus(), 250);
 }
@@ -3487,18 +3573,21 @@ async function salvaPet() {
   if (g && !m) { toast("Scegli anche il mese 📅"); $("#ptM").focus(); return; }
   if (g && m && g > new Date(2024, m, 0).getDate()) { toast("Quel giorno non esiste in quel mese 📅"); return; }
   if (tel && !cleanPetTel(tel)) { toast("Il telefono può avere solo cifre, spazi e un + all'inizio"); $("#ptTel").focus(); return; }
-  const altri = $("#ptAltri").value.split(",").map((x) => x.trim()).filter(Boolean);
-  if (altri.length > 5) { toast("Al massimo 5 altri animali 🐾"); $("#ptAltri").focus(); return; }
-  const pet = cleanPet({ nome: $("#ptNome").value, specie, dt, g, m, a, vet: $("#ptVet").value, tel, note: $("#ptNote").value, routine: CUSTOM.pet.routine, altri });
+  const pet = cleanPet({ nome: $("#ptNome").value, specie, dt, g, m, a, vet: $("#ptVet").value, tel, note: $("#ptNote").value, routine: CUSTOM.pet.routine });
   if ((g || m || a) && !pet.dt) { toast("Quella data non è valida 📅"); return; }
   if (!petPresente(pet)) { toast("Scegli che animale è o scrivi il suo nome"); $("#ptNome").focus(); return; }
-  await saveCustom({ pet }); closeSheet(); toast("Scheda salvata 🐾");
+  await saveCustom({ pet }); await animaleSincronizza(pet); closeSheet(); toast("Scheda salvata 🐾");
 }
 async function rimuoviPet() {
-  const ok = await ask({ title: "Rimuovere il pet?", text: "Cancello la scheda, le spunte della routine e tutti i pesi. Non si può annullare.", ok: "Rimuovi", danger: true });
+  const ok = await ask({ title: "Rimuovere il pet?", text: `Cancello la scheda${CUSTOM.pet.nome ? " di " + esc(CUSTOM.pet.nome) : ""}, le sue spunte e i suoi pesi. Non si può annullare.`, ok: "Rimuovi", danger: true });
   if (!ok) { apriPet(); return; }
-  try { await petCancellaRegistro(); } catch (e) { toast(erroreDiRete(e) ? "Sei offline: riprova tra poco" : "Non sono riuscita a rimuoverlo"); return; }
-  await saveCustom({ pet: cleanPet(null) }); toast("Pet rimosso");
+  // prima l'animale (il server rifiuta se ce ne sono altri: così il registro degli altri non si perde); poi le righe del pet
+  try {
+    const pr = ANIMALI.find((x) => x.id === petSelId());
+    if (ONLINE_MODE && store.user && pr) { const { error } = await store.sb.rpc("pet_elimina_animale", { p_id: pr.id }); if (error) throw error; ANIMALI = ANIMALI.filter((x) => x.id !== pr.id); PET_SEL = ""; }
+    await petCancellaRegistro(pr?.id);
+  } catch (e) { toast(erroreDiRete(e) ? "Sei offline: riprova tra poco" : "Non sono riuscita a rimuoverlo"); return; }
+  specchioPrincipale(); await saveCustom({ pet: ANIMALI.length ? CUSTOM.pet : cleanPet(null) }); toast("Pet rimosso");
 }
 // ---- Routine: fino a 8 voci
 let petBozza = null;
@@ -3558,8 +3647,12 @@ async function petAzione(act, v, el) {
     case "pet-scad-new": apriPetScad(null); break;
     case "pet-spesa-nuova": if (mod("spese")) apriSpesa(null, PET_CAT_SPESA); break;
     case "pet-scad-edit": apriPetScad(el.dataset.id); break;
-    case "pet-filtro": if (v === "" || petNomi().includes(v)) { petFiltro = v; render(); document.querySelector(`.pet-filtro .on`)?.focus({ preventScroll: true }); } break;
-    case "pet-s-tag": if (petScDraft && (v === "" || petNomi().includes(v) || v === petScDraft.tag)) {
+    case "pet-sel": if (petHa(v)) { PET_SEL = v; specchioPrincipale(); petVer++; render(); } break;
+    case "pet-nuovo": if (ONLINE_MODE) apriNuovoAnimale(); break;
+    case "pet-na-specie": document.querySelectorAll("#naSpecie button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); break;
+    case "pet-na-salva": await salvaNuovoAnimale(); break;
+    case "pet-filtro": if (v === "" || petHa(v)) { petFiltro = v; render(); document.querySelector(`.pet-filtro .on`)?.focus({ preventScroll: true }); } break;
+    case "pet-s-tag": if (petScDraft && (v === "" || petHa(v))) {
       const tit = $("#psTit"); if (tit && tit.value === petScTitolo(petScDraft.tipo, petScNome(petScDraft.tag))) tit.value = petScTitolo(petScDraft.tipo, petScNome(v));
       petScDraft.tag = v; document.querySelectorAll("#psTag button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); } break;
     case "pet-s-tipo": if (petScDraft && PET_SCAD_TIPI.some((t) => t[0] === v)) {
@@ -4990,7 +5083,14 @@ document.addEventListener("click", async (e) => {
     case "spesa-nuova": apriSpesa(null); break;
     case "spesa-modifica": { const sp = state.spese.voci.find((x) => x.id === id); if (sp) apriSpesa(sp); break; }
     case "spesa-cat": if (spesaDraft && CATEGORIE_SPESA.some((c) => c[0] === v)) { spesaDraft.categoria = v; document.querySelectorAll(".sp-pick button").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); const pt = $("#sPetTag"); if (pt) pt.hidden = v !== PET_CAT_SPESA; } break;
-    case "spesa-pet-tag": if (spesaDraft && spesaDraft._petTag !== null && (v === "" || petNomi().includes(v))) { spesaDraft._petTag = v; document.querySelectorAll("#sPetTag button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); } break;
+    case "spesa-animale": if (spesaDraft && spesaDraft._animali && (v === "" || petHa(v))) {
+      const d = spesaDraft;
+      if (v === "" || !d._nuova) { d._animali = v === "" ? [""] : [v]; d._toccato = true; } // per tutti, o in modifica: un solo animale
+      else if (!d._toccato) { d._animali = [v]; d._toccato = true; } // il primo clic sostituisce la preselezione (non si divide per sbaglio)
+      else { const l = d._animali.filter(Boolean); const nl = l.includes(v) ? l.filter((x) => x !== v) : [...l, v]; d._animali = nl.length ? nl : [""]; }
+      document.querySelectorAll("#sPetTag button").forEach((b) => { const on = d._animali.includes(b.dataset.v); b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+      const h = $("#sPtH"); if (h) h.textContent = d._nuova && d._animali.filter(Boolean).length > 1 ? petDivisioneTesto(d._animali.filter(Boolean).length) : "";
+    } break;
     case "spesa-giorno": if (spesaDraft && validYmd(v)) { spesaDraft.giorno = v; $("#sGiorno").value = v; document.querySelectorAll(".sp-quando .fbtn").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); } break;
     case "spesa-salva": salvaSpesa(el); break;
     case "spesa-elimina": eliminaSpesa(); break;
@@ -5046,7 +5146,7 @@ document.addEventListener("click", async (e) => {
       else toast(acceso ? `${m[1]} ${m[2]}: acceso` : `${m[1]} ${m[2]}: spento. I dati restano al sicuro`);
       break;
     }
-    case "pet-spesa-nuova": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
+    case "pet-spesa-nuova": case "pet-sel": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
@@ -5238,6 +5338,7 @@ async function loadAndRender() {
   await caricaTurni();
   await caricaSpese();
   state.items = await store.list();
+  await caricaAnimali();
   petDaCache();
   const petPronto = caricaPet(); // in sottofondo: spunte di oggi e pesi dal server
   // giorni attivi: subito quelli che si conoscono, poi (in sottofondo) quelli salvati sul server
