@@ -553,7 +553,7 @@ const PET_ROUTINE_DEF = {
   altro: [...PET_PASTI, PET_ACQUA]
 };
 const PET_RE_ID = /^[a-z][a-z0-9-]{0,23}$/; // sempre con una lettera iniziale (il database accetterebbe anche il trattino, il client no)
-const PET_VUOTO = { nome: "", specie: "", dt: "", g: 0, m: 0, a: 0, vet: "", tel: "", note: "", routine: null };
+const PET_VUOTO = { nome: "", specie: "", dt: "", g: 0, m: 0, a: 0, vet: "", tel: "", note: "", routine: null, altri: [] };
 const petTesto = (v, n, nota) => taglia((typeof v === "string" ? v : "").replace(nota ? /[\u0000-\u0009\u000b-\u001f\u007f]/g : /[\u0000-\u001f\u007f<>]/g, ""), n).trim();
 // Telefono: solo cifre, "+" iniziale e spazi (da 3 a 15 cifre); qualsiasi altra cosa = niente
 function cleanPetTel(v) {
@@ -590,7 +590,8 @@ function cleanPetRoutine(r) {
 function cleanPet(p) {
   p = p && typeof p === "object" && !Array.isArray(p) ? p : {};
   const out = { nome: petTesto(p.nome, 20), specie: typeof p.specie === "string" && PET_SPECIE.some((s) => s[0] === p.specie) ? p.specie : "", ...cleanPetData(p),
-    vet: petTesto(p.vet, 40), tel: cleanPetTel(p.tel), note: petTesto(p.note, 300, true), routine: cleanPetRoutine(p.routine) };
+    vet: petTesto(p.vet, 40), tel: cleanPetTel(p.tel), note: petTesto(p.note, 300, true), routine: cleanPetRoutine(p.routine), altri: [] };
+  out.altri = cleanPetAltri(p.altri, out.nome);
   // nei metadati dell'account il pet deve restare sotto i 2 KB: se serve si accorcia la nota
   const peso = () => new TextEncoder().encode(JSON.stringify(out)).length;
   while (out.note && peso() > 2000) out.note = [...out.note].slice(0, -20).join("").trim();
@@ -598,6 +599,18 @@ function cleanPet(p) {
   return out;
 }
 const petPresente = (p) => !!(p && (p.nome || p.specie));
+// Altri animali (v33): solo nomi, al massimo 5, ognuno da 20; servono da "tag" per dividere scadenze e spese. Niente virgole, "·", ":" o caratteri invisibili
+function cleanPetAltri(a, nome) {
+  if (!Array.isArray(a)) return [];
+  const out = [], visti = new Set([String(nome || "").toLowerCase()].filter(Boolean));
+  for (const x of a.slice(0, 20)) {
+    if (out.length >= 5) break;
+    const t = petTesto(x, 20).replace(/[,·:\u2063\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/g, "").replace(/\s+/g, " ").trim();
+    if (!t || visti.has(t.toLowerCase())) continue;
+    visti.add(t.toLowerCase()); out.push(t);
+  }
+  return out;
+}
 const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
   moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO };
 // I pronomi: servono solo ad adattare i testi (Benvenuta / Benvenuto / Rieccoti). Solo "lei", "lui", "loro" o vuoto (= non specificato); tutto il resto scartato
@@ -1224,7 +1237,7 @@ function openEditor(it, isNew) {
   // _autoRemind: il promemoria lo sceglie Mochi finché l'utente non lo cambia a mano
   // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
   const pm = petMarca(it);
-  draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
+  draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor, tag: pm.tag } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
   advanced = !isNew || draft.kind === "note";
   drawEditor();
   setTimeout(() => { const i = $("#fTitle"); if (i && isNew) i.focus(); }, 250);
@@ -1643,7 +1656,8 @@ function maybeShowInstallHint() {
 const NOVITA = {
   titolo: "Novità in Mochi!",
   punti: [
-    ["pet", "🐾", "<b>Il tuo pet</b>: la scheda del tuo animale, la routine di ogni giorno, i pesi e le scadenze di vaccini e visite con il promemoria. Si accende da Impostazioni → Cosa vuoi usare.", "pet"],
+    // "pet2" senza modulo: la vedono tutti (la vecchia "pet" era legata al modulo spento, quindi segnata come vista senza mostrarla)
+    ["pet2", "🐾", "<b>Il tuo pet</b>: la scheda del tuo animale, la routine di ogni giorno, i pesi e le scadenze di vaccini e visite con il promemoria. Hai più animali? Scrivi i loro nomi nella scheda e dividi scadenze e spese per ognuno. Si accende da Impostazioni → Cosa vuoi usare."],
     ["sobrio", "🎨", "Nuovo stile <b>Sobrio</b> e tre palette nuove (Notte, Bosco, Grafite): colori sobri e forme più decise, per chi preferisce un aspetto più serio. Lo trovi in Impostazioni → Stile e Colori."],
     ["feste", "🎉", "<b>Feste</b>: a Natale, Capodanno, San Valentino, Pasqua, Halloween e in estate la mascotte si veste a festa e la casetta si decora, da sola. Se aggiungi il tuo compleanno in Impostazioni, ti fa gli auguri. In giro ci sono anche sorprese nascoste... Si spegne da Impostazioni → Cosa vuoi usare.", "feste"],
     ["spesa-smart", "🛒", "<b>Lista della spesa intelligente</b>: nelle liste da spuntare della spesa ti suggerisco le cose che compri di solito e le metto in ordine per reparto, come il giro del supermercato."],
@@ -2640,12 +2654,16 @@ function apriSpesa(sp, cat) {
   const ultima = LS.get("mochi.spesa.cat", "spesa");
   spesaDraft = sp ? { ...sp, _nuova: false } : { id: null, giorno: todayStr(), importo_cent: null, categoria: cat ? catSpesa(cat)[0] : catSpesa(ultima)[0], nota: "", _nuova: true, _daPet: !!cat };
   const d = spesaDraft, oggi = todayStr(), ieri = ymd(addDays(new Date(), -1));
+  // tag dell'animale (solo con il pet acceso e due o più nomi): il nome va in testa alla nota, qui si sceglie a parte
+  d._petTag = null;
+  if (mod("pet") && petMulti()) { d._petTag = sp ? petSpesaTag(d.nota) : cat ? petFiltroOk() : ""; if (d._petTag) d.nota = d.nota.slice(d._petTag.length + PET_SEP.length); }
   openSheet(`<h2><span class="mbox">${mascot()}</span>${d._nuova ? "Nuova spesa" : "Modifica spesa"}</h2>
     <div class="field sp-imp"><input class="input big" id="sImporto" inputmode="decimal" enterkeyhint="done" placeholder="0,00" maxlength="14" autocomplete="off" value="${d.importo_cent ? fmtImporto(d.importo_cent) : ""}" aria-label="Importo in euro"><span class="eur">€</span></div>
     <div class="field"><label>Categoria</label><div class="sp-pick">${CATEGORIE_SPESA.map(([k, e, n, c]) => `<button class="${d.categoria === k ? "on" : ""}" style="--cc:${c}" data-act="spesa-cat" data-v="${k}"><span class="e">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     <div class="field"><label>Quando</label><div class="sp-quando">
       <button class="fbtn ${d.giorno === oggi ? "on" : ""}" data-act="spesa-giorno" data-v="${oggi}">Oggi</button><button class="fbtn ${d.giorno === ieri ? "on" : ""}" data-act="spesa-giorno" data-v="${ieri}">Ieri</button>
       <input class="input" type="date" id="sGiorno" value="${d.giorno}" min="2000-01-01" max="2100-12-31" aria-label="Giorno"></div></div>
+    ${d._petTag !== null ? `<div class="field" id="sPetTag" ${d.categoria === PET_CAT_SPESA ? "" : "hidden"}><label id="sPtL">Per chi?</label><div class="pet-dt" role="group" aria-labelledby="sPtL">${petTagHtml(d._petTag, "spesa-pet-tag", "Tutti")}</div></div>` : ""}
     <div class="field"><label>Nota, se vuoi</label><input class="input" id="sNota" maxlength="120" placeholder="Es. pizza con le amiche" autocomplete="off" value="${esc(d.nota)}"></div>
     <div class="actions">${d._nuova ? "" : `<button class="btn danger" data-act="spesa-elimina" aria-label="Elimina">🗑</button>`}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="spesa-salva">Salva</button></div>`);
   const imp = $("#sImporto");
@@ -2659,7 +2677,7 @@ async function salvaSpesa(btn) {
   if (cent === null) { toast(/\d/.test($("#sImporto")?.value || "") ? "Importo non valido: es. 12,50 (massimo 999.999,99 €)" : "Scrivi quanto hai speso, es. 12,50"); $("#sImporto")?.focus(); return; }
   const giorno = $("#sGiorno")?.value || d.giorno;
   if (!validYmd(giorno) || giorno < "2000-01-01" || giorno > "2100-12-31") { toast("Controlla il giorno 📅"); return; }
-  const sp = { id: d.id, giorno, importo_cent: cent, categoria: catSpesa(d.categoria)[0], nota: taglia(($("#sNota")?.value || "").trim(), 120), created_at: d.created_at || new Date().toISOString() };
+  const sp = { id: d.id, giorno, importo_cent: cent, categoria: catSpesa(d.categoria)[0], nota: taglia(((d._petTag && d.categoria === PET_CAT_SPESA ? d._petTag + PET_SEP : "") + ($("#sNota")?.value || "").trim()).trim(), 120), created_at: d.created_at || new Date().toISOString() };
   if (d._nuova) sp.id = uid();
   if (btn) btn.disabled = true;
   const prima = state.spese.voci;
@@ -3279,13 +3297,15 @@ function petGrafico(pesi) {
 // le note sono libere nel database (nessuna colonna nuova), l'editor lo nasconde e lo rimette. Mai in una lista condivisa (lista_id vuoto).
 const PET_SCAD_TIPI = [["vaccino", "Vaccino"], ["antiparassitario", "Antiparassitario"], ["visita", "Visita"], ["farmaco", "Farmaco"], ["toelettatura", "Toelettatura"], ["peso", "Controllo peso"], ["altro", "Altro"]];
 const PET_REP = [["-", "Non si ripete"], ["m1", "Ogni mese"], ["m3", "Ogni 3 mesi"], ["m6", "Ogni 6 mesi"], ["m12", "Ogni anno"], ["d", "Ogni tot giorni"]];
-const PET_MARCA_RE = /^⁣pet:([a-z]{3,16}):(-|m1|m3|m6|m12|d[0-9]{1,3}):([0-9]{1,2})⁣/;
-const petMarcaTesto = (m) => `⁣pet:${m.tipo}:${m.rep}:${m.anchor}⁣`;
+// Tag dell'animale (v33, facoltativo): un secondo blocco subito dopo, "⁣t:Nome⁣". Le versioni vecchie lo lasciano nelle note così com'è.
+const PET_MARCA_RE = /^⁣pet:([a-z]{3,16}):(-|m1|m3|m6|m12|d[0-9]{1,3}):([0-9]{1,2})⁣(?:⁣t:([^⁣\u0000-\u001f<>]{1,40})⁣)?/;
+const petTagOk = (t) => typeof t === "string" && /^[^⁣\u0000-\u001f<>]{1,40}$/.test(t) && t.trim() === t;
+const petMarcaTesto = (m) => `⁣pet:${m.tipo}:${m.rep}:${m.anchor}⁣${petTagOk(m.tag) ? `⁣t:${m.tag}⁣` : ""}`;
 function petMarca(it) {
   if (!it || it.kind !== "todo" || it.lista_id || typeof it.body !== "string" || it.body.charCodeAt(0) !== 0x2063) return null;
   const m = PET_MARCA_RE.exec(it.body); if (!m || !PET_SCAD_TIPI.some((t) => t[0] === m[1])) return null;
   if (m[2][0] === "d" && !(+m[2].slice(1) >= 1 && +m[2].slice(1) <= 365)) return null;
-  return { tipo: m[1], rep: m[2], anchor: +m[3] >= 1 && +m[3] <= 31 ? +m[3] : 0, resto: it.body.slice(m[0].length) };
+  return { tipo: m[1], rep: m[2], anchor: +m[3] >= 1 && +m[3] <= 31 ? +m[3] : 0, tag: m[4] && petTagOk(m[4]) ? m[4] : "", resto: it.body.slice(m[0].length) };
 }
 const petRepTesto = (rep) => rep === "-" ? "" : rep[0] === "d" ? `Ogni ${+rep.slice(1) === 1 ? "giorno" : rep.slice(1) + " giorni"}` : PET_REP.find((r) => r[0] === rep)?.[1] || "";
 // La prossima data: mesi (ancorati al giorno scelto: 31 gen + 1 mese = 28/29 feb, poi di nuovo il 31) o giorni; sempre dopo oggi
@@ -3305,8 +3325,18 @@ function petProssima(due, rep, anchor, oggi = todayStr()) {
   return validYmd(out) && out <= "2100-12-31" ? out : null;
 }
 const petScadenze = () => state.items.filter((i) => !i.done && petMarca(i)).sort((a, b) => ((a.due_date || "9") + a.title < (b.due_date || "9") + b.title ? -1 : 1));
-function petScTitolo(tipo, det = "") {
-  const t = PET_SCAD_TIPI.find((x) => x[0] === tipo)?.[1] || "Scadenza", nome = CUSTOM.pet.nome, d = taglia(det.trim(), 60);
+// ---- Tag (v33): con due o più nomi (scheda + altri animali) scadenze e spese si dividono per animale. Routine e pesi restano uno.
+const petNomi = () => [CUSTOM.pet.nome, ...(CUSTOM.pet.altri || [])].filter(petTagOk);
+const petMulti = () => petNomi().length >= 2;
+let petFiltro = ""; // "" = tutti
+const petFiltroOk = () => (petMulti() && petNomi().includes(petFiltro) ? petFiltro : "");
+const PET_SEP = " · "; // spese: il nome dell'animale in testa alla nota ("Briciola · crocchette"), visibile anche in Spese
+const petSpesaTag = (nota) => { const n = String(nota || ""); return petNomi().find((t) => n.startsWith(t + PET_SEP) || n === t + PET_SEP.trimEnd()) || ""; }; // "Briciola ·" = solo il nome, senza nota
+const petTagHtml = (attiva, act, tutti, extra) => { const nomi = petNomi(); if (extra && !nomi.includes(extra)) nomi.push(extra);
+  return ["", ...nomi].map((t) => `<button type="button" class="fbtn ${attiva === t ? "on" : ""}" data-act="${act}" data-v="${esc(t)}" aria-pressed="${attiva === t}">${t ? esc(t) : tutti}</button>`).join(""); };
+const petScNome = (tag) => (petMulti() ? tag : CUSTOM.pet.nome);
+function petScTitolo(tipo, nome = CUSTOM.pet.nome, det = "") {
+  const t = PET_SCAD_TIPI.find((x) => x[0] === tipo)?.[1] || "Scadenza", d = taglia(det.trim(), 60);
   if (tipo === "altro") return d ? (nome ? `${d} (${nome})` : d) : (nome ? `Scadenza di ${nome}` : "Scadenza del pet");
   return `${t}${nome ? " di " + nome : ""}${d ? ": " + d : ""}`;
 }
@@ -3317,25 +3347,26 @@ function petScStato(it) {
   return { late: false, testo: niceDate(it.due_date) };
 }
 function petScadHtml() {
-  const lista = petScadenze(), mostra = lista.slice(0, 10);
+  const f = petFiltroOk(), lista = petScadenze().filter((it) => !f || petMarca(it).tag === f), mostra = lista.slice(0, 10);
   return `<div class="sec"><h2>Prossime scadenze</h2><button class="fbtn on" data-act="pet-scad-new">Aggiungi</button></div>
     ${mostra.length ? `<div class="list pet-scads">${mostra.map((it) => { const s = petScStato(it), m = petMarca(it), r = petRepTesto(m.rep);
       return `<div class="pet-scad ${s.late ? "late" : ""}"><button class="check" data-act="pet-scad-fatta" data-id="${esc(it.id)}" aria-label="Segna come fatto: ${esc(it.title)}"></button>
         <button class="pet-scad-b" data-act="pet-scad-edit" data-id="${esc(it.id)}" aria-label="Modifica: ${esc(it.title)}"><b>${esc(it.title)}</b><small class="${s.late ? "pet-ritardo" : ""}">${s.late ? "⚠ " : ""}${esc(s.testo)}${r ? " · " + esc(r) : ""}</small></button></div>`; }).join("")}</div>
       ${lista.length > mostra.length ? `<p class="small">Altre ${lista.length - mostra.length} le trovi in Da fare e Agenda.</p>` : ""}`
-      : `<p class="small">Nessuna scadenza. Vaccini, antiparassitari, visite: te le ricordo io.</p>`}`;
+      : `<p class="small">${f ? `Nessuna scadenza per ${esc(f)}.` : "Nessuna scadenza. Vaccini, antiparassitari, visite: te le ricordo io."}</p>`}`;
 }
 let petScDraft = null;
 function apriPetScad(id) {
   const it = id ? state.items.find((x) => x.id === id) : null, m = it && petMarca(it);
   if (id && !m) return;
   const dd = it ? it.due_date || todayStr() : todayStr();
-  petScDraft = { id: it ? it.id : null, tipo: m ? m.tipo : "vaccino" };
+  petScDraft = { id: it ? it.id : null, tipo: m ? m.tipo : "vaccino", tag: m ? m.tag : petFiltroOk() };
   const rep = m ? (m.rep[0] === "d" ? "d" : m.rep) : "-", n = m && m.rep[0] === "d" ? +m.rep.slice(1) : 30;
   const rem = it ? (["none", "morning", "1440"].includes(it.remind) ? it.remind : "morning") : "morning";
   openSheet(`<h2><span class="mbox">${mascot()}</span>${it ? "Modifica la scadenza" : "Nuova scadenza"}</h2>
     <div class="field"><label id="psTL">Di che cosa si tratta?</label><div class="pet-dt" id="psTipi" role="group" aria-labelledby="psTL">${PET_SCAD_TIPI.map(([k, n2]) => `<button type="button" class="fbtn ${petScDraft.tipo === k ? "on" : ""}" data-act="pet-s-tipo" data-v="${k}" aria-pressed="${petScDraft.tipo === k}">${n2}</button>`).join("")}</div></div>
-    <div class="field"><label for="psTit">Titolo</label><input class="input" id="psTit" maxlength="100" autocomplete="off" value="${esc(it ? it.title : petScTitolo(petScDraft.tipo))}"></div>
+    ${petMulti() ? `<div class="field"><label id="psAL">Per chi?</label><div class="pet-dt" id="psTag" role="group" aria-labelledby="psAL">${petTagHtml(petScDraft.tag, "pet-s-tag", "Tutti", petScDraft.tag)}</div></div>` : ""}
+    <div class="field"><label for="psTit">Titolo</label><input class="input" id="psTit" maxlength="100" autocomplete="off" value="${esc(it ? it.title : petScTitolo(petScDraft.tipo, petScNome(petScDraft.tag)))}"></div>
     <div class="field"><label for="psData">Data</label><input class="input" type="date" id="psData" value="${dd}" min="2000-01-01" max="2100-12-31"></div>
     <div class="field"><label for="psRep">Si ripete?</label><select class="input" id="psRep">${PET_REP.map(([k, l]) => `<option value="${k}" ${rep === k ? "selected" : ""}>${l}</option>`).join("")}</select>
       <input class="input" type="number" id="psN" min="1" max="365" inputmode="numeric" value="${n}" aria-label="Ogni quanti giorni" style="margin-top:8px" ${rep === "d" ? "" : "hidden"}></div>
@@ -3351,7 +3382,7 @@ async function salvaPetScad() {
   if (rep === "d") { const n = parseInt($("#psN").value, 10); if (!(n >= 1 && n <= 365)) { toast("Ogni quanti giorni? Da 1 a 365"); $("#psN").focus(); return; } rep = "d" + n; }
   else if (!["-", "m1", "m3", "m6", "m12"].includes(rep)) rep = "-";
   const rem = ["none", "morning", "1440"].includes($("#psRem").value) ? $("#psRem").value : "morning";
-  const marca = { tipo: PET_SCAD_TIPI.some((t) => t[0] === d.tipo) ? d.tipo : "altro", rep, anchor: +data.slice(8, 10) };
+  const marca = { tipo: PET_SCAD_TIPI.some((t) => t[0] === d.tipo) ? d.tipo : "altro", rep, anchor: +data.slice(8, 10), tag: petTagOk(d.tag) ? d.tag : "" };
   let it = d.id ? state.items.find((x) => x.id === d.id) : null; const nuova = !it;
   const resto = it ? (petMarca(it)?.resto ?? it.body) : "";
   const campi = { title: tit, body: petMarcaTesto(marca) + resto, due_date: data, remind: rem, lista_id: null, kind: "todo", updated_at: new Date().toISOString() };
@@ -3377,7 +3408,7 @@ async function petProponiProssima(it) {
   await new Promise((r) => setTimeout(r, 450));
   const si = await ask({ title: "Metto la prossima?", text: `${it.title}\nLa prossima sarebbe ${parseYmd(prox).getDate()} ${MESI[parseYmd(prox).getMonth()]} ${parseYmd(prox).getFullYear()} (${petRepTesto(m.rep).toLowerCase()}).`, ok: "Sì, aggiungila" });
   if (!si) return;
-  const n = newItem({ kind: "todo", title: it.title, body: petMarcaTesto({ tipo: m.tipo, rep: m.rep, anchor: m.anchor || +it.due_date.slice(8, 10) }) + m.resto, due_date: prox, remind: ["none", "morning", "1440"].includes(it.remind) ? it.remind : "morning", lista_id: null, area: "personale" });
+  const n = newItem({ kind: "todo", title: it.title, body: petMarcaTesto({ tipo: m.tipo, rep: m.rep, anchor: m.anchor || +it.due_date.slice(8, 10), tag: m.tag }) + m.resto, due_date: prox, remind: ["none", "morning", "1440"].includes(it.remind) ? it.remind : "morning", lista_id: null, area: "personale" });
   n.remind_at = computeRemind(n);
   state.items.push(n); render(); await store.save(n); toast("Prossima scadenza aggiunta 🐾");
 }
@@ -3386,13 +3417,13 @@ const PET_CAT_SPESA = "animali";
 function petSpeseHtml() {
   if (!mod("spese")) return "";
   const oggi = new Date(), mk = monthKey(oggi), ak = String(oggi.getFullYear());
-  const v = state.spese.voci.filter((x) => x.categoria === PET_CAT_SPESA).sort(ordineSpese);
+  const f = petFiltroOk(), v = state.spese.voci.filter((x) => x.categoria === PET_CAT_SPESA && (!f || petSpesaTag(x.nota) === f)).sort(ordineSpese);
   const somma = (k) => v.filter((x) => x.giorno.startsWith(k)).reduce((a, x) => a + x.importo_cent, 0);
-  return `<div class="sec"><h2>Spese del pet</h2><button class="fbtn on" data-act="pet-spesa-nuova">Aggiungi spesa pet</button></div>
+  return `<div class="sec"><h2>${f ? `Spese di ${esc(f)}` : "Spese del pet"}</h2><button class="fbtn on" data-act="pet-spesa-nuova">Aggiungi spesa pet</button></div>
     <div class="pet-spese-tot"><div><small>Questo mese</small><b>${euro(somma(mk))}</b></div><div><small>Quest'anno</small><b>${euro(somma(ak))}</b></div></div>
     ${v.length ? `<div class="list pet-scads">${v.slice(0, 5).map((x) => { const c = catSpesa(x.categoria); return `<button class="sp-riga" data-act="spesa-modifica" data-id="${esc(x.id)}">
       <span class="sp-e" style="--cc:${c[3]}">${c[1]}</span><span class="sp-t"><b>${esc(x.nota || c[2])}</b><small>${x.nota ? `${c[2]} · ` : ""}${niceDate(x.giorno)}</small></span><b class="sp-i">${euro(x.importo_cent)}</b></button>`; }).join("")}</div>`
-      : `<p class="small">Ancora nessuna spesa per il tuo pet. Cibo, veterinario, giochi: segna qui quanto spendi.</p>`}`;
+      : `<p class="small">${f ? `Ancora nessuna spesa per ${esc(f)}.` : "Ancora nessuna spesa per il tuo pet. Cibo, veterinario, giochi: segna qui quanto spendi."}</p>`}`;
 }
 function viewPet() {
   const p = CUSTOM.pet;
@@ -3414,6 +3445,7 @@ function viewPet() {
       return `<button class="pin-toggle pet-voce ${f ? "on" : ""}" data-act="pet-spunta" data-v="${esc(v.id)}" aria-pressed="${f}"><span><b>${esc(v.t)}</b></span><span class="sw2" aria-hidden="true"></span></button>`; }).join("")}</div>`
       : `<p class="small">Nessuna voce nella routine. Aggiungine qualcuna.</p>`}
     <div class="more-row"><button class="more" data-act="pet-routine">Cambia la routine</button></div>
+    ${petMulti() ? `<div class="sec"><h2 id="pfL">Scadenze e spese di</h2></div><div class="pet-dt pet-filtro" role="group" aria-labelledby="pfL">${petTagHtml(petFiltroOk(), "pet-filtro", "Tutti")}</div>` : ""}
     ${petScadHtml()}
     ${petSpeseHtml()}
     <div class="sec"><h2>Peso</h2><button class="fbtn on" data-act="pet-peso" data-v="">Aggiungi peso</button></div>
@@ -3427,6 +3459,7 @@ function apriPet() {
   const p = CUSTOM.pet, mesi = MESI.map((n, i) => `<option value="${i + 1}" ${p.m === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("");
   openSheet(`<h2><span class="mbox">${mascot()}</span>${petPresente(p) ? "La scheda del tuo pet" : "Il tuo pet"}</h2>
     <div class="field"><label for="ptNome">Nome</label><input class="input" id="ptNome" maxlength="20" autocomplete="off" placeholder="Es. Briciola" value="${esc(p.nome)}"></div>
+    <div class="field"><label for="ptAltri">Altri animali, se ne hai più di uno</label><input class="input" id="ptAltri" maxlength="130" autocomplete="off" placeholder="Es. Fufi, Nuvola" value="${esc((p.altri || []).join(", "))}" aria-describedby="ptAltriH"><small class="small" id="ptAltriH">Nomi separati da virgola, fino a 5. Servono a dividere scadenze e spese per animale.</small></div>
     <div class="field"><label id="ptSpL">Che animale è?</label><div class="sp-pick" id="ptSpecie" role="group" aria-labelledby="ptSpL">${PET_SPECIE.map(([k, n]) => `<button type="button" class="${p.specie === k ? "on" : ""}" data-act="pet-specie" data-v="${k}" aria-pressed="${p.specie === k}"><span class="e">${petIcona(k)}</span><small>${n}</small></button>`).join("")}</div></div>
     <div class="field"><label id="ptDtL">Una data, se vuoi</label>
       <div class="pet-dt" id="ptDt" role="group" aria-labelledby="ptDtL"><button type="button" class="fbtn ${p.dt !== "a" ? "on" : ""}" data-act="pet-dt" data-v="n" aria-pressed="${p.dt !== "a"}">Compleanno</button><button type="button" class="fbtn ${p.dt === "a" ? "on" : ""}" data-act="pet-dt" data-v="a" aria-pressed="${p.dt === "a"}">Arrivo a casa</button></div>
@@ -3448,7 +3481,9 @@ async function salvaPet() {
   if (g && !m) { toast("Scegli anche il mese 📅"); $("#ptM").focus(); return; }
   if (g && m && g > new Date(2024, m, 0).getDate()) { toast("Quel giorno non esiste in quel mese 📅"); return; }
   if (tel && !cleanPetTel(tel)) { toast("Il telefono può avere solo cifre, spazi e un + all'inizio"); $("#ptTel").focus(); return; }
-  const pet = cleanPet({ nome: $("#ptNome").value, specie, dt, g, m, a, vet: $("#ptVet").value, tel, note: $("#ptNote").value, routine: CUSTOM.pet.routine });
+  const altri = $("#ptAltri").value.split(",").map((x) => x.trim()).filter(Boolean);
+  if (altri.length > 5) { toast("Al massimo 5 altri animali 🐾"); $("#ptAltri").focus(); return; }
+  const pet = cleanPet({ nome: $("#ptNome").value, specie, dt, g, m, a, vet: $("#ptVet").value, tel, note: $("#ptNote").value, routine: CUSTOM.pet.routine, altri });
   if ((g || m || a) && !pet.dt) { toast("Quella data non è valida 📅"); return; }
   if (!petPresente(pet)) { toast("Scegli che animale è o scrivi il suo nome"); $("#ptNome").focus(); return; }
   await saveCustom({ pet }); closeSheet(); toast("Scheda salvata 🐾");
@@ -3517,8 +3552,12 @@ async function petAzione(act, v, el) {
     case "pet-scad-new": apriPetScad(null); break;
     case "pet-spesa-nuova": if (mod("spese")) apriSpesa(null, PET_CAT_SPESA); break;
     case "pet-scad-edit": apriPetScad(el.dataset.id); break;
+    case "pet-filtro": if (v === "" || petNomi().includes(v)) { petFiltro = v; render(); document.querySelector(`.pet-filtro .on`)?.focus({ preventScroll: true }); } break;
+    case "pet-s-tag": if (petScDraft && (v === "" || petNomi().includes(v) || v === petScDraft.tag)) {
+      const tit = $("#psTit"); if (tit && tit.value === petScTitolo(petScDraft.tipo, petScNome(petScDraft.tag))) tit.value = petScTitolo(petScDraft.tipo, petScNome(v));
+      petScDraft.tag = v; document.querySelectorAll("#psTag button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); } break;
     case "pet-s-tipo": if (petScDraft && PET_SCAD_TIPI.some((t) => t[0] === v)) {
-      const tit = $("#psTit"); if (tit && tit.value === petScTitolo(petScDraft.tipo)) tit.value = petScTitolo(v);
+      const tit = $("#psTit"), nm = petScNome(petScDraft.tag); if (tit && tit.value === petScTitolo(petScDraft.tipo, nm)) tit.value = petScTitolo(v, nm);
       petScDraft.tipo = v; document.querySelectorAll("#psTipi button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); } break;
     case "pet-scad-salva": await salvaPetScad(); break;
     case "pet-scad-del": await eliminaPetScad(); break;
@@ -4944,7 +4983,8 @@ document.addEventListener("click", async (e) => {
     // spese
     case "spesa-nuova": apriSpesa(null); break;
     case "spesa-modifica": { const sp = state.spese.voci.find((x) => x.id === id); if (sp) apriSpesa(sp); break; }
-    case "spesa-cat": if (spesaDraft && CATEGORIE_SPESA.some((c) => c[0] === v)) { spesaDraft.categoria = v; document.querySelectorAll(".sp-pick button").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); } break;
+    case "spesa-cat": if (spesaDraft && CATEGORIE_SPESA.some((c) => c[0] === v)) { spesaDraft.categoria = v; document.querySelectorAll(".sp-pick button").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); const pt = $("#sPetTag"); if (pt) pt.hidden = v !== PET_CAT_SPESA; } break;
+    case "spesa-pet-tag": if (spesaDraft && spesaDraft._petTag !== null && (v === "" || petNomi().includes(v))) { spesaDraft._petTag = v; document.querySelectorAll("#sPetTag button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); } break;
     case "spesa-giorno": if (spesaDraft && validYmd(v)) { spesaDraft.giorno = v; $("#sGiorno").value = v; document.querySelectorAll(".sp-quando .fbtn").forEach((b) => b.classList.toggle("on", b.dataset.v === v)); } break;
     case "spesa-salva": salvaSpesa(el); break;
     case "spesa-elimina": eliminaSpesa(); break;
@@ -5000,7 +5040,7 @@ document.addEventListener("click", async (e) => {
       else toast(acceso ? `${m[1]} ${m[2]}: acceso` : `${m[1]} ${m[2]}: spento. I dati restano al sicuro`);
       break;
     }
-    case "pet-spesa-nuova": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
+    case "pet-spesa-nuova": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
