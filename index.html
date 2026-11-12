@@ -611,7 +611,11 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 .st-row.fatto .st-in{text-decoration:line-through;color:var(--ink2)}
 .st-btn{width:36px;height:44px;flex:none;border-radius:10px;color:var(--ink2);font-weight:800;font-size:15px}
 .st-btn:disabled{opacity:.25;cursor:default}
-.st-row.nuovo .st-plus{width:26px;flex:none;text-align:center;font-weight:800;font-size:21px;color:var(--acc-t)}
+/* Lista della spesa (v36): schermata a tutta altezza; il campo "Aggiungi" e i suggerimenti restano in fondo */
+.sheet.lista-full{top:0!important;bottom:0!important;left:0!important;right:0!important;width:auto!important;max-width:none!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important;margin:0!important;transform:none!important;overflow-y:auto;display:flex;flex-direction:column}
+.sheet.lista-full .ls-corpo{flex:1 0 auto;padding-bottom:12px}
+.sheet.lista-full .ls-fondo{position:sticky;bottom:calc(-1*(var(--safe-b) + 20px));background:var(--card);padding:10px 0 calc(var(--safe-b) + 14px);border-top:1px solid var(--line,rgba(0,0,0,.08))}
+.st-row.nuovo .st-plus{width:26px;flex:none;text-align:center;font-weight:800;font-size:21px;color:var(--acc-t);background:none;border:0;padding:0;cursor:pointer;font-family:inherit;line-height:1}
 .st-row.nuovo .st-in{border-style:dashed}
 .st-prog{font-size:13px;font-weight:800;color:var(--ink2);text-align:right;margin-right:4px}
 .chip.st-chip{font:inherit;font-weight:800;color:inherit;cursor:pointer;padding:3px 10px;position:relative}

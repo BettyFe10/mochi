@@ -1156,7 +1156,7 @@ function render() {
   document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
   document.querySelectorAll(".nav .side-admin").forEach((b) => b.classList.toggle("hidden", !isAdmin));
   festaDopoRender();
-  const nl = document.querySelector(".nav .pet-lbl"); if (nl) nl.textContent = petTitolo();
+  document.querySelectorAll(".pet-lbl").forEach((nl) => { nl.textContent = petTitolo(); }); // barra mobile e menu desktop
   // voci della barra laterale: solo con account (online-only) e/o solo se il modulo è acceso (data-mod)
   document.querySelectorAll(".nav .online-only, .nav [data-mod]").forEach((b) => b.classList.toggle("hidden", (b.classList.contains("online-only") && !ONLINE_MODE) || (!!b.dataset.mod && !mod(b.dataset.mod))));
   // Intestazioni della barra laterale: spariscono se tutte le voci della sezione sono nascoste
@@ -1186,6 +1186,7 @@ function sbloccaPagina() {
 // Tastiera: chi ha aperto la finestra (per ridargli il focus alla chiusura)
 let sheetOpener = null;
 function openSheet(html) {
+  $("#sheet").classList.remove("lista-full");
   const ae = document.activeElement;
   if (!$("#sheet").classList.contains("on") && ae && ae !== document.body && !$("#sheet").contains(ae)) sheetOpener = ae;
   $("#sheet").innerHTML = `<div class="sheet-bar"><div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">✕</button></div>${html}`;
@@ -1194,6 +1195,7 @@ function openSheet(html) {
   $("#scrim").classList.add("on"); $("#sheet").inert = false; $("#sheet").classList.add("on"); document.body.classList.add("sheet-open");
 }
 function closeSheet() {
+  if (listaFlush) { const f = listaFlush; listaFlush = null; try { f(); } catch {} listaId = null; } // prima si salva, poi si scorda la lista
   const sh = $("#sheet");
   const avevaFocus = sh.contains(document.activeElement);
   if (avevaFocus) document.activeElement.blur();
@@ -1282,13 +1284,13 @@ function drawEditor() {
       <button class="btn primary" data-act="d-save">Salva</button>
     </div>`);
   const t = $("#fTitle");
-  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); if (!draft._spesa && !draft._spesaScelta && titoloSpesa(t.value)) { draft._spesa = true; drawSt(); } });
+  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); if (!draft._spesa && !draft._spesaScelta && titoloSpesa(t.value)) { draft._spesa = true; segnaListaSpesa(true); drawSt(); } });
   t.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveDraft(); } });
   ["fDate", "fTime", "fRemind", "fBody", "fLista"].forEach((id) => {
     const el = $("#" + id); if (!el) return;
     el.addEventListener("input", () => {
       if (!draft) return;
-      if (id === "fDate") draft.due_date = el.value || null;
+      if (id === "fDate") { draft.due_date = el.value || null; draft._dateDefault = false; }
       if (id === "fTime") draft.due_time = el.value || null;
       if (id === "fRemind") { draft.remind = el.value; draft._remindManual = true; draft._autoRemind = false; }
       // Data o ora cambiate: se il promemoria non l'ha scelto lei, lo aggiorno io
@@ -1328,7 +1330,7 @@ function stEditorHtml() {
   return `<div class="sp-opz"><button class="pin-toggle mini-t ${spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${spesa}"><span><b>È una lista della spesa</b><small>${daTitolo ? "L'ho capito dal titolo" : "Suggerimenti e reparti del supermercato"}</small></span><span class="sw2"></span></button>
     ${spesa ? `<button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="st-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b><small>Nell'ordine del giro del supermercato</small></span><span class="sw2"></span></button>` : ""}</div>
     ${righe}
-    ${st.length < MAX_ST ? `<div class="st-row nuovo"><span class="st-plus">+</span><input class="st-in" id="stNew" maxlength="120" placeholder="${st.length ? "Aggiungi un'altra e premi Invio" : "Es. latte, uova... e premi Invio"}" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>` : `<p class="hint">Massimo ${MAX_ST} voci.</p>`}
+    ${st.length < MAX_ST ? `<div class="st-row nuovo"><button type="button" class="st-plus" data-act="st-plus" aria-label="Aggiungi alla lista">+</button><input class="st-in" id="stNew" maxlength="120" placeholder="${st.length ? "Aggiungi un'altra e premi Invio" : "Es. latte, uova... e premi Invio"}" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>` : `<p class="hint">Massimo ${MAX_ST} voci.</p>`}
     ${spesa ? `<div class="sp-sugg-box" id="stSugg" aria-live="polite"></div>` : ""}
     ${rc.length ? `<div class="sp-ricompri"><span class="sp-sugg-l">Ricompri spesso:</span>${rc.map(chipSugg).join("")}</div>` : ""}
     ${st.length ? `<div class="st-prog">${fatti}/${st.length} fatte</div>` : ""}`;
@@ -1337,6 +1339,68 @@ function drawSt(focusNew = false) {
   const box = $("#stBox"); if (!box || !draft) return;
   box.innerHTML = stEditorHtml();
   if (focusNew) { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "nearest" }); } }
+}
+// ---- Lista della spesa (v36): schermata a tutta altezza. Le spunte e le modifiche si salvano subito;
+// la riga scritta e non ancora aggiunta si aggiunge alla chiusura (X, sfondo o "Fatto").
+let listaId = null, listaRighe = [], listaFlush = null;
+const listaItem = () => state.items.find((x) => x.id === listaId);
+function apriListaSpesa(it) {
+  listaId = it.id; listaRighe = (Array.isArray(it.sottotask) ? it.sottotask : []).map((x) => ({ ...x }));
+  listaFlush = () => { const i = $("#lsNuovo"); const v = i ? i.value.trim() : ""; if (v) listaRighe.push({ id: nuovoStId(new Set(listaRighe.map((x) => x.id))), t: taglia(v, 120), f: false }); listaSalva(); };
+  openSheet(listaHtml(it));
+  $("#sheet").classList.add("lista-full");
+  listaBind();
+}
+function listaSalva(extra = {}) {
+  const it = listaItem(); if (!it) return;
+  Object.assign(it, { sottotask: listaRighe.length ? listaRighe.map((x) => ({ ...x })) : null, updated_at: new Date().toISOString() }, extra);
+  render();
+  Promise.resolve(store.save(it)).catch(() => toast("Non sono riuscita a salvare la lista"));
+}
+function listaRedraw(focusId) {
+  const it = listaItem(); if (!it) return;
+  const sh = $("#sheet"), top = sh.scrollTop, bar = sh.querySelector(".sheet-bar");
+  sh.innerHTML = (bar ? bar.outerHTML : "") + listaHtml(it); sh.scrollTop = top; listaBind();
+  if (focusId) $("#" + focusId)?.focus({ preventScroll: true });
+}
+function listaAggiungi(v) {
+  const t = taglia(String(v || "").trim(), 120); if (!t) return false;
+  listaRighe.push({ id: nuovoStId(new Set(listaRighe.map((x) => x.id))), t, f: false }); listaSalva(); return true;
+}
+function listaHtml(it) {
+  const perReparto = CUSTOM.spesa_reparti !== false, fatti = listaRighe.filter((x) => x.f).length;
+  const riga = (x) => `<div class="st-row ${x.f ? "fatto" : ""}"><button class="st-check" data-act="ls-spunta" data-v="${esc(x.id)}" aria-label="${x.f ? "Togli la spunta" : "Spunta"}">${x.f ? "✓" : ""}</button><input class="st-in" data-lsid="${esc(x.id)}" value="${esc(x.t)}" maxlength="120" autocomplete="off" aria-label="Voce della lista"><button class="st-btn" data-act="ls-del" data-v="${esc(x.id)}" aria-label="Togli">✕</button></div>`;
+  const righe = perReparto ? gruppiSpesa(listaRighe).map((g) => `<div class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</div>${g.voci.map(riga).join("")}`).join("") : listaRighe.map(riga).join("");
+  const rc = ricompri(listaRighe);
+  return `<div class="ls-top">
+    <div class="field"><label for="lsTit">Titolo</label><input class="input big" id="lsTit" maxlength="100" value="${esc(it.title)}" autocomplete="off"></div>
+    <div class="ls-opz"><button class="pin-toggle mini-t ${it.pinned ? "on" : ""}" data-act="ls-pin" aria-pressed="${!!it.pinned}"><span><b>Fissa in alto</b></span><span class="sw2"></span></button>
+    <button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="ls-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b></span><span class="sw2"></span></button></div>
+    ${listaRighe.length ? `<div class="st-prog">${fatti}/${listaRighe.length} fatte</div>` : ""}
+  </div>
+  <div class="ls-corpo">${righe || `<p class="hint">Ancora niente: scrivi qui sotto la prima cosa da comprare.</p>`}</div>
+  <div class="ls-fondo">
+    <div class="st-row nuovo"><button type="button" class="st-plus" data-act="ls-plus" aria-label="Aggiungi">+</button><input class="st-in" id="lsNuovo" maxlength="120" placeholder="Es. latte, uova... e premi Invio" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>
+    ${rc.length ? `<div class="sp-ricompri"><span class="sp-sugg-l">Ricompri spesso:</span>${rc.map((e) => `<button class="sp-sugg" data-act="ls-sugg" data-v="${esc(e.t)}">${esc(e.t)}</button>`).join("")}</div>` : ""}
+    <div class="actions"><button class="btn primary" data-act="ls-chiudi">Fatto</button></div>
+  </div>`;
+}
+function listaBind() {
+  const n = $("#lsNuovo"); if (n) n.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (listaAggiungi(n.value)) listaRedraw("lsNuovo"); } });
+  $("#lsTit")?.addEventListener("change", (e) => listaSalva({ title: taglia(e.target.value.trim(), 100) || "Spesa" }));
+  document.querySelectorAll("#sheet [data-lsid]").forEach((i) => i.addEventListener("change", () => {
+    const x = listaRighe.find((r) => r.id === i.dataset.lsid); if (!x) return;
+    const t = taglia(i.value.trim(), 120); if (t) x.t = t; else listaRighe = listaRighe.filter((r) => r.id !== x.id);
+    listaSalva(); listaRedraw();
+  }));
+}
+// Lista della spesa: va in alto (fissata) e, se il titolo è vuoto, si chiama "Spesa". Chi vuole la rinomina o la sposta.
+function segnaListaSpesa(on) {
+  if (!draft) return;
+  if (on) {
+    if (!draft.pinned) { draft.pinned = true; draft._pinAuto = true; }
+    if (!String(draft.title || "").trim()) { draft.title = "Spesa"; const t = $("#fTitle"); if (t) t.value = "Spesa"; }
+  } else if (draft._pinAuto) { draft.pinned = false; draft._pinAuto = false; }
 }
 function aggiungiSt(v) {
   const t = taglia(String(v || "").replace(/\s+/g, " ").trim(), 120);
@@ -1362,13 +1426,13 @@ async function saveDraft() {
   if (!draft) return;
   // una voce scritta nella lista ma senza premere Invio non va persa
   const sn = $("#stNew"); if (sn && sn.value.trim() && draft.sottotask.length < MAX_ST) draft.sottotask.push({ id: nuovoStId(new Set(draft.sottotask.map((x) => x.id))), t: taglia(sn.value.trim(), 120), f: false });
-  const d = { ...draft };
+  const d = { ...draft }; const dataDefault = !!d._dateDefault; delete d._dateDefault;
   const t = $("#fTitle"); if (t) d.title = t.value;
   // Interpreta il testo rapido solo per le nuove voci (senza sovrascrivere scelte manuali)
   if (d._new && d.kind !== "note") {
     const p = parseQuick(d.title || "");
     if (p.title) d.title = p.title;
-    if (p.date && !d._dateManual) d.due_date = d.due_date || p.date;
+    if (p.date && !d._dateManual) d.due_date = dataDefault || !d.due_date ? p.date : d.due_date; // la data di default (oggi) cede a quella scritta a parole
     if (p.time) d.due_time = d.due_time || p.time;
     if (p.area) d.area = p.area;
     if (p.time && d.kind === "todo" && !d._kindManual) d.kind = "event";
@@ -2794,7 +2858,7 @@ function eseguiAzione() {
   else if (a === "spesa") {
     // la lista della spesa più recente ancora aperta; se non c'è, una nuova
     const l = state.items.filter((i) => isSpesa(i) && !i.done).sort((x, y) => (y.updated_at || "").localeCompare(x.updated_at || ""))[0];
-    openEditor(l || newItem({ kind: "note", title: "Lista della spesa", lista_id: null }), !l);
+    if (l) apriListaSpesa(l); else { const n = newItem({ kind: "note", title: "Spesa", lista_id: null, pinned: true }); state.items.push(n); store.save(n).catch(() => {}); render(); apriListaSpesa(n); }
     setTimeout(() => { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "center" }); } }, 300);
   } else if (a === "nuova-spesa") {
     if (!mod("spese")) { toast("Le spese sono spente: le accendi in Impostazioni"); return; }
@@ -3145,7 +3209,7 @@ async function eseguiPassaggio(btn) {
 const PET_MAX_RIGHE = 5000;
 const petSp = (id) => PET_SPECIE.find((s) => s[0] === id) || PET_SPECIE[PET_SPECIE.length - 1];
 const petIcona = (id) => `<span class="emo">${petSp(id)[2]}</span><svg class="ico q" aria-hidden="true"><use href="#i-pet-${petSp(id)[0]}"/></svg>`;
-const petTitolo = () => (CUSTOM.pet.nome ? "Il mio " + CUSTOM.pet.nome : "Il mio pet");
+const petTitolo = () => (ANIMALI.length >= 2 ? "I miei Pet" : CUSTOM.pet.nome ? "Il mio " + CUSTOM.pet.nome : "Il mio pet");
 const petMinGiorno = () => ymd(addDays(new Date(), -1800));
 const petGiornoOk = (g) => validYmd(g) && g >= petMinGiorno() && g <= todayStr();
 const petRound2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -3356,6 +3420,7 @@ function petProssima(due, rep, anchor, oggi = todayStr()) {
 const petScadenze = () => state.items.filter((i) => !i.done && petMarca(i)).sort((a, b) => ((a.due_date || "9") + a.title < (b.due_date || "9") + b.title ? -1 : 1));
 // ---- Animali nella pagina Pet (v35): scadenze e spese hanno animale_id ("" = per tutti / senza animale).
 let PET_SEL = ""; // animale mostrato nella pagina ("" = il primo)
+let PET_SCHERMA = false; // con più animali: false = elenco a card, true = la scheda di quello scelto
 const petSelId = () => (ANIMALI.some((a) => a.id === PET_SEL) ? PET_SEL : ANIMALI[0]?.id || "");
 const petHa = (id) => ANIMALI.some((a) => a.id === id);
 const petNomeDi = (id) => ANIMALI.find((a) => a.id === id)?.nome || "";
@@ -3456,7 +3521,22 @@ function petSpeseHtml() {
       <span class="sp-e" style="--cc:${c[3]}">${c[1]}</span><span class="sp-t"><b>${esc(x.nota || c[2])}</b><small>${x.nota ? `${c[2]} · ` : ""}${niceDate(x.giorno)}</small></span><b class="sp-i">${euro(x.importo_cent)}</b></button>`; }).join("")}</div>`
       : `<p class="small">${f ? `Ancora nessuna spesa per ${esc(f)}.` : "Ancora nessuna spesa per il tuo pet. Cibo, veterinario, giochi: segna qui quanto spendi."}</p>`}`;
 }
+// Con più animali, la pagina apre l'elenco: una card per animale, toccandola si apre la sua scheda
+function petElencoHtml() {
+  const oggi = todayStr();
+  return `<div class="sec" style="margin-top:0"><h2>I miei Pet</h2></div>
+    <div class="pet-elenco">${ANIMALI.map((a) => {
+      const tot = (a.routine ? a.routine : PET_ROUTINE_DEF[a.specie || "altro"] || PET_ROUTINE_DEF.altro).length;
+      const fatte = state.pet.righe.filter((r) => r.tipo === "routine" && r.giorno === oggi && petAnOf(r) === a.id).length;
+      const sp = a.specie ? petSp(a.specie)[1] : "Animale";
+      return `<button type="button" class="pet-card pet-scelta" style="width:100%;text-align:left;margin:0 0 12px;cursor:pointer" data-act="pet-apri" data-v="${esc(a.id)}" aria-label="Apri la scheda di ${esc(a.nome || sp)}">
+        <div class="pet-ico">${petIcona(a.specie)}</div>
+        <div class="pet-id"><b>${esc(a.nome || sp)}</b><small>${esc(sp)} · Fatto oggi ${fatte}/${tot}</small></div></button>`; }).join("")}</div>
+    <p class="small">Tocca un animale per vedere la sua scheda, la routine, i pesi e le scadenze.</p>`;
+}
 function viewPet() {
+  // più animali: prima l'elenco, poi la scheda di quello scelto
+  if (ONLINE_MODE && ANIMALI.length >= 2 && !PET_SCHERMA) return petElencoHtml();
   const p = CUSTOM.pet;
   if (!petPresente(p)) return `<div class="sec" style="margin-top:0"><h2>Il mio pet</h2></div>
     <div class="empty"><div class="mbox">${mascot()}</div><div>Qui tieni la scheda del tuo animale: il nome, il veterinario, la routine di ogni giorno e il peso nel tempo.</div>
@@ -3464,7 +3544,7 @@ function viewPet() {
   const oggi = todayStr(), voci = petVoci(), fatte = petFatte(oggi), n = voci.filter((v) => fatte.has(v.id)).length, pesi = petPesi();
   const festa = petCompleannoOggi(p), dataT = petDataTesto(p);
   const telHref = p.tel ? "tel:" + p.tel.replace(/ /g, "") : "";
-  return `<div class="sec" style="margin-top:0"><h2>${esc(petTitolo())}</h2></div>
+  return `${petMulti() ? `<button type="button" class="more" data-act="pet-indietro">← Tutti i miei Pet</button>` : ""}<div class="sec" style="margin-top:0"><h2>${esc(petTitolo())}</h2></div>
     ${petSelettoreHtml()}
     <div class="pet-card">
       <div class="pet-ico ${festa ? "festa" : ""}">${petIcona(p.specie)}</div>
@@ -3648,6 +3728,8 @@ async function petAzione(act, v, el) {
     case "pet-spesa-nuova": if (mod("spese")) apriSpesa(null, PET_CAT_SPESA); break;
     case "pet-scad-edit": apriPetScad(el.dataset.id); break;
     case "pet-sel": if (petHa(v)) { PET_SEL = v; specchioPrincipale(); petVer++; render(); } break;
+    case "pet-apri": if (petHa(v)) { PET_SEL = v; PET_SCHERMA = true; specchioPrincipale(); render(); } break;
+    case "pet-indietro": PET_SCHERMA = false; render(); break;
     case "pet-nuovo": if (ONLINE_MODE) apriNuovoAnimale(); break;
     case "pet-na-specie": document.querySelectorAll("#naSpecie button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); break;
     case "pet-na-salva": await salvaNuovoAnimale(); break;
@@ -5048,15 +5130,16 @@ document.addEventListener("click", async (e) => {
       focusChiudi();
     }
     if (t === "menu") state.tabPrima = state.tab;
+    if (t === "pet") PET_SCHERMA = false; // dal menu si riparte dall'elenco
     state.tab = t; render(); window.scrollTo({ top: 0, behavior: "smooth" }); return;
   }
   if (e.target.id === "scrim") { closeSheet(); return; }
   const el = e.target.closest("[data-act]"); if (!el) return;
   const act = el.dataset.act, v = el.dataset.v, id = el.dataset.id;
   switch (act) {
-    case "new": openEditor(newItem(state.tab === "agenda" ? { due_date: state.calSel } : {}), true); break;
+    case "new": openEditor(newItem(state.tab === "agenda" ? { due_date: state.calSel } : { due_date: todayStr(), _dateDefault: true }), true); break;
     case "new-on-day": openEditor(newItem({ due_date: state.calSel, kind: "event" }), true); break;
-    case "edit": { e.stopPropagation(); const it = state.items.find((x) => x.id === id); if (it) openEditor(it, false); break; }
+    case "edit": { e.stopPropagation(); const it = state.items.find((x) => x.id === id); if (it) { if (isSpesa(it)) apriListaSpesa(it); else openEditor(it, false); } break; }
     case "toggle": {
       e.stopPropagation();
       const it = state.items.find((x) => x.id === id); if (!it) break;
@@ -5074,9 +5157,17 @@ document.addEventListener("click", async (e) => {
     }
     // lista da spuntare: dentro l'editor
     case "st-toggle": { const x = draft?.sottotask.find((s) => s.id === v); if (x) { x.f = !x.f; drawSt(); } break; }
-    case "st-spesa": if (draft) { draft._spesa = !draft._spesa; draft._spesaScelta = true; drawSt(); } break;
+    case "st-plus": { const n = $("#stNew"); if (!n) break; if (n.value.trim()) aggiungiSt(n.value); else n.focus(); break; }
+    case "st-spesa": if (draft) { draft._spesa = !draft._spesa; draft._spesaScelta = true; segnaListaSpesa(draft._spesa); drawEditor(); } break;
     case "st-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); if (draft) drawSt(); break;
     case "st-sugg": if (draft && v) aggiungiSt(v); break;
+    case "ls-spunta": { const x = listaRighe.find((r) => r.id === v); if (x) { x.f = !x.f; listaSalva(); listaRedraw(); } break; }
+    case "ls-del": listaRighe = listaRighe.filter((r) => r.id !== v); listaSalva(); listaRedraw(); break;
+    case "ls-plus": { const n = $("#lsNuovo"); if (!n) break; if (listaAggiungi(n.value)) listaRedraw("lsNuovo"); else n.focus(); break; }
+    case "ls-sugg": if (listaAggiungi(v)) listaRedraw("lsNuovo"); break;
+    case "ls-pin": { const it = listaItem(); if (it) { listaSalva({ pinned: !it.pinned }); listaRedraw(); } break; }
+    case "ls-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); listaRedraw(); break;
+    case "ls-chiudi": closeSheet(); break;
     case "st-del": if (draft) { draft.sottotask = draft.sottotask.filter((s) => s.id !== v); drawSt(); } break;
     case "st-su": { const a = draft?.sottotask, i = a ? a.findIndex((s) => s.id === v) : -1; if (i > 0) { [a[i - 1], a[i]] = [a[i], a[i - 1]]; drawSt(); } break; }
     // spese
@@ -5146,7 +5237,7 @@ document.addEventListener("click", async (e) => {
       else toast(acceso ? `${m[1]} ${m[2]}: acceso` : `${m[1]} ${m[2]}: spento. I dati restano al sicuro`);
       break;
     }
-    case "pet-spesa-nuova": case "pet-sel": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
+    case "pet-spesa-nuova": case "pet-sel": case "pet-apri": case "pet-indietro": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
@@ -5246,7 +5337,7 @@ document.addEventListener("click", async (e) => {
     case "d-area": draft.area = v; drawEditor(); break;
     case "d-lista":
     case "d-more": advanced = true;
-      if (draft._new && draft.title) { const p = parseQuick(draft.title); draft.due_date = draft.due_date || p.date; draft.due_time = draft.due_time || p.time; }
+      if (draft._new && draft.title) { const p = parseQuick(draft.title); draft.due_date = p.date && draft._dateDefault ? p.date : (draft.due_date || p.date); draft.due_time = draft.due_time || p.time; }
       if (draft.remind === "auto") draft.remind = defaultRemind(draft);
       drawEditor();
       if (act === "d-lista") setTimeout(() => { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "center" }); } }, 60);
