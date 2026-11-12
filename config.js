@@ -6,7 +6,7 @@ window.MOCHI_CONFIG = {
   SUPABASE_ANON_KEY: "",        // chiave "anon public": è pensata per stare nel browser, la protezione la fa la Row Level Security
   VAPID_PUBLIC_KEY: "",         // chiave pubblica per le notifiche push (vedi README)
   REGISTRAZIONI_APERTE: true,   // false = nasconde "Crea account" (va chiusa anche su Supabase, vedi README)
-  NOME: "Federica",             // usato solo in modalità prova; con gli account ognuno ha il suo nome
+  NOME: "Betty",             // usato solo in modalità prova; con gli account ognuno ha il suo nome
   TITOLARE_PRIVACY: "",         // nome e cognome di chi gestisce l'app, mostrato nell'informativa
   EMAIL_PRIVACY: ""             // email di contatto per richieste privacy
 };

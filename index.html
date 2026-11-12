@@ -230,12 +230,12 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
 /* ---------- sheet ---------- */
 .scrim{position:fixed;inset:0;background:rgba(59,37,48,.42);z-index:40;opacity:0;pointer-events:none;transition:.25s}
 .scrim.on{opacity:1;pointer-events:auto}
-.sheet{position:fixed;left:0;right:0;bottom:var(--vv-b,0px);z-index:50;max-width:620px;margin:0 auto;background:var(--card);border-radius:28px 28px 0 0;padding:10px 20px calc(var(--safe-b) + 20px);transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.9,.3,1.1);max-height:min(92dvh,calc(var(--vv-h,100dvh) - 12px));overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;box-shadow:0 -10px 30px rgba(0,0,0,.12)}
+.sheet{position:fixed;left:0;right:0;bottom:var(--vv-b,0px);z-index:50;max-width:620px;margin:0 auto;background:var(--card);border-radius:28px 28px 0 0;padding:10px 20px calc(var(--safe-b) + 32px);transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.9,.3,1.1);max-height:min(92dvh,calc(var(--vv-h,100dvh) - 12px));overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;box-shadow:0 -10px 30px rgba(0,0,0,.12)}
 /* la finestra resta ferma: lo sfondo scuro non fa scorrere la pagina sotto */
 .scrim{touch-action:none;overscroll-behavior:contain}
 .sheet.on{transform:none}
 /* intestazione fissa della finestra: ha altezza e sfondo propri, il contenuto scorre sotto di lei e mai sotto la X */
-.sheet-bar{position:sticky;top:-10px;z-index:4;height:48px;margin:-10px -20px 0;padding:0 12px 0 20px;background:var(--card);display:flex;align-items:center;justify-content:flex-end}
+.sheet-bar{position:sticky;top:-10px;z-index:4;height:62px;margin:-10px -20px 0;padding:0 12px 0 20px;background:var(--card);display:flex;align-items:center;justify-content:flex-end}
 .grab{position:absolute;left:50%;top:9px;transform:translateX(-50%);width:44px;height:5px;border-radius:9px;background:var(--line);margin:0}
 .sheet-x{flex:none;position:relative;margin:0;width:48px;height:48px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;border-radius:50%;border:0;background:var(--pink-l);color:var(--ink2);font-size:16px;font-weight:800;cursor:pointer;z-index:2;display:grid;place-items:center}
 .sheet-x:hover{color:var(--acc-t)}
@@ -302,6 +302,7 @@ textarea.input{min-height:90px;resize:vertical}
 .btn.danger-full{background:#c23a54;color:#fff;box-shadow:0 8px 18px rgba(214,74,98,.3)}
 .more{display:inline-flex;align-items:center;min-height:44px;font-size:14.5px;font-weight:800;color:var(--acc-t);padding:6px 4px;margin-bottom:2px}
 .more-row{display:flex;flex-wrap:wrap;gap:0 14px}
+.more[hidden]{display:none}
 .setrow{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s4) 4px;border-bottom:1px solid var(--line)}
 .setrow:last-child{border-bottom:0}
 .setrow small{display:block;color:var(--ink2);font-size:13px;line-height:1.35;margin-top:2px}
@@ -389,7 +390,7 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
   .split.agenda .day{font-size:17px;border-radius:16px}
   .cal.mini{padding:10px 6px}
   .cal.mini .day{font-size:13px;border-radius:10px;margin:1px}
-  .sheet{top:50%;bottom:auto;left:calc(50% + 124px);right:auto;width:min(560px,calc(100vw - 296px));max-height:92vh;border-radius:28px;transform:translate(-50%,-46%) scale(.97);opacity:0;pointer-events:none;transition:transform .25s ease,opacity .2s ease;padding-bottom:22px}
+  .sheet{top:50%;bottom:auto;left:calc(50% + 124px);right:auto;width:min(560px,calc(100vw - 296px));max-height:92vh;border-radius:28px;transform:translate(-50%,-46%) scale(.97);opacity:0;pointer-events:none;transition:transform .25s ease,opacity .2s ease;padding-bottom:30px}
   .sheet.on{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
   .sheet .grab{display:none}
   .toast{bottom:28px;left:calc(50% + 124px)}
@@ -988,6 +989,7 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="morbido"] .focus-durate button{ border-color:var(--line) }
 :root[data-stile="morbido"] .focus-durate button.on{ border-color:var(--pink-d) }
 :root[data-stile="morbido"] .focus-scena{ background:linear-gradient(transparent 78%,var(--mint) 78%); background-color:var(--card) }
+:root[data-stile="morbido"] .cal{border:2px solid var(--pink);box-shadow:inset 0 0 0 4px var(--card),inset 0 0 0 5.5px var(--pink-l),var(--shadow);padding:18px 12px}
 :root[data-stile="morbido"] .serie-card,:root[data-stile="morbido"] .serra,:root[data-stile="morbido"] .focus-voce{ border:2px solid var(--pink-l) }
 
 /* =========================================================
@@ -1225,7 +1227,8 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="quaderno"] .mob-colore.on span{box-shadow:0 0 0 2.5px var(--card),0 0 0 4px var(--ink-a)}
 .casa-hint{margin:var(--s3) 4px 0}
 .casa-festa .casa-scena.mini{max-width:320px;margin:0 auto var(--s3)}
-@media (min-width:1024px){ .split.casa{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)} .split.casa .casa-scena{max-width:820px} }
+@media (min-width:1024px){ .split.casa{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)} .split.casa .casa-scena{max-width:820px} .split.casa .col-side>.sec:first-child,.split.focus .col-side>.sec:first-child{margin-top:0} }
+@media (min-width:1024px){ .split .col-side>.desk-only:first-child>.sec:first-child{margin-top:0} }
 /* di sera (tema scuro): la stanza si fa blu, le lampade e le lucine si accendono */
 :root[data-theme="dark"] .casa-svg .cs-stanza{filter:url(#casaSera)}
 :root[data-theme="dark"] .casa-svg .cs-sera,:root[data-theme="dark"] .casa-svg .cs-luci{display:inline}
@@ -1503,9 +1506,11 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
 .pet-festa{margin:0 0 var(--s3);padding:10px 14px;border-radius:var(--r-m);background:var(--pink-l);color:var(--acc-t);font-weight:800;font-size:14.5px;overflow-wrap:anywhere}
 .pet-routine{display:grid;gap:var(--s2)}
 .pet-voce{min-height:52px}
-.pet-voce>span:first-child{flex:1;min-width:0}
 .pet-voce b{overflow-wrap:anywhere}
 .pet-voce.on b{color:var(--acc-t)}
+.pet-voce .check{margin-top:0}
+.pet-voce.on .check{background:var(--pink);border-color:var(--pink);color:var(--on-acc,#fff)}
+.pet-voce>span:nth-child(2){flex:1;min-width:0}
 .pet-peso-box{padding:var(--s3) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow)}
 .pet-graf{display:block;width:100%;height:auto;max-height:130px}
 .pet-graf text{fill:var(--ink2);font-size:11px;font-weight:700;font-family:inherit}
@@ -1544,6 +1549,24 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
 :root[data-stile="sobrio"] :is(.pet-card,.pet-peso-box,.pet-vet,.pet-note,.pet-scad,.pet-spese-tot>div){border-radius:var(--r-m);box-shadow:none;border:1.5px solid var(--line)}
 :root[data-stile="sobrio"] .pet-ico{border-radius:var(--r-m)}
 :root[data-stile="sobrio"] .pet-festa{border-radius:var(--r-m)}
+/* Il calendario è un calendario da tavolo: fascia colorata con il mese, anelli della spirale che sporgono, griglia sotto (v39).
+   Solo i calendari grandi (Agenda, Turni), non quello piccolo di Oggi. Nel Sobrio: fascia semplice, niente anelli. */
+.cal:not(.mini){position:relative;margin-top:30px;padding:0 8px 12px;--cal-l:var(--ink)}
+.cal:not(.mini)>.calhead{margin:0 -8px 10px;padding:22px 12px 10px;background:var(--pink);color:var(--on-acc);border-radius:calc(var(--r) - 2px) calc(var(--r) - 2px) 0 0;border-bottom:3px solid var(--cal-l)}
+.cal:not(.mini)>.calhead h2{color:var(--on-acc)}
+.cal:not(.mini)>.calhead .iconbtn{color:var(--ink)}
+.anelli{position:absolute;z-index:2;top:-18px;left:12%;right:12%;display:flex;justify-content:space-between;pointer-events:none}
+.anelli i{display:block;width:13px;height:34px;border-radius:8px;background:var(--ink2);border:3px solid var(--cal-l);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--card) 35%,transparent)}
+:root[data-stile="morbido"] .cal:not(.mini){--cal-l:var(--pink-d);border:3px solid var(--pink-d);box-shadow:0 6px 0 var(--pink-l),var(--shadow);padding:0 12px 16px}
+:root[data-stile="morbido"] .cal:not(.mini)>.calhead{margin:0 -12px 12px}
+:root[data-stile="cartone"] .cal:not(.mini){--cal-l:var(--tratto);border:3px solid var(--tratto);box-shadow:0 5px 0 var(--tratto-l)}
+:root[data-stile="quaderno"] .cal:not(.mini){--cal-l:var(--ink);border:2px solid var(--ink);box-shadow:var(--edge)}
+:root[data-stile="quaderno"] .cal:not(.mini)>.calhead{background:var(--pink-l);color:var(--ink)}
+:root[data-stile="quaderno"] .cal:not(.mini)>.calhead h2{color:var(--ink)}
+:root[data-stile="sobrio"] .cal:not(.mini){margin-top:0;--cal-l:var(--line)}
+:root[data-stile="sobrio"] .cal:not(.mini)>.calhead{background:var(--pink-l);color:var(--acc-t);padding-top:10px}
+:root[data-stile="sobrio"] .cal:not(.mini)>.calhead h2{color:var(--acc-t)}
+:root[data-stile="sobrio"] .anelli{display:none}
 </style>
 </head>
 <body>
@@ -1632,31 +1655,14 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
 <nav class="nav hidden" id="nav">
   <div class="bar">
     <div class="brand desk-only"><span id="brandName">Mochi</span><small>le mie cose</small></div>
-    <div class="side-head desk-only" role="presentation">Ogni giorno</div>
+    <div class="side-head desk-only" role="presentation">Quotidiano</div>
     <button class="tab on" data-tab="oggi"><span class="i"><span class="emo">🌸</span><svg class="ico q" aria-hidden="true"><use href="#i-oggi"/></svg></span>Oggi</button>
     <button class="tab" data-tab="todo"><span class="i"><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span>Da fare</button>
     <button class="plus" data-act="new" aria-label="Aggiungi" title="Nuova voce (N)"><span class="pl">+</span><span class="desk-only">Aggiungi</span></button>
     <button class="tab" data-tab="agenda"><span class="i"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>Agenda</button>
     <button class="tab desk-only" data-tab="appunti"><span class="i"><span class="emo">📝</span><svg class="ico q" aria-hidden="true"><use href="#i-appunti"/></svg></span>Appunti</button>
     <button class="tab mob-only" data-tab="menu"><span class="i"><span class="emo">☰</span><svg class="ico q" aria-hidden="true"><use href="#i-menu"/></svg></span>Menu</button>
-    <!-- Su computer la barra a sinistra contiene tutto il menu -->
-    <button class="side desk-only online-only" data-mod="liste" data-tab="liste"><span class="i"><span class="emo">👭</span><svg class="ico q" aria-hidden="true"><use href="#i-liste"/></svg></span>Liste condivise</button>
-    <button class="side desk-only online-only" data-mod="ricorrenti" data-act="open-ricorrenti" data-tab="ricorrenti"><span class="i"><span class="emo">🔁</span><svg class="ico q" aria-hidden="true"><use href="#i-ricorrenti"/></svg></span>Ricorrenti</button>
-    <button class="side desk-only" data-mod="turni" data-tab="turni"><span class="i"><span class="emo">💼</span><svg class="ico q" aria-hidden="true"><use href="#i-turni"/></svg></span>Turni di lavoro</button>
-    <button class="side desk-only" data-mod="spese" data-tab="spese"><span class="i"><span class="emo">👛</span><svg class="ico q" aria-hidden="true"><use href="#i-spese"/></svg></span>Spese</button>
-    <div class="side-head desk-only" role="presentation">Benessere e gioco</div>
-    <button class="side desk-only" data-mod="focus" data-tab="focus"><span class="i"><span class="emo">🪴</span><svg class="ico q" aria-hidden="true"><use href="#i-focus"/></svg></span>Concentrazione</button>
-    <button class="side desk-only" data-mod="umore" data-act="giardino-apri"><span class="i"><span class="emo">🌷</span><svg class="ico q" aria-hidden="true"><use href="#i-fiore"/></svg></span>Il giardino del mese</button>
-    <button class="side desk-only" data-mod="biscotto" data-act="open-biscotto"><span class="i"><span class="emo">🥠</span><svg class="ico q" aria-hidden="true"><use href="#i-biscotto"/></svg></span>Biscotto del giorno</button>
-    <button class="side desk-only" data-mod="pancino" data-act="open-pancino"><span class="i"><span class="emo">🍣</span><svg class="ico q" aria-hidden="true"><use href="#i-pancino"/></svg></span>Il pancino</button>
-    <button class="side desk-only" data-mod="casa" data-tab="casa"><span class="i"><span class="emo">🏡</span><svg class="ico q" aria-hidden="true"><use href="#i-casa"/></svg></span>La casetta</button>
-    <button class="side desk-only" data-mod="pet" data-tab="pet"><span class="i"><span class="emo">🐾</span><svg class="ico q" aria-hidden="true"><use href="#i-pet-altro"/></svg></span><span class="pet-lbl">Il mio pet</span></button>
-    <div class="side-head desk-only" role="presentation">Riepiloghi</div>
-    <button class="side desk-only" data-act="open-recap"><span class="i"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recap"/></svg></span>Recap del mese</button>
-    <div class="side-head desk-only" role="presentation">Aiuto</div>
-    <button class="side desk-only online-only" data-act="open-consiglio"><span class="i"><span class="emo">💌</span><svg class="ico q" aria-hidden="true"><use href="#i-consiglia"/></svg></span>Consiglia</button>
-    <button class="side side-admin desk-only hidden" data-act="open-inbox"><span class="i"><span class="emo">📬</span><svg class="ico q" aria-hidden="true"><use href="#i-messaggi"/></svg></span>Messaggi ricevuti</button>
-    <button class="side desk-only" data-act="open-settings"><span class="i"><span class="emo">⚙️</span><svg class="ico q" aria-hidden="true"><use href="#i-impostazioni"/></svg></span>Impostazioni</button>
+    <!-- Su computer le altre voci della barra a sinistra le costruisce app.js (VOCI_MENU), la stessa lista del Menu del telefono -->
   </div>
 </nav>
 

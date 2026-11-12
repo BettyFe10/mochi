@@ -933,15 +933,15 @@ function viewOggi() {
     <div class="stat"><b>${todo.length + late.length}</b><span>da fare</span></div>
     <div class="stat"><b>${doneT.length}</b><span>fatte oggi</span></div></div>`;
   h += riepilogoCard();
-  if (mod("serie")) h += serieCard();
   { const tu = turnoDi(t); if (tu && tu.k !== "") h += rigaTurno(t, true); }
+  // Prima le cose di oggi, poi serie, umore e pancino. Se non c'è niente, una riga sola.
+  if (late.length) h += `<div class="sec"><h2>Rimaste indietro</h2><span class="count">${late.length}</span></div><div class="list">${late.map(itemRow).join("")}</div>`;
+  if (ev.length) h += `<div class="sec"><h2>Appuntamenti di oggi</h2></div><div class="list">${ev.map(itemRow).join("")}</div>`;
+  if (todo.length) h += `<div class="sec"><h2>Da fare oggi</h2></div><div class="list">${todo.map(itemRow).join("")}</div>`;
+  if (!ev.length && !todo.length) h += `<div class="sec"><h2>Oggi</h2></div><div class="empty" style="padding:10px">${late.length ? "Nient'altro in programma oggi" : "Niente in programma oggi"}${DECO("✨")}</div>`;
+  if (mod("serie")) h += serieCard();
   if (mod("umore")) h += umoreCard();
   if (mod("pancino")) h += pancinoCard();
-  if (late.length) h += `<div class="sec"><h2>Rimaste indietro</h2><span class="count">${late.length}</span></div><div class="list">${late.map(itemRow).join("")}</div>`;
-  h += `<div class="sec"><h2>Appuntamenti di oggi</h2></div>`;
-  h += ev.length ? `<div class="list">${ev.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Nessun appuntamento oggi ☁️</div>`;
-  h += `<div class="sec"><h2>Da fare oggi</h2></div>`;
-  h += todo.length ? `<div class="list">${todo.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Niente in scadenza oggi${DECO("✨")}</div>`;
   if (noDate.length) h += `<div class="sec"><h2>Quando hai tempo</h2></div><div class="list">${noDate.map(itemRow).join("")}</div>`;
   if (doneT.length) h += `<div class="sec"><h2>Fatte oggi<span class="emo"> 🎉</span></h2></div><div class="list">${doneT.map(itemRow).join("")}</div>`;
   const now = new Date(), cm = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -989,6 +989,7 @@ function monthGrid(m, map, sel, act) {
   return `<div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div><div class="days">${cells}</div>`;
 }
 
+const ANELLI = `<span class="anelli" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>`; // la spirale del calendario da tavolo (solo disegno)
 function viewAgenda() {
   const m = state.calMonth;
   const map = itemsByDay();
@@ -996,11 +997,10 @@ function viewAgenda() {
   const sd = parseYmd(state.calSel);
   return `<div class="split agenda">
     <div class="col-main">
-      <div class="calhead">
-        <button class="iconbtn" data-act="cal-move" data-v="-1">‹</button>
+      <div class="cal">${ANELLI}<div class="calhead">
+        <button class="iconbtn" data-act="cal-move" data-v="-1" aria-label="Mese prima">‹</button>
         <h2>${MESI[m.getMonth()]} ${m.getFullYear()}</h2>
-        <button class="iconbtn" data-act="cal-move" data-v="1">›</button></div>
-      <div class="cal">${monthGrid(m, map, state.calSel, "cal-sel")}</div>
+        <button class="iconbtn" data-act="cal-move" data-v="1" aria-label="Mese dopo">›</button></div>${monthGrid(m, map, state.calSel, "cal-sel")}</div>
     </div>
     <div class="col-side">
       <div class="sec"><h2>${GIORNI[sd.getDay()].replace(/^./, (c) => c.toUpperCase())} ${sd.getDate()} ${MESI[sd.getMonth()]}</h2>
@@ -1023,31 +1023,42 @@ function bachecaStile(id) {
   const rot = ((h % 9) - 4) * 0.7; // da -2.8 a +2.8 gradi
   return `--rot:${rot.toFixed(1)}deg;--pinc:${PUNTINE[(h >>> 4) % PUNTINE.length]}`;
 }
-// Menu completo (su telefono: dal pulsante ☰ in alto; su computer è già tutto nella barra a sinistra)
+/* Voci del Menu: UNICA fonte per il Menu del telefono e per la barra a sinistra del computer.
+   g = gruppo (q Quotidiano, t Per te, a Altro); m = modulo che la accende/spegne; on = solo con account; admin = solo amministratrice;
+   at = attributi del tocco nel Menu; atD = se diversi, attributi nella barra del computer; e/ic = emoji e icona; t = titolo;
+   s() = sottotitolo del Menu; em()/tm() = emoji e titolo del Menu quando cambiano (pet, pancino); soloMenu = sul computer c'è già nella barra in alto */
+const GRUPPI_MENU = [["q", "Quotidiano"], ["t", "Per te"], ["a", "Altro"]];
+const VOCI_MENU = [
+  { g: "q", at: 'data-tab="todo"', e: "✅", ic: "i-todo", t: "Da fare", s: () => "Le cose da fare, con le scadenze", soloMenu: 1 },
+  { g: "q", at: 'data-tab="agenda"', e: "📅", ic: "i-agenda", t: "Agenda", s: () => "Il calendario con gli appuntamenti", soloMenu: 1 },
+  { g: "q", at: 'data-tab="appunti"', e: "📝", ic: "i-appunti", t: "Appunti", s: () => "Idee, liste, cose da tenere", soloMenu: 1 },
+  { g: "q", m: "liste", at: 'data-act="open-liste"', atD: 'data-tab="liste"', e: "👭", ic: "i-liste", t: "Liste condivise", s: () => (state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") },
+  { g: "q", m: "ricorrenti", at: 'data-act="open-ricorrenti"', atD: 'data-act="open-ricorrenti" data-tab="ricorrenti"', e: "🔁", ic: "i-ricorrenti", t: "Ricorrenti", s: () => "Bevi acqua, fai una pausa..." },
+  { g: "q", m: "turni", at: 'data-tab="turni"', e: "💼", ic: "i-turni", t: "Turni di lavoro", s: () => (turniAttivi() ? `${fmtOre(oreMese(new Date()).min)} questo mese` : "Il calendario del lavoro") },
+  { g: "q", m: "spese", at: 'data-tab="spese"', e: "👛", ic: "i-spese", t: "Spese", s: () => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; } },
+  { g: "t", m: "focus", at: 'data-tab="focus"', e: "🪴", ic: "i-focus", t: "Concentrazione", s: () => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; } },
+  { g: "t", m: "umore", at: 'data-act="giardino-apri"', e: "🌷", ic: "i-fiore", t: "Il giardino del mese", s: () => "Le tue giornate in fiori" },
+  { g: "t", m: "biscotto", at: 'data-act="open-biscotto"', e: "🥠", ic: "i-biscotto", t: "Biscotto del giorno", s: () => "La frase di oggi" },
+  { g: "t", m: "pancino", at: 'data-act="open-pancino"', e: "🍣", ic: "i-pancino", t: "Il pancino", tm: () => `Il pancino di ${esc(MN())}`, s: () => "Bocconcini e regali" },
+  { g: "t", m: "casa", at: 'data-tab="casa"', e: "🏡", ic: "i-casa", t: "La casetta", s: () => { const n = mobiliAvuti().length; return n ? `${n} ${n === 1 ? "mobile" : "mobili"} in regalo` : "La casa di " + esc(MN()); } },
+  { g: "t", m: "pet", at: 'data-tab="pet"', e: "🐾", ic: "i-pet-altro", t: "Il mio pet", pet: 1, em: () => petSp(CUSTOM.pet.specie)[2], tm: () => esc(petTitolo()), s: () => { if (!petPresente(CUSTOM.pet)) return "Scheda, routine e pesi"; const v = petVoci(); return v.length ? `Fatto oggi ${v.filter((x) => petFatte(todayStr()).has(x.id)).length}/${v.length}` : "Scheda, routine e pesi"; } },
+  { g: "t", at: 'data-act="open-recap"', e: "🎀", ic: "i-recap", t: "Recap del mese", s: () => "Com'è andato il mese" },
+  { g: "a", on: 1, at: 'data-act="open-consiglio"', e: "💌", ic: "i-consiglia", t: "Consiglia", s: () => "Scrivi alla sviluppatrice" },
+  { g: "a", admin: 1, at: 'data-act="open-inbox"', e: "📬", ic: "i-messaggi", t: "Messaggi ricevuti", s: () => (adminUnread ? `${adminUnread} da leggere` : "Tutti letti") },
+  { g: "a", at: 'data-act="open-settings"', e: "⚙️", ic: "i-impostazioni", t: "Impostazioni", s: () => "Colori, cosa usare, suoni" }
+];
+const voceVisibile = (v) => (!v.m || mod(v.m)) && (!v.on || ONLINE_MODE) && (!v.admin || isAdmin);
+// Barra a sinistra del computer: costruita dalla stessa lista (le voci già nella barra in alto non si ripetono)
+function costruisciBarra() {
+  const dove = document.querySelector('#nav [data-tab="menu"]'); if (!dove) return;
+  const btn = (v) => `<button class="side desk-only${v.on ? " online-only" : ""}${v.admin ? " side-admin hidden" : ""}"${v.m ? ` data-mod="${v.m}"` : ""} ${v.atD || v.at}><span class="i"><span class="emo">${v.e}</span><svg class="ico q" aria-hidden="true"><use href="#${v.ic}"/></svg></span>${v.pet ? '<span class="pet-lbl">Il mio pet</span>' : v.t}</button>`;
+  dove.insertAdjacentHTML("afterend", GRUPPI_MENU.map(([g, tit]) => (g === "q" ? "" : `<div class="side-head desk-only" role="presentation">${tit}</div>`) + VOCI_MENU.filter((v) => v.g === g && !v.soloMenu).map(btn).join("")).join(""));
+}
+costruisciBarra();
+// Menu completo (su telefono: dal pulsante ☰ in basso; su computer è già tutto nella barra a sinistra). Un gruppo senza voci (moduli spenti) non compare
 function viewMenu() {
-  const voce = (attr, e, t, d) => `<button class="mtile" ${attr}><span class="e">${e}</span><b>${t}</b><small>${d}</small></button>`;
-  // Sezioni sempre aperte, ordinate per scopo; una sezione senza voci (moduli spenti) non compare
-  const sez = (titolo, voci) => { const h = voci.join("").trim(); return h ? `<h3 class="msec">${titolo}</h3><div class="mgrid">${h}</div>` : ""; };
-  return `<div class="sec" style="margin-top:0"><h2>Menu</h2></div>
-    ${sez("Ogni giorno", [
-voce('data-tab="appunti"', "📝", "Appunti", "Idee, liste, cose da tenere"),
-mod("spese") ? voce('data-tab="spese"', "👛", "Spese", (() => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; })()) : "",
-mod("turni") ? voce('data-tab="turni"', "💼", "Turni di lavoro", turniAttivi() ? (() => { const o = oreMese(new Date()); return `${fmtOre(o.min)} questo mese`; })() : "Il calendario del lavoro") : "",
-mod("liste") ? voce('data-act="open-liste"', "👭", "Liste condivise", state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") : "",
-mod("ricorrenti") ? voce('data-act="open-ricorrenti"', "🔁", "Ricorrenti", "Bevi acqua, fai una pausa...") : ""])}
-    ${sez("Benessere e gioco", [
-mod("focus") ? voce('data-tab="focus"', "🪴", "Concentrazione", (() => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; })()) : "",
-mod("umore") ? voce('data-act="giardino-apri"', "🌷", "Il giardino del mese", "Le tue giornate in fiori") : "",
-mod("biscotto") ? voce('data-act="open-biscotto"', "🥠", "Biscotto del giorno", "La frase di oggi") : "",
-mod("pancino") ? voce('data-act="open-pancino"', "🍣", `Il pancino di ${esc(MN())}`, "Bocconcini e regali") : "",
-mod("casa") ? voce('data-tab="casa"', "🏡", "La casetta", (() => { const n = mobiliAvuti().length; return n ? `${n} ${n === 1 ? "mobile" : "mobili"} in regalo` : "La casa di " + esc(MN()); })()) : "",
-mod("pet") ? voce('data-tab="pet"', petSp(CUSTOM.pet.specie)[2], esc(petTitolo()), petPresente(CUSTOM.pet) ? (() => { const v = petVoci(); return v.length ? `Fatto oggi ${v.filter((x) => petFatte(todayStr()).has(x.id)).length}/${v.length}` : "Scheda, routine e pesi"; })() : "Scheda, routine e pesi") : ""])}
-    ${sez("Riepiloghi", [
-voce('data-act="open-recap"', "🎀", "Recap del mese", "Com'è andato il mese")])}
-    ${sez("Aiuto", [
-ONLINE_MODE ? voce('data-act="open-consiglio"', "💌", "Consiglia", "Scrivi alla sviluppatrice") : "",
-isAdmin ? voce('data-act="open-inbox"', "📬", "Messaggi ricevuti", adminUnread ? `${adminUnread} da leggere` : "Tutti letti") : "",
-voce('data-act="open-settings"', "⚙️", "Impostazioni", "Colori, cosa usare, suoni")])}`;
+  const tile = (v) => `<button class="mtile" ${v.at}><span class="e">${v.em ? v.em() : v.e}</span><b>${v.tm ? v.tm() : v.t}</b><small>${v.s()}</small></button>`;
+  return `<div class="sec" style="margin-top:0"><h2>Menu</h2></div>` + GRUPPI_MENU.map(([g, tit]) => { const h = VOCI_MENU.filter((v) => v.g === g && voceVisibile(v)).map(tile).join(""); return h ? `<h3 class="msec">${tit}</h3><div class="mgrid">${h}</div>` : ""; }).join("");
 }
 
 // Ordine dei post-it: prima i fissati, poi l'ordine scelto trascinando; quelli nuovi (senza posizione) in cima
@@ -1599,7 +1610,7 @@ function openSettings(gruppo) {
     ${SG_FINE}
     ${sgApri("usare", "🧩", "Cosa vuoi usare", riassuntoUsare())}
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
-      <div class="moduli">${MODULI.filter((m) => !m[5] || ONLINE_MODE).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>
+      <div class="moduli">${[["Funzioni", ["turni", "spese", "pet", "focus", "ricorrenti", "liste", "riepilogo"]], ["Atmosfera e gioco", ["serie", "umore", "casa", "pancino", "biscotto", "feste", "stagioni"]]].map(([tit, ids]) => `<h3 class="msec">${tit}</h3>` + ids.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")).join("")}</div>
       ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
     ${mod("umore") ? `<div class="setrow"><div><b>I fiori del giardino</b><small>${riassuntoFiori()}</small></div><button class="fbtn on" data-act="fiori-apri">Scegli</button></div>` : ""}
     ${SG_FINE}
@@ -1735,6 +1746,7 @@ const NOVITA = {
   titolo: "Novità in Mochi!",
   punti: [
     // "pet2" senza modulo: la vedono tutti (la vecchia "pet" era legata al modulo spento, quindi segnata come vista senza mostrarla)
+    ["barra37", "📱", "<b>Più semplice</b>: sul telefono la barra in basso ha il tasto <b>Menu</b>, dove trovi anche gli Appunti e tutto il resto. In Oggi le cose da fare passano subito sopra serie, umore e pancino."],
     ["pet2", "🐾", "<b>Il tuo pet</b>: la scheda del tuo animale, la routine di ogni giorno, i pesi e le scadenze di vaccini e visite con il promemoria. Hai più animali? Scrivi i loro nomi nella scheda e dividi scadenze e spese per ognuno. Si accende da Impostazioni → Cosa vuoi usare."],
     ["sobrio", "🎨", "Nuovo stile <b>Sobrio</b> e tre palette nuove (Notte, Bosco, Grafite): colori sobri e forme più decise, per chi preferisce un aspetto più serio. Lo trovi in Impostazioni → Stile e Colori."],
     ["feste", "🎉", "<b>Feste</b>: a Natale, Capodanno, San Valentino, Pasqua, Halloween e in estate la mascotte si veste a festa e la casetta si decora, da sola. Se aggiungi il tuo compleanno in Impostazioni, ti fa gli auguri. In giro ci sono anche sorprese nascoste... Si spegne da Impostazioni → Cosa vuoi usare.", "feste"],
@@ -1760,7 +1772,7 @@ const NOVITA = {
     ["q2", "🥠", "<b>Il biscotto della fortuna</b>: ogni mattina, alla prima apertura, c'è un biscotto da aprire con la frase del giorno.", "biscotto"],
     ["q3", "📓", "<b>Nuovo stile Quaderno</b> da provare: carta puntinata, titoli scritti a mano ed etichette di carta. In Impostazioni → Stile."],
     ["q4", "🐾", "<b>12 nuove mascotte</b>: gattino, panda, coniglietta, pulcino, tartaruga, canguro, riccio, capibara, marimo, axolotl, lontra e cavallino. In Impostazioni → Nome e mascotte."],
-    ["q5", "☰", "<b>Menu completo</b>: liste condivise, ricorrenti, recap e tutto il resto sono a portata di tocco dal pulsante ☰ in alto."],
+    ["q5", "☰", "<b>Menu completo</b>: liste condivise, ricorrenti, recap e tutto il resto sono a portata di tocco dal Menu."],
     ["q6", "🔁", "<b>Promemoria ricorrenti</b>: bevi acqua ogni 2 ore, una pausa ogni ora... Li trovi in Impostazioni.", "ricorrenti"],
     ["q7", "🔤", "<b>Caratteri</b> e <b>12 colori</b> per gli appunti; da computer gli appunti stanno su una bacheca di sughero 📌"],
     ["q8", "👭", "<b>Liste condivise</b>: crea una lista come \"Casa\" o \"Spesa\", invita chi vuoi con un codice e la usate insieme. In Impostazioni.", "liste"],
@@ -2503,8 +2515,7 @@ function viewTurni() {
     : "Nessun ciclo: segni i turni giorno per giorno";
   return `<div class="sec" style="margin-top:0"><h2><span class="emo">💼 </span>Turni di lavoro</h2></div>
     <div class="split turni"><div class="col-main">
-      <div class="calhead"><button class="iconbtn" data-act="turni-mese" data-v="-1">‹</button><h2>${MESI[m.getMonth()]} ${m.getFullYear()}</h2><button class="iconbtn" data-act="turni-mese" data-v="1">›</button></div>
-      <div class="cal"><div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div><div class="days">${celle}</div></div>
+      <div class="cal">${ANELLI}<div class="calhead"><button class="iconbtn" data-act="turni-mese" data-v="-1" aria-label="Mese prima">‹</button><h2>${MESI[m.getMonth()]} ${m.getFullYear()}</h2><button class="iconbtn" data-act="turni-mese" data-v="1" aria-label="Mese dopo">›</button></div><div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div><div class="days">${celle}</div></div>
       <p class="hint" style="text-align:center;margin-top:8px">Tocca un giorno per cambiarlo. Il puntino indica un cambio fatto a mano.</p>
     </div><div class="col-side">
       <div class="ore-mese"><b>${fmtOre(o.min)}</b><span>di lavoro in ${o.turni} ${o.turni === 1 ? "turno" : "turni"} a ${MESI[m.getMonth()]}</span>
@@ -3216,7 +3227,7 @@ async function eseguiPassaggio(btn) {
 const PET_MAX_RIGHE = 5000;
 const petSp = (id) => PET_SPECIE.find((s) => s[0] === id) || PET_SPECIE[PET_SPECIE.length - 1];
 const petIcona = (id) => `<span class="emo">${petSp(id)[2]}</span><svg class="ico q" aria-hidden="true"><use href="#i-pet-${petSp(id)[0]}"/></svg>`;
-const petTitolo = () => (ANIMALI.length >= 2 ? "I miei Pet" : CUSTOM.pet.nome ? "Il mio " + CUSTOM.pet.nome : "Il mio pet");
+const petTitolo = () => (ANIMALI.length >= 2 ? "I miei Pet" : CUSTOM.pet.nome || "Il mio pet");
 const petMinGiorno = () => ymd(addDays(new Date(), -1800));
 const petGiornoOk = (g) => validYmd(g) && g >= petMinGiorno() && g <= todayStr();
 const petRound2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -3468,17 +3479,20 @@ function apriPetScad(id) {
   openSheet(`<h2><span class="mbox">${mascot()}</span>${it ? "Modifica la scadenza" : "Nuova scadenza"}</h2>
     <div class="field"><label id="psTL">Di che cosa si tratta?</label><div class="pet-dt" id="psTipi" role="group" aria-labelledby="psTL">${PET_SCAD_TIPI.map(([k, n2]) => `<button type="button" class="fbtn ${petScDraft.tipo === k ? "on" : ""}" data-act="pet-s-tipo" data-v="${k}" aria-pressed="${petScDraft.tipo === k}">${n2}</button>`).join("")}</div></div>
     ${petMulti() ? `<div class="field"><label id="psAL">Per chi?</label><div class="pet-dt" id="psTag" role="group" aria-labelledby="psAL">${petTagHtml(petScDraft.tag, "pet-s-tag", "Per tutti")}</div></div>` : ""}
-    <div class="field"><label for="psTit">Titolo</label><input class="input" id="psTit" maxlength="100" autocomplete="off" value="${esc(it ? it.title : petScTitolo(petScDraft.tipo, petScNome(petScDraft.tag)))}"></div>
     <div class="field"><label for="psData">Data</label><input class="input" type="date" id="psData" value="${dd}" min="2000-01-01" max="2100-12-31"></div>
+    <button type="button" class="more" id="psMoreBtn" data-act="pet-s-altre" aria-expanded="${it ? "true" : "false"}" aria-controls="psAltre" ${it ? "hidden" : ""}>+ Titolo, ripetizione e promemoria</button>
+    <div id="psAltre" ${it ? "" : "hidden"}>
+    <div class="field"><label for="psTit">Titolo</label><input class="input" id="psTit" maxlength="100" autocomplete="off" value="${esc(it ? it.title : petScTitolo(petScDraft.tipo, petScNome(petScDraft.tag)))}"></div>
     <div class="field"><label for="psRep">Si ripete?</label><select class="input" id="psRep">${PET_REP.map(([k, l]) => `<option value="${k}" ${rep === k ? "selected" : ""}>${l}</option>`).join("")}</select>
       <input class="input" type="number" id="psN" min="1" max="365" inputmode="numeric" value="${n}" aria-label="Ogni quanti giorni" style="margin-top:8px" ${rep === "d" ? "" : "hidden"}></div>
     <div class="field"><label for="psRem">Promemoria 🔔</label><select class="input" id="psRem">${[["morning", "Alle 9 del giorno stesso"], ["1440", "Il giorno prima"], ["none", "Nessun promemoria"]].map(([k, l]) => `<option value="${k}" ${rem === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    </div>
     <div class="actions">${it ? `<button class="btn danger" data-act="pet-scad-del" aria-label="Elimina la scadenza">🗑</button>` : ""}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-scad-salva">Salva</button></div>`);
   $("#psRep").addEventListener("change", (e) => { $("#psN").hidden = e.target.value !== "d"; });
 }
 async function salvaPetScad() {
   const d = petScDraft; if (!d) return;
-  const tit = taglia($("#psTit").value.trim(), 100); if (!tit) { toast("Scrivi un titolo 🍙"); $("#psTit").focus(); return; }
+  const tit = taglia($("#psTit").value.trim(), 100); if (!tit) { toast("Scrivi un titolo 🍙"); const a = $("#psAltre"), b = $("#psMoreBtn"); if (a) a.hidden = false; if (b) b.hidden = true; $("#psTit").focus(); return; }
   const data = $("#psData").value; if (!validYmd(data) || data < "2000-01-01" || data > "2100-12-31") { toast("Controlla la data 📅"); return; }
   let rep = $("#psRep").value;
   if (rep === "d") { const n = parseInt($("#psN").value, 10); if (!(n >= 1 && n <= 365)) { toast("Ogni quanti giorni? Da 1 a 365"); $("#psN").focus(); return; } rep = "d" + n; }
@@ -3522,7 +3536,7 @@ function petSpeseHtml() {
   const oggi = new Date(), mk = monthKey(oggi), ak = String(oggi.getFullYear());
   const f = petFiltroOk(), v = state.spese.voci.filter((x) => x.categoria === PET_CAT_SPESA && (!f || x.animale_id === f)).sort(ordineSpese);
   const somma = (k) => v.filter((x) => x.giorno.startsWith(k)).reduce((a, x) => a + x.importo_cent, 0);
-  return `<div class="sec"><h2>${f ? `Spese di ${esc(f)}` : "Spese del pet"}</h2><button class="fbtn on" data-act="pet-spesa-nuova">Aggiungi spesa pet</button></div>
+  return `<div class="sec"><h2>${f ? `Spese di ${esc(f)}` : "Spese del pet"}</h2><button class="fbtn" data-act="pet-spesa-nuova">Aggiungi spesa pet</button></div>
     <div class="pet-spese-tot"><div><small>Questo mese</small><b>${euro(somma(mk))}</b></div><div><small>Quest'anno</small><b>${euro(somma(ak))}</b></div></div>
     ${v.length ? `<div class="list pet-scads">${v.slice(0, 5).map((x) => { const c = catSpesa(x.categoria); return `<button class="sp-riga" data-act="spesa-modifica" data-id="${esc(x.id)}">
       <span class="sp-e" style="--cc:${c[3]}">${c[1]}</span><span class="sp-t"><b>${esc(x.nota || c[2])}</b><small>${x.nota ? `${c[2]} · ` : ""}${niceDate(x.giorno)}</small></span><b class="sp-i">${euro(x.importo_cent)}</b></button>`; }).join("")}</div>`
@@ -3559,18 +3573,18 @@ function viewPet() {
       <button class="fbtn" data-act="pet-edit" aria-label="Modifica la scheda di ${esc(p.nome || "il tuo pet")}">Modifica</button>
     </div>
     ${festa ? `<div class="pet-festa" role="status">Oggi è il compleanno ${p.nome ? "di " + esc(p.nome) : "del tuo pet"}!${DECO("🎂")}</div>` : ""}
+    ${p.vet || p.tel ? `<div class="sec"><h2>Veterinario</h2></div><div class="pet-vet">${p.vet ? `<b>${esc(p.vet)}</b>` : ""}${p.tel ? `<a class="pet-tel" href="${esc(telHref)}" aria-label="Chiama${p.vet ? " " + esc(p.vet) : ""} al ${esc(p.tel)}">Chiama ${esc(p.tel)}</a>` : ""}</div>` : ""}
     <div class="sec"><h2>Routine di oggi</h2><span class="count" aria-live="polite">Fatto oggi ${n}/${voci.length}</span></div>
     ${voci.length ? `<div class="pet-routine" role="group" aria-label="Routine di oggi${p.nome ? " di " + esc(p.nome) : ""}">${voci.map((v) => { const f = fatte.has(v.id);
-      return `<button class="pin-toggle pet-voce ${f ? "on" : ""}" data-act="pet-spunta" data-v="${esc(v.id)}" aria-pressed="${f}"><span><b>${esc(v.t)}</b></span><span class="sw2" aria-hidden="true"></span></button>`; }).join("")}</div>`
+      return `<button class="pin-toggle pet-voce ${f ? "on" : ""}" data-act="pet-spunta" data-v="${esc(v.id)}" role="checkbox" aria-checked="${f}"><span class="check" aria-hidden="true">${f ? "✓" : ""}</span><span><b>${esc(v.t)}</b></span></button>`; }).join("")}</div>`
       : `<p class="small">Nessuna voce nella routine. Aggiungine qualcuna.</p>`}
     <div class="more-row"><button class="more" data-act="pet-routine">Cambia la routine</button></div>
     ${petMulti() ? `<div class="sec"><h2 id="pfL">Scadenze e spese di</h2></div><div class="pet-dt pet-filtro" role="group" aria-labelledby="pfL">${petTagHtml(petFiltroOk(), "pet-filtro", "Tutti")}</div>` : ""}
     ${petScadHtml()}
     ${petSpeseHtml()}
-    <div class="sec"><h2>Peso</h2><button class="fbtn on" data-act="pet-peso" data-v="">Aggiungi peso</button></div>
+    <div class="sec"><h2>Peso</h2><button class="fbtn" data-act="pet-peso" data-v="">Aggiungi peso</button></div>
     ${pesi.length ? `<div class="pet-peso-box">${petGrafico(pesi)}<ul class="pet-pesi">${[...pesi].reverse().map((x) => `<li><button class="pet-peso-riga" data-act="pet-peso" data-v="${x.giorno}" aria-label="Modifica il peso del ${esc(niceDate(x.giorno))}: ${fmtKg(x.kg)} kg"><span>${esc(niceDate(x.giorno))}</span><b>${fmtKg(x.kg)} kg</b></button></li>`).join("")}</ul></div>`
       : `<p class="small">Ancora nessun peso segnato. Con qualche misura vedi come cambia nel tempo.</p>`}
-    ${p.vet || p.tel ? `<div class="sec"><h2>Veterinario</h2></div><div class="pet-vet">${p.vet ? `<b>${esc(p.vet)}</b>` : ""}${p.tel ? `<a class="pet-tel" href="${esc(telHref)}" aria-label="Chiama${p.vet ? " " + esc(p.vet) : ""} al ${esc(p.tel)}">${esc(p.tel)}</a>` : ""}</div>` : ""}
     ${p.note ? `<div class="sec"><h2>Note</h2></div><p class="pet-note">${esc(p.note)}</p>` : ""}`;
 }
 // ---- Animali (v35): con account stanno in pet_animali (ordinati dal più vecchio). Non c'è un principale salvato:
@@ -3635,11 +3649,13 @@ async function salvaNuovoAnimale() {
 
 // ---- Scheda: crea, modifica, rimuovi
 function apriPet() {
-  const p = CUSTOM.pet, mesi = MESI.map((n, i) => `<option value="${i + 1}" ${p.m === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("");
+  const p = CUSTOM.pet, nuovo = !petPresente(p), mesi = MESI.map((n, i) => `<option value="${i + 1}" ${p.m === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("");
   openSheet(`<h2><span class="mbox">${mascot()}</span>${petPresente(p) ? "La scheda del tuo pet" : "Il tuo pet"}</h2>
     <div class="field"><label for="ptNome">Nome</label><input class="input" id="ptNome" maxlength="20" autocomplete="off" placeholder="Es. Briciola" value="${esc(p.nome)}"></div>
     
     <div class="field"><label id="ptSpL">Che animale è?</label><div class="sp-pick" id="ptSpecie" role="group" aria-labelledby="ptSpL">${PET_SPECIE.map(([k, n]) => `<button type="button" class="${p.specie === k ? "on" : ""}" data-act="pet-specie" data-v="${k}" aria-pressed="${p.specie === k}"><span class="e">${petIcona(k)}</span><small>${n}</small></button>`).join("")}</div></div>
+    ${nuovo ? `<div class="more-row"><button type="button" class="more" id="ptPiuBtn" data-act="pet-piu" aria-expanded="false" aria-controls="ptPiu">+ Data, veterinario e note</button></div>` : ""}
+    <div id="ptPiu" ${nuovo ? "hidden" : ""}>
     <div class="field"><label id="ptDtL">Una data, se vuoi</label>
       <div class="pet-dt" id="ptDt" role="group" aria-labelledby="ptDtL"><button type="button" class="fbtn ${p.dt !== "a" ? "on" : ""}" data-act="pet-dt" data-v="n" aria-pressed="${p.dt !== "a"}">Compleanno</button><button type="button" class="fbtn ${p.dt === "a" ? "on" : ""}" data-act="pet-dt" data-v="a" aria-pressed="${p.dt === "a"}">Arrivo a casa</button></div>
       <div class="pet-data"><select class="input" id="ptG" aria-label="Giorno"><option value="">Giorno</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${p.g === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select>
@@ -3648,6 +3664,7 @@ function apriPet() {
     <div class="field"><label for="ptVet">Veterinario</label><input class="input" id="ptVet" maxlength="40" autocomplete="off" placeholder="Nome dello studio" value="${esc(p.vet)}"></div>
     <div class="field"><label for="ptTel">Telefono del veterinario</label><input class="input" id="ptTel" type="tel" inputmode="tel" maxlength="20" autocomplete="off" placeholder="Es. +39 02 1234567" value="${esc(p.tel)}"></div>
     <div class="field"><label for="ptNote">Note</label><textarea class="input" id="ptNote" rows="3" maxlength="300" placeholder="Allergie, cibo preferito, cose da ricordare">${esc(p.note)}</textarea></div>
+    </div>
     ${petPresente(p) ? `<button class="more ospite-cancella" data-act="pet-rimuovi">Rimuovi questo animale e i suoi dati</button>` : ""}
     <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-salva">Salva</button></div>`);
   if (!petPresente(p)) setTimeout(() => $("#ptNome")?.focus(), 250);
@@ -3715,6 +3732,7 @@ function petFesta(g, el) {
 async function petAzione(act, v, el) {
   switch (act) {
     case "pet-edit": apriPet(); break;
+    case "pet-piu": { const b = $("#ptPiu"); if (b) { b.hidden = false; el.closest(".more-row")?.remove(); $("#ptVet")?.focus(); } break; } // scheda nuova: i dettagli compaiono solo se li vuole
     case "pet-specie": document.querySelectorAll("#ptSpecie button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); break;
     case "pet-dt": document.querySelectorAll("#ptDt button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); break;
     case "pet-salva": await salvaPet(); break;
@@ -3744,8 +3762,10 @@ async function petAzione(act, v, el) {
     case "pet-s-tag": if (petScDraft && (v === "" || petHa(v))) {
       const tit = $("#psTit"); if (tit && tit.value === petScTitolo(petScDraft.tipo, petScNome(petScDraft.tag))) tit.value = petScTitolo(petScDraft.tipo, petScNome(v));
       petScDraft.tag = v; document.querySelectorAll("#psTag button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); } break;
+    case "pet-s-altre": { const a = $("#psAltre"), b = $("#psMoreBtn"); if (a) { a.hidden = false; if (b) b.hidden = true; $("#psTit")?.focus({ preventScroll: false }); } break; }
     case "pet-s-tipo": if (petScDraft && PET_SCAD_TIPI.some((t) => t[0] === v)) {
       const tit = $("#psTit"), nm = petScNome(petScDraft.tag); if (tit && tit.value === petScTitolo(petScDraft.tipo, nm)) tit.value = petScTitolo(v, nm);
+      if (v === "altro") { const a = $("#psAltre"), b = $("#psMoreBtn"); if (a && a.hidden) { a.hidden = false; if (b) b.hidden = true; const t = $("#psTit"); t?.focus(); t?.select(); } } // "Altro" non ha un titolo suo: lo scrive chi usa l'app
       petScDraft.tipo = v; document.querySelectorAll("#psTipi button").forEach((b) => { const on = b === el; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); }); } break;
     case "pet-scad-salva": await salvaPetScad(); break;
     case "pet-scad-del": await eliminaPetScad(); break;
@@ -4058,8 +4078,7 @@ function viewCasa() {
       return `<div class="mob-item"><button class="pin-toggle mob-riga ${on ? "on" : ""}" data-act="casa-mobile" data-v="${id}" aria-pressed="${on}">${iconaMobile(id)}<span><b>${nome}</b><small>${on ? "In casa" : "Messo via"}</small></span><span class="sw2"></span></button><div class="mob-colori" role="group" aria-label="Colori di ${nome}">${pallini}</div></div>`;
     }).join("")}</div>
     <p class="hint casa-hint">I mobili arrivano in regalo spuntando le cose fatte. Le casette nuove si aprono con i giorni attivi della serie.</p>`;
-  return `<div class="sec" style="margin-top:0"><h2><span class="emo">🏡 </span>La casetta di ${esc(MN())}</h2></div>
-    <div class="split casa"><div class="col-main">${scena}${scelte}</div><div class="col-side">${mobili}</div></div>`;
+  return `<div class="split casa"><div class="col-main"><div class="sec" style="margin-top:0"><h2><span class="emo">🏡 </span>La casetta di ${esc(MN())}</h2></div>${scena}${scelte}</div><div class="col-side">${mobili}</div></div>`;
 }
 // Sblocchi: si calcolano dai numeri e si salvano per sempre; una festa per ogni cosa nuova (una volta sola)
 let sblocchiInCorso = false;
@@ -4386,8 +4405,7 @@ function viewFocus() {
       ${fine && !pausa && v ? (v.done ? `<p class="focus-voce fatta">✓ <b>${esc(v.title)}</b> è spuntata</p>` : `<div class="focus-voce"><span>Hai finito <b>${esc(v.title)}</b>?</span><button class="fbtn" data-act="focus-spunta">Sì, spuntala</button></div>`) : ""}
       <div class="actions focus-azioni">${azioni}</div>${fine ? "" : avviso}`;
   }
-  return `<div class="sec" style="margin-top:0"><h2><span class="emo">🪴 </span>Concentrazione</h2></div>
-    <div class="split focus"><div class="col-main">${main}</div><div class="col-side">${serra}</div></div>`;
+  return `<div class="split focus"><div class="col-main"><div class="sec" style="margin-top:0"><h2><span class="emo">🪴 </span>Concentrazione</h2></div>${main}</div><div class="col-side">${serra}</div></div>`;
 }
 document.addEventListener("change", (e) => { if (e.target.id === "focusVoce") focusPrep.voce = RE_ID.test(e.target.value) ? e.target.value : ""; });
 // Ogni secondo: aggiorna solo il tempo, la barra e (se serve) la piantina. La pagina non si ridisegna.
@@ -5125,6 +5143,14 @@ async function spuntaVoce(it, el) {
   await store.save(it);
   if (it.done) petProponiProssima(it);
 }
+// Il + e la lettera N fanno la stessa cosa: nuova voce, con la data di oggi (in Agenda, del giorno scelto)
+// Il + è contestuale: in Spese apre subito una nuova spesa, in Turni il turno di oggi, in Agenda un appuntamento del giorno scelto, in Appunti un appunto
+function nuovaVoce() {
+  if (state.tab === "spese" && mod("spese")) { apriSpesa(null); return; }
+  if (state.tab === "turni" && mod("turni") && turniAttivi()) { apriTurnoGiorno(todayStr()); return; }
+  if (state.tab === "agenda") { openEditor(newItem({ kind: "event", due_date: state.calSel }), true); return; }
+  openEditor(newItem({ due_date: todayStr(), _dateDefault: true }), true);
+}
 document.addEventListener("click", async (e) => {
   const tab = e.target.closest("[data-tab]");
   if (tab) {
@@ -5144,7 +5170,7 @@ document.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]"); if (!el) return;
   const act = el.dataset.act, v = el.dataset.v, id = el.dataset.id;
   switch (act) {
-    case "new": openEditor(newItem(state.tab === "agenda" ? { due_date: state.calSel } : { due_date: todayStr(), _dateDefault: true }), true); break;
+    case "new": nuovaVoce(); break;
     case "new-on-day": openEditor(newItem({ due_date: state.calSel, kind: "event" }), true); break;
     case "edit": { e.stopPropagation(); const it = state.items.find((x) => x.id === id); if (it) { if (isSpesa(it)) apriListaSpesa(it); else openEditor(it, false); } break; }
     case "toggle": {
@@ -5244,7 +5270,7 @@ document.addEventListener("click", async (e) => {
       else toast(acceso ? `${m[1]} ${m[2]}: acceso` : `${m[1]} ${m[2]}: spento. I dati restano al sicuro`);
       break;
     }
-    case "pet-spesa-nuova": case "pet-sel": case "pet-apri": case "pet-indietro": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
+    case "pet-spesa-nuova": case "pet-sel": case "pet-apri": case "pet-indietro": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-s-altre": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-piu": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
@@ -5419,7 +5445,7 @@ document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "n" || e.key === "N")
       && !$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden")) {
-    e.preventDefault(); openEditor(newItem(state.tab === "agenda" ? { due_date: state.calSel } : {}), true);
+    e.preventDefault(); nuovaVoce();
   }
 });
 
