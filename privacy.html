@@ -57,6 +57,15 @@
   :root[data-stile="quaderno"] .back button{border-radius:8px;border:1.5px solid var(--ink-a);box-shadow:2px 2px 0 var(--ink-a)}
   :root[data-stile="quaderno"] .end{border-radius:8px;background:var(--pink);color:#3b2a32;border:1.5px solid rgba(59,42,50,.55);box-shadow:3px 3px 0 rgba(59,42,50,.35)}
   :root[data-stile="quaderno"] header img{border-radius:8px}
+  /* Stile Sobrio: neutri freddi, bordi sottili, angoli piccoli, pulsante pieno nel colore scelto */
+  :root[data-stile="sobrio"] body{background-image:none}
+  :root[data-stile="sobrio"] :is(h1,h2){font-weight:800;letter-spacing:-.01em}
+  :root[data-stile="sobrio"]:not([data-font]){--ft:Nunito,system-ui,sans-serif}
+  :root[data-stile="sobrio"] section{border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--shadow)}
+  :root[data-stile="sobrio"] .back button{border-radius:var(--r-m);box-shadow:0 0 0 1px var(--line)}
+  :root[data-stile="sobrio"] .back .x{border-radius:var(--r-m)}
+  :root[data-stile="sobrio"] .end{background:var(--sob-fill);color:#fff;border-radius:var(--r-m);box-shadow:0 2px 0 rgba(0,0,0,.28);min-height:52px}
+  :root[data-stile="sobrio"] :is(button,a):focus-visible{outline:2px solid var(--acc-t);outline-offset:2px}
 </style>
 </head>
 <body>

@@ -444,7 +444,8 @@ function festaDi(data, compleanno = "") {
 // Temi di colore: [id, nome, colore chiaro, colore scuro] (i colori veri sono nel CSS di index.html)
 const PALETTE = [
   ["fragola", "Fragola", "#ff8fb1", "#e85d8a", "🍓"], ["matcha", "Matcha", "#7cc79a", "#3f9a6b", "🍵"],
-  ["lavanda", "Lavanda", "#b69cff", "#7a5fd6", "🪻"], ["pesca", "Pesca", "#ffab7a", "#e0703f", "🍑"], ["cielo", "Cielo", "#7cc0f0", "#3a86c8", "☁️"]
+  ["lavanda", "Lavanda", "#b69cff", "#7a5fd6", "🪻"], ["pesca", "Pesca", "#ffab7a", "#e0703f", "🍑"], ["cielo", "Cielo", "#7cc0f0", "#3a86c8", "☁️"],
+  ["notte", "Notte", "#8fa4ee", "#34498f", "🌙"], ["bosco", "Bosco", "#6fb08a", "#1f5c3f", "🌲"], ["grafite", "Grafite", "#f0b84e", "#8a5a0c", "🔩"]
 ];
 // Caratteri: [id, nome, famiglia per l'anteprima] (i font sono in vendor/fonts, nessuna richiesta esterna)
 const FONTI = [
@@ -456,8 +457,11 @@ const FONTI = [
 const STILI = [
   ["morbido", "Morbido", "Tondo e soffice, con sfumature e ombre leggere"],
   ["cartone", "Cartone", "Linee scure e colori pieni, come un cartone animato"],
-  ["quaderno", "Quaderno", "Carta puntinata, titoli a mano, etichette di carta"]
+  ["quaderno", "Quaderno", "Carta puntinata, titoli a mano, etichette di carta"],
+  ["sobrio", "Sobrio", "Colori sobri, forme decise, niente fronzoli"]
 ];
+// Piccole decorazioni nei testi (cuoricini e lustrini): nello stile Sobrio non ci sono
+const DECO = (e) => (typeof CUSTOM === "object" && CUSTOM && CUSTOM.stile === "sobrio" ? "" : " " + e);
 /* Cosa vuoi usare: ogni parte dell'app si può spegnere (Impostazioni). Spegnere nasconde, non cancella i dati.
    [id, emoji, nome, descrizione, acceso all'inizio, solo con account] */
 const MODULI = [
@@ -615,6 +619,7 @@ function cheer(ms = 1700) {
   cheerT = setTimeout(() => document.querySelectorAll(".mascotte").forEach((m) => m.classList.remove("happy")), ms);
 }
 function heartAt(el) {
+  if (CUSTOM.stile === "sobrio") return; // niente cuoricini che salgono
   const r = el.getBoundingClientRect();
   const s = document.createElement("span");
   s.className = "heart"; s.textContent = ["💗", "🌸", "✨", "💕"][Math.floor(Math.random() * 4)];
@@ -705,7 +710,7 @@ function openPancino() {
       : `<button class="lock" disabled><span class="e">🎁</span><b>???</b><small>Si trova in una festa</small></button>`).join("")}</div>` : ""}
     <p class="hint" style="margin:10px 4px 14px">Ogni cosa che spunti è un bocconcino. ${esc(MN())} non ha mai fame e non si offende: festeggia solo quello che fai.</p>
     ${mod("casa") ? `<button class="more" data-act="open-casa">🏡 Vai alla casetta di ${esc(MN())}</button>` : ""}
-    <div class="actions"><button class="btn primary" data-act="close">Ciao ${esc(MN())} 💗</button></div>`);
+    <div class="actions"><button class="btn primary" data-act="close">Ciao ${esc(MN())}${DECO("💗")}</button></div>`);
 }
 // Il bocconcino vola dalla spunta alla mascotte in alto
 function feed(fromEl, it) {
@@ -734,7 +739,7 @@ function checkRegalo(prima) {
   setTimeout(() => {
     openSheet(`<div class="recap"><div class="mbox">${mascot("happy")}</div>
       <h2 class="fred">Un regalo per ${esc(MN())}! ${t.e}</h2>
-      <div class="say">${t.n} bocconcini: si è guadagnato il ${t.nome.toLowerCase()}. Grazie a te 💗</div></div>
+      <div class="say">${t.n} bocconcini: si è guadagnato il ${t.nome.toLowerCase()}. Grazie a te${DECO("💗")}</div></div>
       <div class="actions"><button class="btn primary" data-act="close">Che bello!</button></div>`);
     confetti(innerWidth / 2, innerHeight * 0.35, 40);
   }, 1100);
@@ -853,7 +858,7 @@ function viewOggi() {
   h += `<div class="sec"><h2>Appuntamenti di oggi</h2></div>`;
   h += ev.length ? `<div class="list">${ev.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Nessun appuntamento oggi ☁️</div>`;
   h += `<div class="sec"><h2>Da fare oggi</h2></div>`;
-  h += todo.length ? `<div class="list">${todo.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Niente in scadenza oggi ✨</div>`;
+  h += todo.length ? `<div class="list">${todo.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Niente in scadenza oggi${DECO("✨")}</div>`;
   if (noDate.length) h += `<div class="sec"><h2>Quando hai tempo</h2></div><div class="list">${noDate.map(itemRow).join("")}</div>`;
   if (doneT.length) h += `<div class="sec"><h2>Fatte oggi<span class="emo"> 🎉</span></h2></div><div class="list">${doneT.map(itemRow).join("")}</div>`;
   const now = new Date(), cm = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1367,7 +1372,7 @@ function openRecap(month) {
       <div class="legend"><span><span class="emo">💼 </span>Lavoro ${lav}</span><span><span class="emo">🌷 </span>Personale ${per}</span></div>` : ""}
     ${done.length ? `<div class="sec"><h2>Cose che hai portato a casa</h2></div>
       <div class="list">${done.sort((a, b) => b.done_at.localeCompare(a.done_at)).slice(0, 10).map((i) => `<div class="item ${i.area} done" style="opacity:1"><span class="check">✓</span><div class="body"><div class="t" style="text-decoration:none">${esc(i.title)}</div></div></div>`).join("")}</div>` : ""}
-    <div class="actions" style="margin-top:16px"><button class="btn primary" data-act="close">Grazie ${MN()} 💗</button></div>`);
+    <div class="actions" style="margin-top:16px"><button class="btn primary" data-act="close">Grazie ${MN()}${DECO("💗")}</button></div>`);
   if (total >= 5) setTimeout(() => confetti(window.innerWidth / 2, window.innerHeight * .35, 40), 350);
 }
 
@@ -1539,6 +1544,7 @@ function maybeShowInstallHint() {
 const NOVITA = {
   titolo: "Novità in Mochi!",
   punti: [
+    ["sobrio", "🎨", "Nuovo stile <b>Sobrio</b> e tre palette nuove (Notte, Bosco, Grafite): colori sobri e forme più decise, per chi preferisce un aspetto più serio. Lo trovi in Impostazioni → Stile e Colori."],
     ["feste", "🎉", "<b>Feste</b>: a Natale, Capodanno, San Valentino, Pasqua, Halloween e in estate la mascotte si veste a festa e la casetta si decora, da sola. Se aggiungi il tuo compleanno in Impostazioni, ti fa gli auguri. In giro ci sono anche sorprese nascoste... Si spegne da Impostazioni → Cosa vuoi usare.", "feste"],
     ["spesa-smart", "🛒", "<b>Lista della spesa intelligente</b>: nelle liste da spuntare della spesa ti suggerisco le cose che compri di solito e le metto in ordine per reparto, come il giro del supermercato."],
     ["riepilogo", "🌙", "<b>Riepilogo della domenica</b>: la domenica sera i numeri della tua settimana (cose fatte, giorni attivi, turni e spese), con il confronto con quella prima.", "riepilogo"],
@@ -1705,7 +1711,7 @@ async function proponiInvito(code) {
     const id = await store.accettaInvito(code);
     if (!id) { toast("Invito non valido o scaduto 😕"); return; }
     await loadListe(); state.items = await store.list(); state.todoFilter = "l:" + id; state.tab = "todo"; render();
-    cheer(); toast(`${gen("Eccoti in", "Benvenuta in", "Benvenuto in")} ${str(info.emoji)} ${str(info.nome)}! 💗`);
+    cheer(); toast(`${gen("Eccoti in", "Benvenuta in", "Benvenuto in")} ${str(info.emoji)} ${str(info.nome)}!${DECO("💗")}`);
   } catch (e) { toast(/10 persone|massimo/.test(e?.message || "") ? e.message : "Non sono riuscita a entrare"); }
 }
 async function chiediCodice() {
@@ -3672,7 +3678,7 @@ function nuovaParticella(tipo, sparsa) {
   if (tipo === "pioggia") return { x: rnd(-40, w), y: sparsa ? rnd(0, h) : rnd(-60, -10), v: rnd(7, 10), l: rnd(10, 18) };
   if (tipo === "sole") return { x: rnd(0, w), y: rnd(0, h), r: rnd(2.6, 5), f: rnd(0, 6.28), v: rnd(.15, .35) };
   if (tipo === "neve") return { x: rnd(0, w), y, r: rnd(1.4, 3.4), v: rnd(.4, 1), f: rnd(0, 6.28), o: rnd(.4, 1.2) };
-  const COL = tipo === "foglie" ? ["#e8a25a", "#d9763d", "#c9a24a", "#b5653a"] : tipo === "cuori" ? ["#ff8fb1", "#ff6f8f", "#ffb3c6", "#f7a1bb"] : ["#ffb7c9", "#ffc8d8", "#f7a1bb", "#ffd9e4"];
+  const COL = tipo === "foglie" ? ["#e8a25a", "#d9763d", "#c9a24a", "#b5653a"] : document.documentElement.dataset.stile === "sobrio" ? ["#9fb0c6", "#b8c4d4", "#8fa2bb", "#c6d0dd"] /* Sobrio: petali e cuori in grigio azzurro, niente rosa */ : tipo === "cuori" ? ["#ff8fb1", "#ff6f8f", "#ffb3c6", "#f7a1bb"] : ["#ffb7c9", "#ffc8d8", "#f7a1bb", "#ffd9e4"];
   return { x: rnd(0, w), y, r: tipo === "foglie" ? rnd(5, 8) : tipo === "cuori" ? rnd(4, 7) : rnd(3.5, 5.5), v: tipo === "foglie" ? rnd(.6, 1.2) : rnd(.45, .9), f: rnd(0, 6.28), o: rnd(.6, 1.6), a: rnd(0, 6.28), va: rnd(-.04, .04), c: COL[Math.floor(Math.random() * COL.length)] };
 }
 function stagioniMisura() {
@@ -4002,7 +4008,7 @@ function festeApri() {
   setTimeout(() => {
     if (f === "compleanno" || f === "capodanno") whenSheetFree(() => {
       openSheet(`<div class="recap"><div class="mbox">${mascot("happy")}</div><h2 class="fred">${f === "compleanno" ? "Buon compleanno!" : "Buon anno!"} ${FESTE[f].e}</h2>
-        <div class="say">${esc(festaFrase(f))}</div></div><div class="actions"><button class="btn primary" data-act="close">Grazie ${esc(MN())} 💗</button></div>`);
+        <div class="say">${esc(festaFrase(f))}</div></div><div class="actions"><button class="btn primary" data-act="close">Grazie ${esc(MN())}${DECO("💗")}</button></div>`);
       confetti(innerWidth / 2, innerHeight * .3, 50); fuochini(f === "capodanno" ? 5 : 3); cheer(2400); suona("notifica");
     });
     else toast(festaFrase(f));
@@ -4506,7 +4512,7 @@ document.addEventListener("click", async (e) => {
     case "save-custom": {
       const sel = document.querySelector(".mpick button.on")?.dataset.v || CUSTOM.mascotte;
       await saveCustom({ nome_app: $("#cName").value, mascotte: sel });
-      closeSheet(); setTimeout(() => cheer(), 200); toast(`Ciao! Ora sono ${MN()} 💗`);
+      closeSheet(); setTimeout(() => cheer(), 200); toast(`Ciao! Ora sono ${MN()}${DECO("💗")}`);
       break;
     }
     case "d-kind": draft.kind = v; draft._kindManual = true; if (v === "note") advanced = true;

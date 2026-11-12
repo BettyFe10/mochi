@@ -21,7 +21,7 @@
 <script src="mascotte.js"></script>
 <script src="frasi.js"></script>
 <style>
-.palettes{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:4px 0 2px}
+.palettes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 6px;margin:4px 0 2px}
 .palettes button{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:none;padding:0;cursor:pointer;color:var(--ink2);font:inherit}
 .palettes .sw{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;font-size:26px;border:3px solid var(--card);box-shadow:0 0 0 2px var(--line);transition:transform .15s}
 .palettes button.on .sw{box-shadow:0 0 0 3px var(--pink-d);transform:scale(1.06)}
@@ -399,7 +399,12 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
 .stile-cartone .anteprima i:first-child{width:45%;background:#ffe58f;border-color:#4a2f3a;box-shadow:0 2px 0 #4a2f3a}
 .stile-cartone .anteprima i:last-child{width:60%;background:#ff8fb1;border-color:#4a2f3a;box-shadow:0 2px 0 #4a2f3a}
 .stile-cartone b{font-family:Fredoka,var(--ft);font-weight:600;font-size:16px}
-.stili{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stili{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stile-sobrio .anteprima{background:#f1f3f6;border:1px solid #c5ccd5;border-radius:4px}
+.stile-sobrio .anteprima i{background:#fff;border:1px solid #c5ccd5;border-radius:2px;height:10px}
+.stile-sobrio .anteprima i:first-child{width:45%;background:#cfd6de}
+.stile-sobrio .anteprima i:last-child{width:60%;background:#34498f;border-color:#34498f}
+.stile-sobrio b{font-family:Nunito,var(--ft);font-weight:800;font-size:16px}
 /* Com'è andata la giornata */
 .umore-card{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;background:var(--card);border-radius:var(--r-xl);padding:var(--s4);box-shadow:var(--shadow);margin:0}
 .umore-card .u-domanda{width:100%;font-family:var(--fh,var(--ft));font-size:18px;font-weight:600}
@@ -470,7 +475,7 @@ body.sheet-open .toast.on{transform:translate(-50%,0)}
 @keyframes biscottoDondola{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg) translateY(-3px)}}
 @media (prefers-reduced-motion: reduce){.biscotto-wrap.on:not(.aperto) .b-cookie svg{animation:none}.b-cookie .b-l,.b-cookie .b-r,.b-carta{transition:none}}
 /* Morbido usa le emoji, Quaderno le icone a tratto */
-:root:not([data-stile="quaderno"]) .ico.q{display:none}
+:root:not([data-stile="quaderno"]):not([data-stile="sobrio"]) .ico.q{display:none}
 :root[data-stile="quaderno"] .emo{display:none}
 /* Appunti come foglietti appuntati su una bacheca di sughero (telefono e computer) */
 .notes{padding:30px 14px 18px;border-radius:16px;border:9px solid #b9824f;
@@ -956,7 +961,7 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
   background-size:24px 24px;
 }
 @media (prefers-color-scheme: dark){ :root[data-stile="cartone"]:not([data-theme="light"]) body{ background-image:radial-gradient(rgba(255,255,255,.045) 1.4px, transparent 1.6px) } }
-:root[data-theme="dark"]:not([data-stile="quaderno"]) body{ background-image:radial-gradient(rgba(255,255,255,.045) 1.4px, transparent 1.6px) }
+:root[data-theme="dark"]:not([data-stile="quaderno"]):not([data-stile="sobrio"]) body{ background-image:radial-gradient(rgba(255,255,255,.045) 1.4px, transparent 1.6px) }
 
 /* --- SCHEDE: righe di elenco, celle, pannelli. Bianche, linea leggera, nessuna ombra --- */
 :root[data-stile="cartone"] :is(.item,.sp-riga,.turno-riga,.umore-riga,.lcard,.msg,.cal,.sp-cats,.mtile,.bubble,.recap .cell,.serie-card,.serra,.focus-voce){
@@ -1279,6 +1284,133 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 @media (prefers-reduced-motion: no-preference){ .uovo-nasc{animation:uovoSbircia 5s ease-in-out infinite} }
 @keyframes uovoSbircia{0%,88%,100%{transform:none}92%{transform:rotate(-12deg)}96%{transform:rotate(10deg)}}
 @media (prefers-reduced-motion: reduce){ .fd-luce,.fd-fluttua,.fd-pipistrello,.fd-fiamma,.mascotte.festa-giro,.festa-cade{animation:none} .festa-cade{display:none} }
+
+/* =========================================================
+   STILE SOBRIO (id "sobrio")
+   Più serio e asciutto: neutri freddi (grafite di sera), accento della palette scelta più profondo,
+   angoli piccoli e decisi, bordi sottili, ombre nette e leggere, icone a tratto, niente lustrini né cuoricini.
+   I colori veri sono in tema.css (--sob-fill = riempimento con testo bianco, >= 4.5:1). Regole in DESIGN.md.
+   ========================================================= */
+:root[data-stile="sobrio"] body{background-color:var(--bg);background-image:none}
+:root[data-stile="sobrio"] :is(h1,h2,h3,.fred){font-weight:800;letter-spacing:-.01em}
+:root[data-stile="sobrio"][data-font] :is(h1,h2,h3,.fred){font-weight:700}
+:root[data-stile="sobrio"] .top .hello h1{font-size:25px}
+:root[data-stile="sobrio"] .top .mascot{filter:none}
+:root[data-stile="sobrio"] .motto{font-style:normal;font-weight:600}
+/* schede: bordo sottile, angolo piccolo, ombra netta e leggera */
+:root[data-stile="sobrio"] :is(.item,.stat,.bubble,.pancino,.sp-tot,.sp-riga,.sp-cats,.turno-riga,.umore-card,.umore-riga,.lcard,.msg,.cal,.mtile,.serie-card,.serra,.focus-voce,.focus-scena,.ore-mese,.riepilogo-card,.recap,.ospite-scheda,.ospite-invito,.casa-scelta,.casa-scena,.sp-sugg,.biscotto-card){
+  border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--shadow)}
+:root[data-stile="sobrio"] :is(.mtile,.pancino,.sp-tot,.ore-mese,.recap,.umore-card,.biscotto-card){border-radius:var(--r-xl)}
+:root[data-stile="sobrio"] .item{border-left:4px solid var(--pink);border-radius:var(--r-m)}
+:root[data-stile="sobrio"] .item.lavoro{border-left-color:var(--lav-d)}
+:root[data-stile="sobrio"] .item:active{transform:none}
+:root[data-stile="sobrio"] .item.done{opacity:.62}
+:root[data-stile="sobrio"] .bubble{background:var(--card)}
+:root[data-stile="sobrio"] .recap{background:var(--card);color:var(--ink)}
+:root[data-stile="sobrio"] .recap .cell{background:var(--bg2);border:0;border-radius:var(--r-m);box-shadow:none}
+:root[data-stile="sobrio"] .recap .cell b,:root[data-stile="sobrio"] .stat b{color:var(--acc-t)}
+:root[data-stile="sobrio"] .recap::before,:root[data-stile="sobrio"] .recap::after{display:none}
+:root[data-stile="sobrio"] .stat{background:var(--card)}
+:root[data-stile="sobrio"] .check{border-radius:5px;border-width:2px}
+:root[data-stile="sobrio"] .item.done .check{background:var(--sob-fill);border-color:var(--sob-fill);color:#fff}
+:root[data-stile="sobrio"] .item.done.lavoro .check{background:var(--lav-d);border-color:var(--lav-d);color:var(--bg)}
+:root[data-stile="sobrio"] :is(.st-check,.st-box){border-radius:4px}
+:root[data-stile="sobrio"] :is(.st-row.fatto .st-check,.st-voce.fatto .st-box,.sd.fatto){background:var(--sob-fill);border-color:var(--sob-fill);color:#fff}
+:root[data-stile="sobrio"] .item.lavoro .st-voce.fatto .st-box{background:var(--lav-d);border-color:var(--lav-d);color:var(--bg)}
+:root[data-stile="sobrio"] .sd{border-radius:6px;border-width:1.5px;color:var(--ink)}
+:root[data-stile="sobrio"] .sd.fatto.oggi{border-color:var(--sob-fill)}
+/* titoli di sezione, etichette e contatori */
+:root[data-stile="sobrio"] .sec h2{font-size:19px}
+:root[data-stile="sobrio"] .sec .count{border-radius:5px;background:var(--pink-l);color:var(--acc-t);padding:3px 9px}
+:root[data-stile="sobrio"] .chip{border-radius:5px}
+:root[data-stile="sobrio"] .chip.st-chip{border-radius:5px}
+:root[data-stile="sobrio"] :is(.tchip,.tday,.tpick,.tday-s){border-radius:6px}
+:root[data-stile="sobrio"] :is(.areas button,.emojis button,.giorni button,.regali button,.fonts button,.stili button,.sp-pick button,.suoni button,.mpick button,.pin-toggle,.focus-durate button,.stag-scelta,.lcard,.facce button){border-radius:var(--r-m);border-width:1.5px;border-color:var(--line)}
+:root[data-stile="sobrio"] :is(.areas button,.emojis button,.giorni button,.regali button,.fonts button,.stili button,.sp-pick button,.suoni button,.mpick button,.focus-durate button).on,:root[data-stile="sobrio"] .stili button.on{border-color:var(--pink-d);background:var(--pink-l)}
+:root[data-stile="sobrio"] .sp-e{border-radius:6px}
+:root[data-stile="sobrio"] :is(.pc-bar,.pc-bar i,.sp-bar,.sp-bar i){border-radius:3px}
+:root[data-stile="sobrio"] .pc-bar i,:root[data-stile="sobrio"] .week7 i{background:var(--pink)}
+:root[data-stile="sobrio"] .week7 i{border-radius:3px 3px 1px 1px}
+:root[data-stile="sobrio"] .sp-bar i{background:var(--pink)}
+:root[data-stile="sobrio"] .sp-bud.oltre .sp-bar i{background:var(--danger)}
+/* pulsanti: rettangolari, angoli decisi */
+:root[data-stile="sobrio"] .btn{border-radius:var(--r-m);background:var(--bg2);border:1px solid var(--line)}
+:root[data-stile="sobrio"] .btn.primary{background:var(--sob-fill);color:#fff;border-color:transparent;box-shadow:0 2px 0 rgba(0,0,0,.28)}
+:root[data-stile="sobrio"] .btn.primary:active,:root[data-stile="sobrio"] .btn:active{transform:translateY(1px);box-shadow:none}
+:root[data-stile="sobrio"] .btn.danger{border-color:transparent}
+:root[data-stile="sobrio"] .btn.danger-full{background:#b3263f;color:#fff;box-shadow:0 2px 0 rgba(0,0,0,.28);border-color:transparent}
+:root[data-stile="sobrio"] .fbtn{border-radius:var(--r-m);box-shadow:none;border:1px solid var(--line)}
+:root[data-stile="sobrio"] .fbtn.on{background:var(--sob-fill);color:#fff;border-color:transparent}
+:root[data-stile="sobrio"] .iconbtn{border-radius:var(--r-m);border:1px solid var(--line);box-shadow:none}
+:root[data-stile="sobrio"] .seg{border-radius:var(--r-m);background:var(--bg2)}
+:root[data-stile="sobrio"] .seg button{border-radius:6px}
+:root[data-stile="sobrio"] .seg button.on{background:var(--card);box-shadow:0 0 0 1px var(--line),0 1px 2px rgba(20,30,45,.12);color:var(--acc-t)}
+:root[data-stile="sobrio"] :is(.input,textarea.input,select.input){border-radius:var(--r-m);border-width:1.5px}
+:root[data-stile="sobrio"] .input:focus{border-color:var(--pink-d);box-shadow:0 0 0 2px var(--pink-l)}
+/* calendario */
+:root[data-stile="sobrio"] .day{border-radius:8px}
+:root[data-stile="sobrio"] .day.today:not(.sel){background:var(--pink-l);color:var(--acc-t);box-shadow:inset 0 0 0 1.5px var(--pink)}
+:root[data-stile="sobrio"] .day.sel{background:var(--sob-fill);color:#fff}
+:root[data-stile="sobrio"] .day.sel .dots i{background:#fff}
+/* icone a tratto invece delle emoji (come in Quaderno) */
+:root[data-stile="sobrio"] .emo{display:none}
+:root[data-stile="sobrio"] .nav .tab .i{filter:none;opacity:.6}
+:root[data-stile="sobrio"] .nav .tab.on .i{opacity:1;transform:none}
+:root[data-stile="sobrio"] .nav .side .i{display:grid;place-items:center}
+:root[data-stile="sobrio"] .evdot{background:var(--bg2);color:var(--ink);border-radius:5px}
+/* barra in basso e pulsante "+" */
+:root[data-stile="sobrio"] .nav .bar{border-radius:var(--r-xl);border:1px solid var(--line);box-shadow:0 6px 18px rgba(20,30,45,.16)}
+:root[data-stile="sobrio"] .nav .tab{border-radius:var(--r-m)}
+:root[data-stile="sobrio"] .nav .tab.on{color:var(--acc-t)}
+:root[data-stile="sobrio"] .nav .plus{border-radius:var(--r-l);background:var(--sob-fill);color:#fff;box-shadow:0 3px 0 rgba(0,0,0,.3)}
+:root[data-stile="sobrio"] .nav .plus:active{transform:translateY(2px);box-shadow:none}
+/* finestre */
+:root[data-stile="sobrio"] .sheet{border-radius:14px 14px 0 0;border:1px solid var(--line);border-bottom:0;box-shadow:var(--pop)}
+:root[data-stile="sobrio"] .sheet .grab{border-radius:2px;height:4px;background:var(--ink-b,var(--line));opacity:.5}
+:root[data-stile="sobrio"] .sheet-x{border-radius:var(--r-m);background:var(--bg2);border:1px solid var(--line);color:var(--ink2)}
+:root[data-stile="sobrio"] .sheet h2{font-size:21px}
+:root[data-stile="sobrio"] .toast{border-radius:var(--r-m);box-shadow:0 4px 14px rgba(0,0,0,.28);font-weight:700}
+/* bacheca di sughero: resta sughero, ma più scura, post-it squadrati con colori meno pastello */
+:root[data-stile="sobrio"] .notes{border-radius:4px;border:7px solid #85623f;background-color:#b08a5c;background-image:radial-gradient(rgba(60,38,16,.22) 1px,transparent 1.6px);background-size:8px 8px;background-position:0 0;box-shadow:inset 0 2px 8px rgba(0,0,0,.3)}
+:root[data-stile="sobrio"] .notes .note,:root[data-stile="sobrio"] .note{border-radius:2px;color:#1c2530;box-shadow:0 3px 6px rgba(40,25,10,.38);transform:rotate(calc(var(--rot,0deg) * .3))}
+:root[data-stile="sobrio"] .notes .note::before{width:13px;height:13px;margin-left:-6px;top:-6px;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6) 0 2px,transparent 3.4px),#56616e;box-shadow:0 2px 3px rgba(0,0,0,.4)}
+:root[data-stile="sobrio"] .notes .note:active,:root[data-stile="sobrio"] .notes .note:hover{transform:rotate(0deg) translateY(-2px);box-shadow:0 8px 14px -4px rgba(40,25,10,.5)}
+:root[data-stile="sobrio"] .note.c1{background:#f0dc8c}:root[data-stile="sobrio"] .note.c2{background:#e8b6bf}:root[data-stile="sobrio"] .note.c3{background:#a9d3bd}:root[data-stile="sobrio"] .note.c4{background:#c4bfe6}:root[data-stile="sobrio"] .note.c5{background:#efc3a5}:root[data-stile="sobrio"] .note.c6{background:#a9c8e6}
+:root[data-stile="sobrio"] .note.c7{background:#cfdd9f}:root[data-stile="sobrio"] .note.c8{background:#dcb9e3}:root[data-stile="sobrio"] .note.c9{background:#ced3d9}:root[data-stile="sobrio"] .note.c10{background:#e9ab9f}:root[data-stile="sobrio"] .note.c11{background:#a0d5cc}:root[data-stile="sobrio"] .note.c12{background:#d9c8aa}
+:root[data-stile="sobrio"] .note .st-box{border-radius:3px}
+/* mascotte e casetta: i disegni restano; la mascotte nelle caselle e nel pancino ha un riquadro sobrio */
+:root[data-stile="sobrio"] .mpick button{background:var(--card)}
+:root[data-stile="sobrio"] .casa-scena,:root[data-stile="sobrio"] .casa-scelta{overflow:hidden}
+:root[data-stile="sobrio"] .mob-colore span{border-radius:6px;box-shadow:none}
+/* feste: ghirlandina e cappellini restano, ma discreti e fermi */
+:root[data-stile="sobrio"] .festa-deco{opacity:.55;filter:saturate(.5)}
+:root[data-stile="sobrio"] :is(.fd-luce,.fd-fluttua,.fd-pipistrello,.fd-fiamma){animation:none}
+/* accesso e ospite */
+:root[data-stile="sobrio"] .login h1{font-weight:800}
+:root[data-stile="sobrio"] #lPrivacy{border-radius:var(--r-m)}
+/* accessibilità: anello di focus ben visibile (2px) */
+:root[data-stile="sobrio"] :is(button,a,[tabindex],summary):focus-visible{outline:2px solid var(--acc-t);outline-offset:2px}
+:root[data-stile="sobrio"] :is(input,select,textarea):focus-visible{outline:2px solid var(--acc-t);outline-offset:1px}
+:root[data-stile="sobrio"] .mob-colore:focus-visible{outline:2px solid var(--acc-t);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){ :root[data-stile="sobrio"] :is(.btn,.nav .plus,.item,.notes .note){transition:none;transform:none} :root[data-stile="sobrio"] .btn:active,:root[data-stile="sobrio"] .nav .plus:active{transform:none} }
+/* cork scuro con tema scuro */
+@media (prefers-color-scheme: dark){ :root[data-stile="sobrio"]:not([data-theme="light"]) .notes{border-color:#5c4630;background-color:#7b6140} }
+:root[data-stile="sobrio"][data-theme="dark"] .notes{border-color:#5c4630;background-color:#7b6140}
+@media (min-width:1024px){
+  :root[data-stile="sobrio"] .nav{box-shadow:none;border-right:1px solid var(--line);background:var(--card)}
+  :root[data-stile="sobrio"] .nav .bar{border:0;box-shadow:none;border-radius:0}
+  :root[data-stile="sobrio"] .nav .brand span{font-weight:800;font-size:25px;letter-spacing:-.01em}
+  :root[data-stile="sobrio"] .nav .plus{border-radius:var(--r-m);height:46px;transform:none}
+  :root[data-stile="sobrio"] .nav .tab,:root[data-stile="sobrio"] .nav .side{border-radius:var(--r-m)}
+  :root[data-stile="sobrio"] .nav .tab.on,:root[data-stile="sobrio"] .nav .side.on{background:var(--pink-l);color:var(--acc-t);box-shadow:inset 3px 0 0 var(--pink)}
+  :root[data-stile="sobrio"] .nav .tab .ico,:root[data-stile="sobrio"] .nav .side .ico{width:21px;height:21px}
+  :root[data-stile="sobrio"] .sheet{border-radius:14px;border:1px solid var(--line);box-shadow:var(--pop-d)}
+  :root[data-stile="sobrio"] .top .hello h1{font-size:30px}
+  :root[data-stile="sobrio"] .notes{border-width:9px;border-radius:5px}
+}
+/* palette nuove in Quaderno: il giorno scelto ha il testo scuro (il rosa/azzurro chiaro non regge il bianco) */
+:root[data-stile="quaderno"]:is([data-palette="notte"],[data-palette="bosco"],[data-palette="grafite"]) .day.sel{color:var(--on-acc)}
+:root[data-stile="quaderno"]:is([data-palette="notte"],[data-palette="bosco"],[data-palette="grafite"]) .day.sel .dots i{background:var(--on-acc)}
 </style>
 </head>
 <body>

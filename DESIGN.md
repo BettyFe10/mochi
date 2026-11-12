@@ -6,7 +6,7 @@ Niente file nuovi da pubblicare (il workflow ha un elenco fisso).
 
 ## 1. L'idea
 
-Mochi è tondo, soffice e kawaii. Lo stile predefinito (Morbido) è rosa e sfumato; chi vuole può scegliere Cartone (un cartone kawaii dei primi anni 2000: contorno scuro morbido, colori pieni e allegri) o Quaderno. In tutti e tre deve essere prima di tutto chiaro e calmo da usare ogni giorno.
+Mochi è tondo, soffice e kawaii. Lo stile predefinito (Morbido) è rosa e sfumato; chi vuole può scegliere Cartone (un cartone kawaii dei primi anni 2000: contorno scuro morbido, colori pieni e allegri) o Quaderno, e per chi preferisce un aspetto più serio c'è Sobrio. In tutti e quattro deve essere prima di tutto chiaro e calmo da usare ogni giorno.
 
 Principi, in ordine di importanza:
 
@@ -17,7 +17,7 @@ Principi, in ordine di importanza:
 5. **Fatto a mano, non in serie.** Le schede non sono tutte uguali: raggio e trattamento cambiano con l'importanza.
 6. **Ispirati allo spirito, mai ai personaggi.** Niente personaggi, nomi, loghi o elementi riconoscibili di cartoni esistenti.
 
-## 2. Tre stili
+## 2. Quattro stili
 
 In Impostazioni > Stile, in quest'ordine. L'id è il valore di `data-stile` su `<html>` e in `CUSTOM.stile`.
 
@@ -26,14 +26,28 @@ In Impostazioni > Stile, in quest'ordine. L'id è il valore di `data-stile` su `
 | **Morbido** (predefinito) | `morbido` | l'aspetto originale di Mochi: rosa sfumato, ombre morbide colorate, pulsante principale e "+" con sfumatura e alone, righe con la striscia colorata a sinistra, finestre con lo sfondo appena sfocato | `:root[data-stile="morbido"]` |
 | **Cartone** | `cartone` | linea scura "da cartone", colori pieni del giardino (sole, pesca, prato), adesivi con ombra netta, niente sfumature né vetro | `:root[data-stile="cartone"]` |
 | **Quaderno** | `quaderno` | carta puntinata, titoli a mano, etichette di carta, evidenziatori | `:root[data-stile="quaderno"]` |
+| **Sobrio** | `sobrio` | più serio e asciutto: neutri freddi, accento della palette scelta più profondo, angoli piccoli, bordi sottili, icone a tratto | `:root[data-stile="sobrio"]` |
 
 Come è fatto il CSS:
-- Le **regole base** (in alto in `index.html`) sono già "morbide": spazi, dimensioni del testo, area di tocco, contrasto e focus valgono per **tutti e tre**.
+- Le **regole base** (in alto in `index.html`) sono già "morbide": spazi, dimensioni del testo, area di tocco, contrasto e focus valgono per **tutti e quattro**.
 - Il blocco **STILE MORBIDO** contiene solo i ritocchi che lo tengono fedele all'originale. Lì c'è anche il colore pieno `--acc-pieno`/`--acc-pieno2`: un rosa del tema scurito, così il testo bianco sui pulsanti sfumati regge il 4.5:1.
-- Il blocco **STILE CARTONE** e quello **QUADERNO** non si toccano tra loro: ogni regola è scritta per un solo stile.
+- I blocchi **STILE CARTONE**, **QUADERNO** e **SOBRIO** non si toccano tra loro: ogni regola è scritta per un solo stile.
 - Regole che valgono per due stili (es. emoji invece delle icone a tratto): `:root:not([data-stile="quaderno"])`.
-- Chi aveva già scelto `morbido` vede l'originale; un valore sconosciuto torna a `morbido` (`cleanCustom`). `privacy.js` accetta gli stessi tre valori.
+- Chi aveva già scelto `morbido` vede l'originale; un valore sconosciuto torna a `morbido` (`cleanCustom`). `privacy.js` accetta gli stessi quattro valori (e le stesse otto palette).
 - Le sezioni 6 e 7 qui sotto (linee e pulsanti a tre livelli) descrivono lo stile **Cartone**. In Morbido le schede hanno l'ombra morbida colorata (`--shadow`) e il pulsante principale la sfumatura.
+
+## 2b. Stile Sobrio (id `sobrio`)
+
+Nato dalla richiesta "una versione più maschile": stessa struttura e stessi moduli, aspetto serio e asciutto. Il nome è la voce in `STILI` (`app.js`), si cambia con una riga.
+- **Colori**: neutri freddi (chiaro grigio-azzurro, scuro grafite/blu notte, mai nero puro) in `tema.css`, blocco "Variabili dello stile Sobrio". Quello che cambia con la palette è solo l'accento: `--pink`/`--pink-d`/`--pink-l` e `--sob-fill`, il riempimento pieno con testo bianco (>= 4.5:1 in chiaro e in scuro).
+- **Forme**: raggi 6-12px (`--r-s..--r-xl` ridefiniti), bordi 1-1.5px, ombra netta e leggera (`--shadow`), finestre con angoli di 14px. Mai rotazioni, tondini o forme a goccia (le eccezioni sono la bacheca e le mascotte).
+- **Pulsanti**: rettangolari, pieno = `--sob-fill` con testo bianco e ombra piatta di 2px; il "+" è dello stesso colore. Niente sfumature né aloni.
+- **Titoli**: Nunito 800 asciutto (se l'utente ha scelto un carattere vale il suo); icone a tratto al posto delle emoji, come in Quaderno.
+- **Decorazioni**: niente cuoricini né lustrini (`DECO()` in `app.js` li toglie dai testi, `heartAt` non fa nulla); ghirlande e cappellini di festa restano ma opachi e fermi; niente effetti di sfondo.
+- **Bacheca**: resta di sughero, più scura; post-it con angoli quasi vivi e colori meno pastello (testo sempre scuro).
+- **Mascotte e casetta**: i disegni non si toccano.
+- **Focus**: anello di 2px nel colore dell'accento, su tutti i controlli; con `prefers-reduced-motion` niente transizioni sui pulsanti.
+- **Palette nuove** (Notte, Bosco, Grafite): disponibili in tutti gli stili, definite come le altre in `tema.css`, controllate AA in chiaro e scuro (le emoji dei pallini sono 🌙 🌲 🔩).
 
 ## 3. Spaziature
 
