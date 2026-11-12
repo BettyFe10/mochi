@@ -220,7 +220,7 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null || md.nome_mascotte != null) {
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null || md.barra != null || md.nome_mascotte != null) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
       CUSTOM = cleanCustom({ nome_app: md.nome_app, nome_mascotte: md.nome_mascotte, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
         moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
@@ -233,11 +233,13 @@ const SupaStore = {
         // pronomi: quelli dell'account (anche vuoti: "tolti"), altrimenti restano quelli di questo dispositivo
         pronomi: md.pronomi ?? CUSTOM.pronomi,
         // pet: quello dell'account (anche vuoto: "rimosso"), altrimenti resta quello di questo dispositivo
-        pet: md.pet ?? CUSTOM.pet });
+        pet: md.pet ?? CUSTOM.pet,
+        // barra in basso: quella dell'account, altrimenti resta quella di questo dispositivo
+        barra: md.barra ?? CUSTOM.barra });
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet, barra: c.barra } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -612,8 +614,14 @@ function cleanPetAltri(a, nome) {
   }
   return out;
 }
+// La barra in basso del telefono: Oggi, Menu e + sono fissi, gli altri 2 posti li sceglie chi usa l'app (solo id conosciuti, niente doppioni)
+const BARRA_OK = ["todo", "agenda", "appunti", "turni", "spese", "focus", "casa", "pet", "liste"], BARRA_DEF = ["todo", "agenda"];
+function cleanBarra(b) {
+  const l = Array.isArray(b) ? [...new Set(b.filter((x) => typeof x === "string" && BARRA_OK.includes(x)))].slice(0, 2) : [];
+  return l.length === 2 ? l : [...BARRA_DEF];
+}
 const DEFAULT_CUSTOM = { nome_app: "Mochi", nome_mascotte: "", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
-  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO };
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO, barra: BARRA_DEF };
 // I pronomi: servono solo ad adattare i testi (Benvenuta / Benvenuto / Rieccoti). Solo "lei", "lui", "loro" o vuoto (= non specificato); tutto il resto scartato
 const PRONOMI = [["", "Non specificato"], ["lei", "Lei"], ["lui", "Lui"], ["loro", "Loro"]];
 const cleanPronomi = (p) => (typeof p === "string" && ["lei", "lui", "loro"].includes(p) ? p : "");
@@ -641,7 +649,7 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), nome_app: nome || DEFAULT_CUSTOM.nome_app, nome_mascotte: nomeM, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), barra: cleanBarra(c.barra), nome_app: nome || DEFAULT_CUSTOM.nome_app, nome_mascotte: nomeM, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
 // Testi che si adattano: gen(neutro, lei, lui). Chi non sceglie (o sceglie "loro") legge sempre la forma neutra.
@@ -1052,6 +1060,24 @@ const VOCI_MENU = [
 ];
 const voceVisibile = (v) => (!v.m || mod(v.m)) && (!v.on || ONLINE_MODE) && (!v.admin || isAdmin);
 // Barra a sinistra del computer: costruita dalla stessa lista (le voci già nella barra in alto non si ripetono)
+// ---- Barra in basso del telefono: Oggi, + e Menu fissi, 2 posti a scelta (CUSTOM.barra). Se la scelta non è disponibile (modulo spento) si ripiega su Da fare, Agenda, Appunti
+const BARRA_NOME = { todo: "Da fare", agenda: "Agenda", appunti: "Appunti", turni: "Turni", spese: "Spese", focus: "Timer", casa: "Casetta", liste: "Liste" };
+const barraVoce = (id) => VOCI_MENU.find((v) => (v.atD || v.at).includes(`data-tab="${id}"`));
+const barraDisp = (id) => { const v = barraVoce(id); return !!v && voceVisibile(v); };
+function slotBarra() { const o = []; for (const id of [...CUSTOM.barra, ...BARRA_DEF, "appunti"]) if (!o.includes(id) && barraDisp(id)) o.push(id); return o.slice(0, 2); }
+function aggiornaSlotBarra() {
+  const ids = slotBarra();
+  [0, 1].forEach((i) => {
+    const b = document.getElementById("slot" + i), v = barraVoce(ids[i]); if (!b || !v) return;
+    if (b.dataset.tab !== ids[i]) { b.dataset.tab = ids[i]; b.innerHTML = `<span class="i"><span class="emo">${v.e}</span><svg class="ico q" aria-hidden="true"><use href="#${v.ic}"/></svg></span><span class="bl ${v.pet ? "pet-lbl" : ""}">${v.pet ? esc(petTitolo()) : BARRA_NOME[ids[i]]}</span>`; }
+  });
+}
+async function salvaBarra(nuova, testo) {
+  const prima = slotBarra();
+  await saveCustom({ barra: nuova });
+  if ($("#sheet").classList.contains("on")) riapriImpostazioni();
+  toastAnnulla(testo, () => salvaBarra(prima, "Barra com'era prima"));
+}
 function costruisciBarra() {
   const dove = document.querySelector('#nav [data-tab="menu"]'); if (!dove) return;
   const btn = (v) => `<button class="side desk-only${v.on ? " online-only" : ""}${v.admin ? " side-admin hidden" : ""}"${v.m ? ` data-mod="${v.m}"` : ""} ${v.atD || v.at}><span class="i"><span class="emo">${v.e}</span><svg class="ico q" aria-hidden="true"><use href="#${v.ic}"/></svg></span>${v.pet ? '<span class="pet-lbl">Il mio pet</span>' : v.t}</button>`;
@@ -1167,6 +1193,7 @@ function render() {
   const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, pet: viewPet, menu: viewMenu }[state.tab] || viewOggi)();
   const el = $("#view");
   el.innerHTML = `<div class="view">${v}</div>`;
+  aggiornaSlotBarra();
   document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => { const on = b.dataset.tab === state.tab; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   document.querySelectorAll(".nav .side-admin").forEach((b) => b.classList.toggle("hidden", !isAdmin));
   festaDopoRender();
@@ -1628,6 +1655,9 @@ function openSettings(gruppo) {
       <div class="palettes">${PALETTE.map(([id, nome, a, b, e]) => `<button class="${CUSTOM.colore === id ? "on" : ""}" data-act="pick-palette" data-v="${id}" aria-label="${nome}" title="${nome}"><span class="sw" style="background:linear-gradient(145deg,${a}55,${b}88)">${e}</span><small>${nome}</small></button>`).join("")}</div></div>
     <div class="setrow col"><div><b>Carattere</b><small>${esc(FONTI.find((x) => x[0] === CUSTOM.font)[1])}${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="fonts">${FONTI.map(([id, nome, fam]) => `<button class="${CUSTOM.font === id ? "on" : ""}" data-act="pick-font" data-v="${id}"><span class="aa" style="font-family:${fam}">Aa</span><small>${nome}</small></button>`).join("")}</div></div>
+    <div class="setrow col mob-only" id="setBarra"><div><b>Barra in basso</b><small>Oggi, + e Menu restano dove sono. Scegli le due scorciatoie accanto al +${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
+      <div class="barra-sel">${[0, 1].map((i) => { const sel = slotBarra()[i]; return `<select class="input" id="cBarra${i}" aria-label="Scorciatoia ${i + 1}">${BARRA_OK.filter((id) => barraDisp(id) || id === sel).map((id) => `<option value="${id}" ${id === sel ? "selected" : ""}>${esc(barraVoce(id).t)}</option>`).join("")}</select>`; }).join("")}</div>
+      ${slotBarra().join() !== BARRA_DEF.join() ? `<div class="more-row"><button class="more" data-act="barra-ripristina">Ripristina (Da fare e Agenda)</button></div>` : ""}</div>
     <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
       <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     ${SG_FINE}
@@ -1638,6 +1668,11 @@ function openSettings(gruppo) {
     ${SG_FINE}
     <div class="actions"><button class="btn" data-act="close">Chiudi</button></div>`);
   $("#themeSel").addEventListener("change", (e) => setTheme(e.target.value));
+  [0, 1].forEach((i) => $("#cBarra" + i)?.addEventListener("change", (e) => {
+    const prima = slotBarra(), nuova = [...prima]; nuova[i] = e.target.value;
+    if (nuova[0] === nuova[1]) nuova[1 - i] = prima[i]; // stessa scelta nell'altro posto: si scambiano
+    salvaBarra(nuova, "Barra aggiornata");
+  }));
   const salvaCompleanno = async () => {
     const g = $("#cGiorno")?.value, m = $("#cMese")?.value; if (!g || !m) return;
     const c = cleanCompleanno(`${pad(+m)}-${pad(+g)}`);
@@ -3152,11 +3187,11 @@ const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i +
 const giu = (r) => { if (r.error) throw r.error; return r; };
 // Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
 // (gli sblocchi della casetta si uniscono sempre: non si perdono mai)
-const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "nome_mascotte", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
+const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "nome_mascotte", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori", "barra"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
 async function portaPreferenze() {
   const copia = LS.get("mochi.ospite.custom", null); if (!copia) return; // solo la copia dell'ospite, mai le preferenze di chi è entrato
   const ospite = cleanCustom(copia);
-  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi), fiori: store.user?.user_metadata?.fiori != null ? CUSTOM.fiori : ospite.fiori, pronomi: cleanPronomi(store.user?.user_metadata?.pronomi) !== "" ? CUSTOM.pronomi : ospite.pronomi, pet: petPresente(cleanPet(store.user?.user_metadata?.pet)) ? CUSTOM.pet : ospite.pet } : { ...ospite });
+  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi), fiori: store.user?.user_metadata?.fiori != null ? CUSTOM.fiori : ospite.fiori, pronomi: cleanPronomi(store.user?.user_metadata?.pronomi) !== "" ? CUSTOM.pronomi : ospite.pronomi, pet: petPresente(cleanPet(store.user?.user_metadata?.pet)) ? CUSTOM.pet : ospite.pet, barra: store.user?.user_metadata?.barra != null ? CUSTOM.barra : ospite.barra } : { ...ospite });
   LS.set("mochi.custom", CUSTOM); applyCustom();
   await store.saveCustom(CUSTOM); // se non riesce, l'errore ferma il passaggio: la copia resta e si può riprovare
 }
@@ -5040,7 +5075,13 @@ async function exportData() {
    EFFETTI
    ========================================================= */
 let toastT;
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2600); }
+let toastUndo = null;
+// Toast con "Annulla": per le modifiche che si fanno in un attimo e che si vogliono poter rimangiare
+function toastAnnulla(msg, fn) {
+  const t = $("#toast"); toastUndo = fn; t.innerHTML = `<span>${esc(msg)}</span> <button type="button" class="ta" data-act="toast-annulla">Annulla</button>`;
+  t.classList.add("on", "con-azione"); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove("on", "con-azione"); toastUndo = null; }, 6000);
+}
+function toast(msg) { const t = $("#toast"); toastUndo = null; t.classList.remove("con-azione"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2600); }
 /* Trascina giù la finestra per chiuderla (su telefono), come nelle app native.
    La finestra si muove SOLO se il dito parte:
    - dalla maniglia / intestazione (la fascia in alto), oppure
@@ -5277,6 +5318,8 @@ document.addEventListener("click", async (e) => {
     case "pet-spesa-nuova": case "pet-sel": case "pet-apri": case "pet-indietro": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-s-altre": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-piu": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
+    case "barra-ripristina": salvaBarra([...BARRA_DEF], "Barra ripristinata"); break;
+    case "toast-annulla": { const f = toastUndo; toastUndo = null; $("#toast").classList.remove("on", "con-azione"); if (f) f(); break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
     case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(); break; }
     case "uovo": festaUovo(v, el); break;
@@ -5533,9 +5576,9 @@ function clearLocal() {
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || k.startsWith("mochi.petCache.") || k.startsWith("mochi.petFesta.") || (k.startsWith("mochi.petDaInviare.") && !(LS.get(k, []) || []).length) || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
-  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; c.pet = cleanPet(null); LS.set("mochi.custom", c); }
+  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; c.pet = cleanPet(null); c.barra = [...BARRA_DEF]; LS.set("mochi.custom", c); }
   state.pet.righe = [];
-  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null });
+  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null, barra: null });
 }
 function setLoginMode(m) {
   loginMode = m;

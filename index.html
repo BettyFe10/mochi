@@ -1549,6 +1549,11 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
 :root[data-stile="sobrio"] :is(.pet-card,.pet-peso-box,.pet-vet,.pet-note,.pet-scad,.pet-spese-tot>div){border-radius:var(--r-m);box-shadow:none;border:1.5px solid var(--line)}
 :root[data-stile="sobrio"] .pet-ico{border-radius:var(--r-m)}
 :root[data-stile="sobrio"] .pet-festa{border-radius:var(--r-m)}
+.nav .tab .bl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav .tab.mob-only{min-width:0}
+.toast.con-azione{pointer-events:auto}
+.toast .ta{margin-left:8px;padding:4px 10px;border-radius:12px;border:1.5px solid currentColor;background:none;color:inherit;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
+.barra-sel{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 /* Il calendario è un calendario da tavolo: fascia colorata con il mese, anelli della spirale che sporgono, griglia sotto (v39).
    Solo i calendari grandi (Agenda, Turni), non quello piccolo di Oggi. Nel Sobrio: fascia semplice, niente anelli. */
 .cal:not(.mini){position:relative;margin-top:30px;padding:0 8px 12px;--cal-l:var(--ink)}
@@ -1657,9 +1662,11 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
     <div class="brand desk-only"><span id="brandName">Mochi</span><small>le mie cose</small></div>
     <div class="side-head desk-only" role="presentation">Quotidiano</div>
     <button class="tab on" data-tab="oggi"><span class="i"><span class="emo">🌸</span><svg class="ico q" aria-hidden="true"><use href="#i-oggi"/></svg></span>Oggi</button>
-    <button class="tab" data-tab="todo"><span class="i"><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span>Da fare</button>
+    <button class="tab mob-only" id="slot0" data-tab="todo"><span class="i"><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span><span class="bl">Da fare</span></button>
+    <button class="tab desk-only" data-tab="todo"><span class="i"><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span>Da fare</button>
     <button class="plus" data-act="new" aria-label="Aggiungi" title="Nuova voce (N)"><span class="pl">+</span><span class="desk-only">Aggiungi</span></button>
-    <button class="tab" data-tab="agenda"><span class="i"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>Agenda</button>
+    <button class="tab desk-only" data-tab="agenda"><span class="i"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>Agenda</button>
+    <button class="tab mob-only" id="slot1" data-tab="agenda"><span class="i"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span><span class="bl">Agenda</span></button>
     <button class="tab desk-only" data-tab="appunti"><span class="i"><span class="emo">📝</span><svg class="ico q" aria-hidden="true"><use href="#i-appunti"/></svg></span>Appunti</button>
     <button class="tab mob-only" data-tab="menu"><span class="i"><span class="emo">☰</span><svg class="ico q" aria-hidden="true"><use href="#i-menu"/></svg></span>Menu</button>
     <!-- Su computer le altre voci della barra a sinistra le costruisce app.js (VOCI_MENU), la stessa lista del Menu del telefono -->
