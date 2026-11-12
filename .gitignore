@@ -13,3 +13,4 @@ _site/
 .env.*
 config.local.js
 native/Config/Secrets.xcconfig
+CLAUDE.md

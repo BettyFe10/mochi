@@ -1467,6 +1467,59 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
   #view .msec{margin:14px 4px 6px}
   #view .msec:first-of-type{margin-top:2px}
 }
+/* ---- Il mio pet ---- */
+.pet-card{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);margin-bottom:var(--s3)}
+.pet-ico{position:relative;flex:none;width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:var(--pink-l);font-size:30px;line-height:1;color:var(--pink-d)}
+.pet-ico .ico{width:32px;height:32px}
+.pet-ico.festa::after{content:"🎉";position:absolute;top:-8px;right:-6px;font-size:20px;transform:rotate(14deg)}
+:root[data-stile="sobrio"] .pet-ico.festa::after{content:none}
+.pet-id{flex:1;min-width:0}
+.pet-id b{display:block;font-size:16px;overflow-wrap:anywhere}
+.pet-id small{display:block;color:var(--ink2);font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.pet-festa{margin:0 0 var(--s3);padding:10px 14px;border-radius:var(--r-m);background:var(--pink-l);color:var(--acc-t);font-weight:800;font-size:14.5px;overflow-wrap:anywhere}
+.pet-routine{display:grid;gap:var(--s2)}
+.pet-voce{min-height:52px}
+.pet-voce>span:first-child{flex:1;min-width:0}
+.pet-voce b{overflow-wrap:anywhere}
+.pet-voce.on b{color:var(--acc-t)}
+.pet-peso-box{padding:var(--s3) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow)}
+.pet-graf{display:block;width:100%;height:auto;max-height:130px}
+.pet-graf text{fill:var(--ink2);font-size:11px;font-weight:700;font-family:inherit}
+.pet-linea{fill:none;stroke:var(--pink-d);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.pet-pt{fill:var(--card);stroke:var(--pink-d);stroke-width:2.4}
+.pet-pesi{list-style:none;margin:var(--s2) 0 0;padding:0}
+.pet-peso-riga{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;padding:6px 4px;color:var(--ink);font:inherit;text-align:left;border-top:1px solid var(--line)}
+.pet-pesi li:first-child .pet-peso-riga{border-top:0}
+.pet-peso-riga span{color:var(--ink2);font-size:14px}
+.pet-vet,.pet-note{padding:var(--s3) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);margin:0;overflow-wrap:anywhere}
+.pet-vet b{display:block;margin-bottom:4px}
+.pet-note{white-space:pre-wrap;line-height:1.5;font-size:14.5px}
+.pet-tel{display:inline-flex;align-items:center;min-height:44px;font-weight:800;color:var(--acc-t);text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.pet-dt{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.pet-data{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr);gap:8px}
+.pet-rlista{display:grid;gap:8px;margin-bottom:8px}
+.pet-rriga{display:flex;align-items:center;gap:8px}
+.pet-rriga .input{flex:1;min-width:0}
+.pet-rdel{flex:none;width:44px;height:44px}
+.pet-lbl{min-width:0;overflow-wrap:anywhere}
+.pet-scads{gap:var(--s2)}
+.pet-spese-tot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s2);margin-bottom:var(--s2)}
+.pet-spese-tot>div{padding:var(--s3);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);min-width:0}
+.pet-spese-tot small{display:block;color:var(--ink2);font-size:13px}
+.pet-spese-tot b{display:block;font-size:18px;overflow-wrap:anywhere}
+.pet-scad{display:flex;align-items:center;gap:var(--s3);padding:6px var(--s3);min-height:56px;border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);min-width:0}
+.pet-scad .check{margin-top:0}
+.pet-scad-b{flex:1;min-width:0;min-height:44px;display:block;text-align:left;color:var(--ink);font:inherit;padding:4px 0}
+.pet-scad-b b{display:block;font-size:15px;overflow-wrap:anywhere}
+.pet-scad-b small{display:block;color:var(--ink2);font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.pet-scad.late{box-shadow:inset 4px 0 0 var(--danger),var(--shadow)}
+.pet-scad small.pet-ritardo{color:var(--danger);font-weight:800}
+:root[data-stile="cartone"] :is(.pet-card,.pet-peso-box,.pet-vet,.pet-note,.pet-scad,.pet-spese-tot>div){border:2px solid var(--tratto-l);box-shadow:none}
+:root[data-stile="cartone"] .pet-ico{border:2px solid var(--tratto-m)}
+:root[data-stile="quaderno"] :is(.pet-card,.pet-peso-box,.pet-vet,.pet-note,.pet-scad,.pet-spese-tot>div){border-radius:var(--r-paper);box-shadow:var(--edge);border:1.5px solid var(--ink-a)}
+:root[data-stile="sobrio"] :is(.pet-card,.pet-peso-box,.pet-vet,.pet-note,.pet-scad,.pet-spese-tot>div){border-radius:var(--r-m);box-shadow:none;border:1.5px solid var(--line)}
+:root[data-stile="sobrio"] .pet-ico{border-radius:var(--r-m)}
+:root[data-stile="sobrio"] .pet-festa{border-radius:var(--r-m)}
 </style>
 </head>
 <body>
@@ -1485,6 +1538,14 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
     <symbol id="i-turni" viewBox="0 0 24 24"><path d="M4.2 8.4c0-.7.5-1.2 1.2-1.2h13.2c.7 0 1.2.5 1.2 1.2v9.4c0 .7-.5 1.2-1.2 1.2H5.4c-.7 0-1.2-.5-1.2-1.2z"/><path d="M9 7.2V5.6c0-.5.4-.9.9-.9h4.2c.5 0 .9.4.9.9v1.6M4.4 12.6c4.9 1.8 10.3 1.8 15.2 0"/></symbol>
     <symbol id="i-spese" viewBox="0 0 24 24"><path d="M4.2 8.4c0-1 .8-1.8 1.8-1.8h12.3c.9 0 1.6.7 1.6 1.6v10c0 .9-.7 1.6-1.6 1.6H6c-1 0-1.8-.8-1.8-1.8z"/><path d="M4.5 8.2c.3-1.3 1.2-2 2.5-2.5l7.5-2.6c.8-.2 1.5.3 1.5 1.1v2.3"/><path d="M19.9 11.4h-3.4c-1 0-1.8.8-1.8 1.8s.8 1.8 1.8 1.8h3.4"/><path d="M16.8 13.2h.1"/></symbol>
     <symbol id="i-casa" viewBox="0 0 24 24"><path d="M4.2 11.2L12 4.6l7.8 6.6"/><path d="M6.2 9.8v9c0 .6.4 1 1 1h9.6c.6 0 1-.4 1-1v-9"/><path d="M10 19.8v-4.6c0-.6.4-1 1-1h2c.6 0 1 .4 1 1v4.6"/><path d="M15.6 6.6V4.4h2v4"/></symbol>
+    <symbol id="i-pet-cane" viewBox="0 0 24 24"><path d="M8.6 6.4h6.8c1.4 0 2.3 1 2.3 2.4v4.4c0 3.2-2.4 5.4-5.7 5.4s-5.7-2.2-5.7-5.4V8.8c0-1.4.9-2.4 2.3-2.4z"/><path d="M6.6 8C4.8 7.8 3.8 9.3 4 12c.1 1.3.7 2.1 1.5 2.3M17.4 8c1.8-.2 2.8 1.3 2.6 4-.1 1.3-.7 2.1-1.5 2.3"/><circle cx="9.8" cy="11" r=".6"/><circle cx="14.2" cy="11" r=".6"/><path d="M10.7 14.2h2.6l-1.3 1.4z"/></symbol>
+    <symbol id="i-pet-gatto" viewBox="0 0 24 24"><path d="M5.2 4.6l3.4 2.8h6.8l3.4-2.8v8.6c0 3.4-2.9 5.6-6.8 5.6s-6.8-2.2-6.8-5.6z"/><circle cx="9.6" cy="11.4" r=".6"/><circle cx="14.4" cy="11.4" r=".6"/><path d="M11 14.2l1 .9 1-.9M3.2 13.4l3 .4M20.8 13.4l-3 .4"/></symbol>
+    <symbol id="i-pet-coniglio" viewBox="0 0 24 24"><path d="M9.2 10.4C7.7 6.2 8 3.4 9.4 3.4s1.7 3.2 1.2 7M14.8 10.4c1.5-4.2 1.2-7-.2-7s-1.7 3.2-1.2 7"/><circle cx="12" cy="14.6" r="5.2"/><circle cx="10.2" cy="13.8" r=".6"/><circle cx="13.8" cy="13.8" r=".6"/><path d="M11.2 16.2l.8.7.8-.7"/></symbol>
+    <symbol id="i-pet-criceto" viewBox="0 0 24 24"><circle cx="12" cy="13.4" r="6.8"/><circle cx="6.6" cy="7.4" r="1.9"/><circle cx="17.4" cy="7.4" r="1.9"/><circle cx="9.6" cy="12.4" r=".6"/><circle cx="14.4" cy="12.4" r=".6"/><path d="M11.1 15.2h1.8M12 15.2v1.2"/></symbol>
+    <symbol id="i-pet-uccellino" viewBox="0 0 24 24"><path d="M4.6 14c0-4.2 3.1-7.2 7.2-7.2 2.7 0 4.2 1.5 4.2 3.5 0 3-2.9 6-6.8 6.9C6.6 17.7 4.6 16.5 4.6 14z"/><path d="M16 9.8l3.6 1-3.2 1.4"/><circle cx="13.6" cy="9.4" r=".6"/><path d="M10 17.8l-.6 2M12.8 17.4l.2 2.4M7.4 13.6c1.6.6 3.2.4 4.4-.6"/></symbol>
+    <symbol id="i-pet-pesce" viewBox="0 0 24 24"><path d="M3.4 12c2.2-3.4 5.2-5.1 8.6-5.1 3 0 5.4 1.7 7 5.1-1.6 3.4-4 5.1-7 5.1-3.4 0-6.4-1.7-8.6-5.1z"/><path d="M18.6 12l2.8-3v6z"/><circle cx="8.2" cy="11" r=".6"/><path d="M12.6 8.2c.8 2.4.8 5.2 0 7.6"/></symbol>
+    <symbol id="i-pet-rettile" viewBox="0 0 24 24"><path d="M3.6 16.6c2.6.4 3.6-1.6 4.8-3.2 1.2-1.6 3-2 5-1.6 1.6.3 2.6-.6 3.2-2.2.4-1.2 1.4-2.2 2.8-2"/><path d="M8.4 13.4l-2 3.4M12.8 12.2l-.6 4M16 10.2l2.4 2.2"/><circle cx="19.2" cy="7.6" r=".6"/></symbol>
+    <symbol id="i-pet-altro" viewBox="0 0 24 24"><circle cx="6.8" cy="10.6" r="1.7"/><circle cx="10.6" cy="6.8" r="1.7"/><circle cx="15.4" cy="6.8" r="1.7"/><circle cx="19" cy="10.6" r="1.7"/><path d="M12.8 11.4c-3 0-5.6 2.6-5.6 5 0 1.6 1.3 2.4 3 2.1l2.6-.5 2.6.5c1.7.3 3-.5 3-2.1 0-2.4-2.6-5-5.6-5z"/></symbol>
     <!-- la casetta di sera (tema scuro): stanza un po' più buia e blu, le luci restano accese -->
     <filter id="casaSera" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".74 0 0 0 0  0 .66 0 0 0  0 0 .84 0 .04  0 0 0 1 0"/></filter>
     <radialGradient id="casaAlone"><stop offset="0" stop-color="#ffe7a3" stop-opacity=".7"/><stop offset=".45" stop-color="#ffd98a" stop-opacity=".3"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/></radialGradient>
@@ -1565,6 +1626,7 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
     <button class="side desk-only" data-mod="biscotto" data-act="open-biscotto"><span class="i"><span class="emo">🥠</span><svg class="ico q" aria-hidden="true"><use href="#i-biscotto"/></svg></span>Biscotto del giorno</button>
     <button class="side desk-only" data-mod="pancino" data-act="open-pancino"><span class="i"><span class="emo">🍣</span><svg class="ico q" aria-hidden="true"><use href="#i-pancino"/></svg></span>Il pancino</button>
     <button class="side desk-only" data-mod="casa" data-tab="casa"><span class="i"><span class="emo">🏡</span><svg class="ico q" aria-hidden="true"><use href="#i-casa"/></svg></span>La casetta</button>
+    <button class="side desk-only" data-mod="pet" data-tab="pet"><span class="i"><span class="emo">🐾</span><svg class="ico q" aria-hidden="true"><use href="#i-pet-altro"/></svg></span><span class="pet-lbl">Il mio pet</span></button>
     <div class="side-head desk-only" role="presentation">Riepiloghi</div>
     <button class="side desk-only" data-act="open-recap"><span class="i"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recap"/></svg></span>Recap del mese</button>
     <div class="side-head desk-only" role="presentation">Aiuto</div>

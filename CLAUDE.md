@@ -4,6 +4,7 @@ Web app PWA kawaii in italiano (cose da fare, appuntamenti, appunti, spesa, turn
 
 ## Come rispondere a Betty
 Italiano. Niente trattini lunghi (solo "-"). Prima frase: la verità scomoda o una domanda che mette in discussione l'ipotesi. Tag [CERTO]/[PROBABILE]/[IPOTESI] prima delle affermazioni. Mai: "Ottima domanda", "Hai perfettamente ragione", "Ha perfettamente senso", "Assolutamente", "Senza dubbio". Disaccordo: "Non sono d'accordo perché... Al tuo posto farei... Il rischio è...". Mantieni la posizione salvo informazioni nuove. Niente introduzioni.
+Quando tocca a Betty lanciare SQL, fare il push, fare `/clear` o aprire una nuova chat: avvisala SEMPRE in fondo alla risposta con i comandi e i passi esatti (file da copiare, query di controllo e risultato atteso; file da spuntare in GitHub Desktop e messaggio; cosa incollare dopo `/clear`).
 
 ## Regole che non si discutono
 - Commit e push li fa Betty con GitHub Desktop. Tu NON fai git commit/push, niente co-author o firme AI.
@@ -22,7 +23,8 @@ Italiano. Niente trattini lunghi (solo "-"). Prima frase: la verità scomoda o u
 - Ospite: LocalStore in localStorage (ONLINE_MODE = CONFIG_ONLINE && !OSPITE).
 
 ## Stato dei lavori e coda (aggiornare qui a ogni consegna)
-Vedi il documento del progetto "claude/contesto-e-istruzioni.md" su claude.ai (Project "App Mochi") per lo stato aggiornato. Coda decisa da Betty: menu e impostazioni a gruppi + fix overflow iPhone (in verifica), micro-sprint contrasto AA palette storiche, Pet (un animale per persona, scheda + scadenze + routine + spese, con tabella pet_registro: BRIEF_pet.md nel kit test), backup automatico (rimandato), app nativa (alla fine).
+Vedi il documento del progetto "claude/contesto-e-istruzioni.md" su claude.ai (Project "App Mochi") per lo stato aggiornato. Stato 12 nov: v31 pubblicata. SQL 15-pet.sql lanciato e verificato su Supabase. Pet (v32: scheda in CUSTOM.pet, routine e pesi in pet_registro, scadenze = cose da fare con marcatore U+2063 nelle note, spese pet = categoria esistente "animali") sviluppato, in verifica, poi push di Betty. Contrasto AA: lasciato com'è (decisione di Betty). Mascotte nuove: non si fanno (decisione di Betty).
+Coda decisa da Betty, uno alla volta: 1) push v32; 2) tag animale (v33: una sola scheda, tag con il nome dell'animale su scadenze e spese per dividerle, niente SQL; routine e peso restano uno); 3) breve onboarding e personalizzazione per i nuovi iscritti (v34); 4) revisione UI/UX delle modali desktop e mobile per alleggerirle e togliere campi inutili (prima proposta a Betty, poi modifiche, v35); backup automatico (rimandato), app nativa (alla fine).
 
 ## Risparmio di token e consumi (IMPORTANTE)
 - Usa Sonnet per tutto il lavoro di codice; Opus solo per revisione indipendente, piani e bug difficili. Haiku per ritocchi di testo/CSS.
@@ -32,3 +34,4 @@ Vedi il documento del progetto "claude/contesto-e-istruzioni.md" su claude.ai (P
 - Test: lancia SOLO quelli che toccano ciò che hai cambiato; la suite completa una volta a fine lavoro. Test lenti e sensibili al carico (t_feste, t_casette, t_serie, t_sobrio) da soli, mai in parallelo. Kit in ~/Desktop/mochi-test (fuori dal repo).
 - Per verifiche indipendenti usa un sub-agente con brief corto (cosa è cambiato, cosa attaccare, cosa riportare), non rileggere tutto tu.
 - Risposte finali brevi: cosa è cambiato, file toccati, numeri dei test, limiti, passi per Betty. Niente riassunti dei passaggi.
+- Sub-agenti: uno alla volta, solo Sonnet o Haiku, mai in parallelo e mai Opus senza il mio ok esplicito. Modello principale: Sonnet.

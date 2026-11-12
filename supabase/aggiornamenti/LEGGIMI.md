@@ -17,3 +17,6 @@ Da lanciare con la versione "Spesa intelligente + Riepilogo della domenica" (pri
 - `14-riepilogo.sql`: funzione `riepilogo_settimanale()`, tabella `riepilogo_inviati` e il cron `mochi-riepilogo`
   (ogni ora la domenica, UTC; manda solo quando a Roma sono le 20). Serve pg_cron attivo, come per i promemoria:
   se lo script è lanciato prima di attivarlo, rilancialo dopo (si può rilanciare).
+
+Da lanciare con la versione "Pet" (prima di pubblicarla):
+- `15-pet.sql`: tabella `pet_registro` (spunte della routine e storico dei pesi del pet, solo tue; limite 5000 righe)
