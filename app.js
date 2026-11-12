@@ -1342,10 +1342,10 @@ function drawSt(focusNew = false) {
 }
 // ---- Lista della spesa (v36): schermata a tutta altezza. Le spunte e le modifiche si salvano subito;
 // la riga scritta e non ancora aggiunta si aggiunge alla chiusura (X, sfondo o "Fatto").
-let listaId = null, listaRighe = [], listaFlush = null;
+let listaId = null, listaRighe = [], listaFlush = null, listaMenu = false;
 const listaItem = () => state.items.find((x) => x.id === listaId);
 function apriListaSpesa(it) {
-  listaId = it.id; listaRighe = (Array.isArray(it.sottotask) ? it.sottotask : []).map((x) => ({ ...x }));
+  listaId = it.id; listaMenu = false; listaRighe = (Array.isArray(it.sottotask) ? it.sottotask : []).map((x) => ({ ...x }));
   listaFlush = () => { const i = $("#lsNuovo"); const v = i ? i.value.trim() : ""; if (v) listaRighe.push({ id: nuovoStId(new Set(listaRighe.map((x) => x.id))), t: taglia(v, 120), f: false }); listaSalva(); };
   openSheet(listaHtml(it));
   $("#sheet").classList.add("lista-full");
@@ -1353,7 +1353,10 @@ function apriListaSpesa(it) {
 }
 function listaSalva(extra = {}) {
   const it = listaItem(); if (!it) return;
-  Object.assign(it, { sottotask: listaRighe.length ? listaRighe.map((x) => ({ ...x })) : null, updated_at: new Date().toISOString() }, extra);
+  // tutte le voci spuntate = la lista è fatta (si chiude da sola); una voce in più o tolta la riapre
+  const tutte = listaRighe.length > 0 && listaRighe.every((x) => x.f);
+  const fatto = tutte !== !!it.done ? { done: tutte, done_at: tutte ? new Date().toISOString() : null } : {};
+  Object.assign(it, { sottotask: listaRighe.length ? listaRighe.map((x) => ({ ...x })) : null, updated_at: new Date().toISOString() }, fatto, extra);
   render();
   Promise.resolve(store.save(it)).catch(() => toast("Non sono riuscita a salvare la lista"));
 }
@@ -1373,16 +1376,20 @@ function listaHtml(it) {
   const righe = perReparto ? gruppiSpesa(listaRighe).map((g) => `<div class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</div>${g.voci.map(riga).join("")}`).join("") : listaRighe.map(riga).join("");
   const rc = ricompri(listaRighe);
   return `<div class="ls-top">
-    <div class="field"><label for="lsTit">Titolo</label><input class="input big" id="lsTit" maxlength="100" value="${esc(it.title)}" autocomplete="off"></div>
-    <div class="ls-opz"><button class="pin-toggle mini-t ${it.pinned ? "on" : ""}" data-act="ls-pin" aria-pressed="${!!it.pinned}"><span><b>Fissa in alto</b></span><span class="sw2"></span></button>
-    <button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="ls-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b></span><span class="sw2"></span></button></div>
-    ${listaRighe.length ? `<div class="st-prog">${fatti}/${listaRighe.length} fatte</div>` : ""}
+    <div class="ls-barra">
+      <input class="ls-titolo" id="lsTit" maxlength="100" value="${esc(it.title)}" autocomplete="off" aria-label="Titolo della lista">
+      ${listaRighe.length ? `<span class="ls-cont">${fatti}/${listaRighe.length}</span>` : ""}
+      <button type="button" class="ls-menu-b ${listaMenu ? "on" : ""}" data-act="ls-menu" aria-expanded="${listaMenu}" aria-label="Opzioni della lista">⋯</button>
+    </div>
+    ${listaMenu ? `<div class="ls-menu">
+      <button class="pin-toggle mini-t ${it.pinned ? "on" : ""}" data-act="ls-pin" aria-pressed="${!!it.pinned}"><span><b>Fissa in alto</b></span><span class="sw2"></span></button>
+      <button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="ls-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b></span><span class="sw2"></span></button>
+    </div>` : ""}
   </div>
   <div class="ls-corpo">${righe || `<p class="hint">Ancora niente: scrivi qui sotto la prima cosa da comprare.</p>`}</div>
   <div class="ls-fondo">
-    <div class="st-row nuovo"><button type="button" class="st-plus" data-act="ls-plus" aria-label="Aggiungi">+</button><input class="st-in" id="lsNuovo" maxlength="120" placeholder="Es. latte, uova... e premi Invio" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>
-    ${rc.length ? `<div class="sp-ricompri"><span class="sp-sugg-l">Ricompri spesso:</span>${rc.map((e) => `<button class="sp-sugg" data-act="ls-sugg" data-v="${esc(e.t)}">${esc(e.t)}</button>`).join("")}</div>` : ""}
-    <div class="actions"><button class="btn primary" data-act="ls-chiudi">Fatto</button></div>
+    ${rc.length ? `<div class="ls-ricompri" role="group" aria-label="Ricompri spesso"><span class="sp-sugg-l">Ricompri:</span>${rc.map((e) => `<button class="sp-sugg" data-act="ls-sugg" data-v="${esc(e.t)}">${esc(e.t)}</button>`).join("")}</div>` : ""}
+    <div class="ls-aggiungi"><input class="input" id="lsNuovo" maxlength="120" placeholder="Aggiungi, es. latte, e premi Invio" autocomplete="off" enterkeyhint="done" aria-label="Nuova voce"><button type="button" class="ls-plus" data-act="ls-plus" aria-label="Aggiungi alla lista">+</button></div>
   </div>`;
 }
 function listaBind() {
@@ -5167,7 +5174,7 @@ document.addEventListener("click", async (e) => {
     case "ls-sugg": if (listaAggiungi(v)) listaRedraw("lsNuovo"); break;
     case "ls-pin": { const it = listaItem(); if (it) { listaSalva({ pinned: !it.pinned }); listaRedraw(); } break; }
     case "ls-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); listaRedraw(); break;
-    case "ls-chiudi": closeSheet(); break;
+    case "ls-menu": listaMenu = !listaMenu; listaRedraw(); break;
     case "st-del": if (draft) { draft.sottotask = draft.sottotask.filter((s) => s.id !== v); drawSt(); } break;
     case "st-su": { const a = draft?.sottotask, i = a ? a.findIndex((s) => s.id === v) : -1; if (i > 0) { [a[i - 1], a[i]] = [a[i], a[i - 1]]; drawSt(); } break; }
     // spese
