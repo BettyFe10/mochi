@@ -219,9 +219,9 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null) {
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null || md.nome_mascotte != null) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
-      CUSTOM = cleanCustom({ nome_app: md.nome_app, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
+      CUSTOM = cleanCustom({ nome_app: md.nome_app, nome_mascotte: md.nome_mascotte, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
         moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
         // casetta: scelta e mobili spenti dall'account, sblocchi uniti (non si perdono mai)
         casa: md.casa ? unisciCasa(md.casa, CUSTOM.casa) : CUSTOM.casa, spesa_reparti: md.spesa_reparti ?? CUSTOM.spesa_reparti,
@@ -236,7 +236,7 @@ const SupaStore = {
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -611,7 +611,7 @@ function cleanPetAltri(a, nome) {
   }
   return out;
 }
-const DEFAULT_CUSTOM = { nome_app: "Mochi", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
+const DEFAULT_CUSTOM = { nome_app: "Mochi", nome_mascotte: "", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
   moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO };
 // I pronomi: servono solo ad adattare i testi (Benvenuta / Benvenuto / Rieccoti). Solo "lei", "lui", "loro" o vuoto (= non specificato); tutto il resto scartato
 const PRONOMI = [["", "Non specificato"], ["lei", "Lei"], ["lui", "Lui"], ["loro", "Loro"]];
@@ -629,6 +629,8 @@ const unisciRicordi = (a, b) => [...new Set([...cleanRicordi(a), ...cleanRicordi
 function cleanCustom(c) {
   c = c && typeof c === "object" ? c : {};
   const nome = typeof c.nome_app === "string" ? c.nome_app.replace(/[<>]/g, "").trim().slice(0, 24) : "";
+  // nome della mascotte: niente caratteri che rompono l'HTML o le virgolette (si usa anche nei testi), max 16
+  const nomeM = typeof c.nome_mascotte === "string" ? c.nome_mascotte.replace(/[<>&"'`\u0000-\u001f\u007f]/g, "").trim().slice(0, 16) : "";
   const acc = typeof c.accessorio === "string" && (c.accessorio === "auto" || c.accessorio === "none" || TRAGUARDI.some((t) => t.id === c.accessorio) || RICORDI.some((r) => r.id === c.accessorio)) ? c.accessorio : "auto";
   const colore = typeof c.colore === "string" && PALETTE.some((x) => x[0] === c.colore) ? c.colore : "fragola";
   const font = typeof c.font === "string" && FONTI.some((x) => x[0] === c.font) ? c.font : "morbido";
@@ -638,14 +640,15 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), nome_app: nome || DEFAULT_CUSTOM.nome_app, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), nome_app: nome || DEFAULT_CUSTOM.nome_app, nome_mascotte: nomeM, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
 // Testi che si adattano: gen(neutro, lei, lui). Chi non sceglie (o sceglie "loro") legge sempre la forma neutra.
 const gen = (neutro, lei, lui) => (CUSTOM.pronomi === "lei" ? lei : CUSTOM.pronomi === "lui" ? lui : neutro);
 // Il modulo è acceso? (quelli che richiedono un account sono spenti in modalità prova)
 const mod = (k) => CUSTOM.moduli[k] !== false && !(MODULI.find((m) => m[0] === k)?.[5] && !ONLINE_MODE);
-const MN = () => MASC.list[CUSTOM.mascotte].nome;
+// Il nome della mascotte: quello scelto dall'utente, altrimenti quello di default della mascotte (mascotte.js)
+const MN = () => CUSTOM.nome_mascotte || MASC.list[CUSTOM.mascotte].nome;
 const mascot = (cls = "") => withAcc(MASC.svg(CUSTOM.mascotte, { cls }), CUSTOM.mascotte);
 
 function setLink(rel, href) {
@@ -824,6 +827,9 @@ function openMascotPicker() {
     <h2><span class="mbox">${mascot()}</span>Personalizza</h2>
     <div class="field"><label>Nome dell'app</label>
       <input class="input big" id="cName" maxlength="24" value="${esc(CUSTOM.nome_app)}" placeholder="Mochi" autocomplete="off"></div>
+    <div class="field"><label for="cMascNome">Nome della mascotte</label>
+      <input class="input" id="cMascNome" maxlength="16" value="${esc(CUSTOM.nome_mascotte)}" placeholder="${esc(MASC.list[CUSTOM.mascotte].nome)}" autocomplete="off">
+      <small class="small">Lascialo vuoto per il nome di default.</small></div>
     <div class="field"><label>Mascotte</label></div>
     <div class="mpick">${Object.entries(MASC.list).map(([id, m]) => `
       <button class="${CUSTOM.mascotte === id ? "on" : ""}" data-act="pick-mascot" data-v="${id}">
@@ -3047,7 +3053,7 @@ const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i +
 const giu = (r) => { if (r.error) throw r.error; return r; };
 // Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
 // (gli sblocchi della casetta si uniscono sempre: non si perdono mai)
-const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
+const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "nome_mascotte", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
 async function portaPreferenze() {
   const copia = LS.get("mochi.ospite.custom", null); if (!copia) return; // solo la copia dell'ospite, mai le preferenze di chi è entrato
   const ospite = cleanCustom(copia);
@@ -5122,13 +5128,15 @@ document.addEventListener("click", async (e) => {
     case "wear": await saveCustom({ accessorio: v }); openPancino(); cheer(); break;
     case "pick-mascot": {
       document.querySelectorAll(".mpick button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+      // il nome scritto vale per la mascotte scelta in origine: cambiando mascotte il campo torna vuoto (o al nome salvato, se ci torni)
+      const mi = $("#cMascNome"); if (mi) { mi.value = v === CUSTOM.mascotte ? CUSTOM.nome_mascotte : ""; mi.placeholder = MASC.list[v]?.nome || ""; }
       el.querySelector(".mascotte")?.classList.add("happy");
       setTimeout(() => el.querySelector(".mascotte")?.classList.remove("happy"), 1400);
       break;
     }
     case "save-custom": {
       const sel = document.querySelector(".mpick button.on")?.dataset.v || CUSTOM.mascotte;
-      await saveCustom({ nome_app: $("#cName").value, mascotte: sel });
+      await saveCustom({ nome_app: $("#cName").value, mascotte: sel, nome_mascotte: $("#cMascNome")?.value ?? "" });
       closeSheet(); setTimeout(() => cheer(), 200); toast(`Ciao! Ora sono ${MN()}${DECO("💗")}`);
       break;
     }
