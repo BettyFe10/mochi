@@ -1667,8 +1667,8 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
 </nav>
 
 <div class="scrim" id="scrim"></div>
-<section class="sheet" id="sheet" inert></section>
-<div class="toast" id="toast"></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" inert></section>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="app.js"></script>
 </body>

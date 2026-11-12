@@ -880,7 +880,7 @@ function itemRow(it) {
   const area = it.area === "lavoro" ? "lavoro" : "personale";
   const left = it.kind === "event"
     ? `<span class="evdot"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>`
-    : `<button class="check" data-act="toggle" data-id="${esc(it.id)}" aria-label="Completa">${it.done ? "✓" : ""}</button>`;
+    : `<button class="check" data-act="toggle" data-id="${esc(it.id)}" aria-label="${it.done ? "Riapri" : "Completa"}: ${esc(it.title)}">${it.done ? "✓" : ""}</button>`;
   const chips = [];
   if (it.due_date) chips.push(`<span class="chip ${isLate(it) ? "late" : ""}">${isLate(it) ? "⏰ " : ""}${niceDate(it.due_date)}${it.due_time ? " · " + it.due_time : ""}</span>`);
   chips.push(`<span class="chip ${area === "lavoro" ? "lav" : "per"}">${area === "lavoro" ? '<span class="emo">💼 </span>Lavoro' : '<span class="emo">🌷 </span>Personale'}</span>`);
@@ -938,7 +938,7 @@ function viewOggi() {
   if (late.length) h += `<div class="sec"><h2>Rimaste indietro</h2><span class="count">${late.length}</span></div><div class="list">${late.map(itemRow).join("")}</div>`;
   if (ev.length) h += `<div class="sec"><h2>Appuntamenti di oggi</h2></div><div class="list">${ev.map(itemRow).join("")}</div>`;
   if (todo.length) h += `<div class="sec"><h2>Da fare oggi</h2></div><div class="list">${todo.map(itemRow).join("")}</div>`;
-  if (!ev.length && !todo.length) h += `<div class="sec"><h2>Oggi</h2></div><div class="empty" style="padding:10px">${late.length ? "Nient'altro in programma oggi" : "Niente in programma oggi"}${DECO("✨")}</div>`;
+  if (!ev.length && !todo.length) h += `<div class="sec"><h2>Oggi</h2></div><div class="empty" style="padding:10px">${late.length ? "Nient'altro in programma oggi" : "Niente in programma oggi"}${DECO("✨")}${state.items.length ? "" : `<div class="actions ospite-azioni"><button class="btn primary" data-act="new">Scrivi la prima cosa</button></div>`}</div>`;
   if (mod("serie")) h += serieCard();
   if (mod("umore")) h += umoreCard();
   if (mod("pancino")) h += pancinoCard();
@@ -962,7 +962,10 @@ function viewTodo() {
   const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="todo-filter" data-v="${k}">${l}</button>`;
   let h = `<div class="filters">${fb("tutte", "Tutte")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
   h += `<div class="sec"><h2>Da fare</h2><span class="count">${open.length}</span></div>`;
-  h += open.length ? `<div class="list">${open.map(itemRow).join("")}</div>` : emptyBox(`Tutto fatto! ${MN()} è fiera di te 🌸`);
+  h += open.length ? `<div class="list">${open.map(itemRow).join("")}</div>`
+    : !state.items.some((i) => i.kind === "todo") ? `<div class="empty"><div class="mbox">${mascot()}</div><div>Qui trovi le cose da fare. Scrivi come parli: <i>"chiamare il dentista domani"</i>.</div><div class="actions ospite-azioni"><button class="btn primary" data-act="new">Scrivi la prima cosa</button></div></div>`
+    : !list.length ? `<div class="empty"><div class="mbox">${mascot()}</div><div>Con questo filtro non c'è niente.</div><div class="actions ospite-azioni"><button class="btn" data-act="todo-filter" data-v="tutte">Mostra tutte</button></div></div>`
+    : emptyBox(`Tutto fatto! ${MN()} è fiera di te 🌸`);
   if (done.length) h += `<div class="sec"><h2>Completate</h2></div><div class="list">${done.map(itemRow).join("")}</div>`;
   return h;
 }
@@ -1164,7 +1167,7 @@ function render() {
   const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, pet: viewPet, menu: viewMenu }[state.tab] || viewOggi)();
   const el = $("#view");
   el.innerHTML = `<div class="view">${v}</div>`;
-  document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
+  document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => { const on = b.dataset.tab === state.tab; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   document.querySelectorAll(".nav .side-admin").forEach((b) => b.classList.toggle("hidden", !isAdmin));
   festaDopoRender();
   document.querySelectorAll(".pet-lbl").forEach((nl) => { nl.textContent = petTitolo(); }); // barra mobile e menu desktop
@@ -1202,6 +1205,7 @@ function openSheet(html) {
   if (!$("#sheet").classList.contains("on") && ae && ae !== document.body && !$("#sheet").contains(ae)) sheetOpener = ae;
   $("#sheet").innerHTML = `<div class="sheet-bar"><div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">✕</button></div>${html}`;
   $("#sheet").scrollTop = 0;
+  { const t = $("#sheet h2"); if (t) { t.id = "sheetTitolo"; $("#sheet").setAttribute("aria-labelledby", "sheetTitolo"); } else $("#sheet").removeAttribute("aria-labelledby"); } // la finestra prende il nome dal suo titolo
   bloccaPagina(); sheetSuTastiera();
   $("#scrim").classList.add("on"); $("#sheet").inert = false; $("#sheet").classList.add("on"); document.body.classList.add("sheet-open");
 }
@@ -1269,7 +1273,7 @@ function drawEditor() {
   const areaBtn = (k, l, c) => `<button class="${c} ${d.area === k ? "on" : ""}" data-act="d-area" data-v="${k}">${l}</button>`;
   const isNote = d.kind === "note";
   openSheet(`
-    <h2><span class="mbox">${mascot()}</span>${d._new ? "Cosa ti ricordo?" : "Modifica"}</h2>
+    <h2><span class="mbox">${mascot()}</span>${d._new ? (isNote ? "Cosa annoti?" : d.kind === "event" ? "Che appuntamento hai?" : "Cosa c'è da fare?") : "Modifica"}</h2>
     <div class="seg">${kindBtn("todo", `<span class=e><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span>Da fare`)}${kindBtn("event", `<span class=e><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>Appuntamento`)}${kindBtn("note", `<span class=e><span class="emo">📝</span><svg class="ico q" aria-hidden="true"><use href="#i-appunti"/></svg></span>Appunto`)}</div>
     <div class="field">
       <input class="input big" id="fTitle" maxlength="300" placeholder="${isNote ? "Titolo dell'appunto" : "Es. dentista giovedì alle 17"}" value="${esc(d.title)}" autocomplete="off" enterkeyhint="done">
@@ -1290,7 +1294,7 @@ function drawEditor() {
       <div class="field"><label>${isNote ? "Testo" : "Note"}</label><textarea class="input" id="fBody" maxlength="20000" placeholder="${isNote ? "Scrivi qui..." : "Dettagli, indirizzo, cosa portare..."}">${esc(d.body || "")}</textarea></div>
     `}
     <div class="actions">
-      ${!d._new ? `<button class="btn danger" data-act="d-delete">🗑</button>` : ""}
+      ${!d._new ? `<button class="btn danger" data-act="d-delete" aria-label="Elimina">🗑</button>` : ""}
       <button class="btn" data-act="close">Annulla</button>
       <button class="btn primary" data-act="d-save">Salva</button>
     </div>`);
