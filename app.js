@@ -483,7 +483,8 @@ const MODULI = [
   ["pancino", "🍣", "Il pancino", "La mascotte mangia le cose che fai e riceve regali", true],
   ["stagioni", "❄️", "Stagioni", "Neve, pioggia, sole o foglie sullo sfondo", false],
   ["feste", "🎉", "Feste", "Cappellini, decorazioni e sorprese a Natale, Pasqua, Halloween e nei compleanni", true],
-  ["pet", "🐾", "Il mio pet", "La scheda del tuo animale, la routine di ogni giorno e i pesi", false]
+  ["pet", "🐾", "Il mio pet", "La scheda del tuo animale, la routine di ogni giorno e i pesi", false],
+  ["tempo", "🕰️", "Quando hai tempo", "In Oggi, le cose senza una data", true]
 ];
 /* La casetta: dati (i disegni e la pagina sono più sotto, sezione "LA CASETTA") */
 // [id, nome, emoji, giorni attivi per sbloccarla (0 = subito), mascotte di casa, colori per la stanza semplice [muro, pavimento]]
@@ -905,7 +906,7 @@ function itemRow(it) {
   if (st.length) chips.push(`<button class="chip st-chip ${aperto ? "on" : ""} ${st.every((x) => x.f) ? "tutte" : ""}" data-act="st-apri" data-id="${esc(it.id)}" aria-expanded="${aperto ? "true" : "false"}" aria-label="Lista da spuntare: ${st.filter((x) => x.f).length} su ${st.length}">☑ ${st.filter((x) => x.f).length}/${st.length}<span class="st-fr">${aperto ? "▴" : "▾"}</span></button>`);
   return `<div class="item ${area} ${it.done ? "done" : ""}" data-act="edit" data-id="${esc(it.id)}">
     ${left}
-    <div class="body"><div class="t">${esc(it.title)}</div><div class="meta">${chips.join("")}</div>${aperto ? `<div class="st-lista">${voceListaHtml(it)}</div>` : ""}</div>
+    <div class="body"><div class="t"><button type="button" class="t-btn" data-act="edit" data-id="${esc(it.id)}">${esc(it.title)}</button></div><div class="meta">${chips.join("")}</div>${aperto ? `<div class="st-lista">${voceListaHtml(it)}</div>` : ""}</div>
   </div>`;
 }
 const stVoce = (it, x) => `<button class="st-voce ${x.f ? "fatto" : ""}" data-act="st-spunta" data-id="${esc(it.id)}" data-v="${esc(x.id)}" aria-pressed="${x.f ? "true" : "false"}"><span class="st-box">${x.f ? "✓" : ""}</span><span class="st-tx">${esc(x.t)}</span></button>`;
@@ -937,9 +938,9 @@ function viewOggi() {
 
   let h = `<div class="bubble detto">${nigiSays()}</div>${invitoOspite()}`;
   h += `<div class="stats">
-    <div class="stat"><b>${ev.length}</b><span>appuntamenti</span></div>
-    <div class="stat"><b>${todo.length + late.length}</b><span>da fare</span></div>
-    <div class="stat"><b>${doneT.length}</b><span>fatte oggi</span></div></div>`;
+    <button type="button" class="stat" data-tab="agenda" aria-label="${ev.length} appuntamenti oggi: apri l'agenda"><b>${ev.length}</b><span>appuntamenti</span></button>
+    <button type="button" class="stat" data-tab="todo" aria-label="${todo.length + late.length} da fare: apri la lista"><b>${todo.length + late.length}</b><span>da fare</span></button>
+    <button type="button" class="stat" data-tab="todo" aria-label="${doneT.length} fatte oggi: apri la lista"><b>${doneT.length}</b><span>fatte oggi</span></button></div>`;
   h += riepilogoCard();
   { const tu = turnoDi(t); if (tu && tu.k !== "") h += rigaTurno(t, true); }
   // Prima le cose di oggi, poi serie, umore e pancino. Se non c'è niente, una riga sola.
@@ -950,7 +951,7 @@ function viewOggi() {
   if (mod("serie")) h += serieCard();
   if (mod("umore")) h += umoreCard();
   if (mod("pancino")) h += pancinoCard();
-  if (noDate.length) h += `<div class="sec"><h2>Quando hai tempo</h2></div><div class="list">${noDate.map(itemRow).join("")}</div>`;
+  if (mod("tempo") && noDate.length) h += `<div class="sec"><h2>Quando hai tempo</h2></div><div class="list">${noDate.map(itemRow).join("")}</div>`;
   if (doneT.length) h += `<div class="sec"><h2>Fatte oggi<span class="emo"> 🎉</span></h2></div><div class="list">${doneT.map(itemRow).join("")}</div>`;
   const now = new Date(), cm = new Date(now.getFullYear(), now.getMonth(), 1);
   let side = `<div class="desk-only"><div class="sec"><h2 style="text-transform:capitalize">${MESI[cm.getMonth()]}</h2></div>
@@ -1175,7 +1176,7 @@ function viewAppunti() {
   if (!list.length) return h + emptyBox("Nessun appunto. Idee, liste della spesa, password del wifi di casa della nonna... 📝");
   h += `<div class="notes">${list.map((n) => `<div class="note c${n.color || 1} ${n.pinned ? "fissa" : ""}" style="${bachecaStile(n.id)}" data-act="edit" data-id="${esc(n.id)}">
       ${n.pinned ? `<span class="pin">📌</span>` : ""}
-      <h3>${esc(n.title)}</h3>${n.body ? `<p>${esc(n.body)}</p>` : ""}
+      <h3><button type="button" class="t-btn" data-act="edit" data-id="${esc(n.id)}">${esc(n.title)}</button></h3>${n.body ? `<p>${esc(n.body)}</p>` : ""}
       ${n.sottotask?.length ? `<div class="st-note">${voceListaHtml(n, 10)}</div>` : ""}
       <div class="when">${n.sottotask?.length ? `☑ ${n.sottotask.filter((x) => x.f).length}/${n.sottotask.length} · ` : ""}${n.lista_id && listaById(n.lista_id) ? esc(listaById(n.lista_id).emoji) : n.area === "lavoro" ? "💼" : "🌷"} ${niceDate(ymd(new Date(n.updated_at || n.created_at)))}</div></div>`).join("")}</div>`;
   return h;
@@ -1289,7 +1290,8 @@ function openEditor(it, isNew) {
   // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
   const pm = petMarca(it);
   draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
-  advanced = !isNew || draft.kind === "note";
+  // Finestra più leggera: data, promemoria, lista e note compaiono già aperti solo se la voce li usa; altrimenti stanno dietro "+ Data, promemoria e note"
+  advanced = draft.kind === "note" || (!isNew && !!(draft.due_date || draft.due_time || String(draft.body || "").trim() || draft.sottotask.length));
   drawEditor();
   setTimeout(() => { const i = $("#fTitle"); if (i && isNew) i.focus(); }, 250);
 }
@@ -1641,7 +1643,7 @@ function openSettings(gruppo) {
     ${SG_FINE}
     ${sgApri("usare", "🧩", "Cosa vuoi usare", riassuntoUsare())}
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
-      <div class="moduli">${[["Funzioni", ["turni", "spese", "pet", "focus", "ricorrenti", "liste", "riepilogo"]], ["Atmosfera e gioco", ["serie", "umore", "casa", "pancino", "biscotto", "feste", "stagioni"]]].map(([tit, ids]) => `<h3 class="msec">${tit}</h3>` + ids.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")).join("")}</div>
+      <div class="moduli">${[["Funzioni", ["turni", "spese", "pet", "focus", "ricorrenti", "liste", "riepilogo", "tempo"]], ["Atmosfera e gioco", ["serie", "umore", "casa", "pancino", "biscotto", "feste", "stagioni"]]].map(([tit, ids]) => `<h3 class="msec">${tit}</h3>` + ids.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")).join("")}</div>
       ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
     ${mod("umore") ? `<div class="setrow"><div><b>I fiori del giardino</b><small>${riassuntoFiori()}</small></div><button class="fbtn on" data-act="fiori-apri">Scegli</button></div>` : ""}
     ${SG_FINE}
@@ -5318,6 +5320,11 @@ document.addEventListener("click", async (e) => {
     case "pet-spesa-nuova": case "pet-sel": case "pet-apri": case "pet-indietro": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-s-altre": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-piu": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
+    case "onb-pal": if (PALETTE.some((x) => x[0] === v)) { await saveCustom({ colore: v }); apriBenvenuto(1); cheer(); } break;
+    case "onb-pron": if (PRONOMI.some((x) => x[0] === v)) { await saveCustom({ pronomi: v }); apriBenvenuto(2); } break;
+    case "onb-mod": if (ONB_MODULI.includes(v)) { await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: !CUSTOM.moduli[v] } }); apriBenvenuto(3); } break;
+    case "onb-salta": closeSheet(); break;
+    case "onb-avanti": { const n = +v; if (n >= 3) { closeSheet(); cheer(); setTimeout(() => toast("Tocca il + e scrivi la prima cosa 🍙"), 400); } else apriBenvenuto(n + 1); break; }
     case "barra-ripristina": salvaBarra([...BARRA_DEF], "Barra ripristinata"); break;
     case "toast-annulla": { const f = toastUndo; toastUndo = null; $("#toast").classList.remove("on", "con-azione"); if (f) f(); break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
@@ -5519,6 +5526,39 @@ async function loadAndRender() {
   petPronto.then((c) => { if (c && state.tab === "pet" && !$("#sheet").classList.contains("on")) render(); });
   if (await giorniPronti && !$("#sheet").classList.contains("on") && state.tab !== "focus") render();
 }
+/* =========================================================
+   BENVENUTO: tre domande veloci (colori, come ti parlo, cosa ti serve) la prima volta che si entra.
+   Compare una volta sola, solo se non c'è niente: nessuna voce, nessuna preferenza sull'account, nessun dato da ospite da portare.
+   Quel primo giorno gli altri avvisi (installazione, novità, biscotto, feste) restano zitti. Niente di nuovo sul database.
+   ========================================================= */
+function benvenutoDovuto() {
+  if (LS.get("mochi.benvenuto", 0) || state.items.length) return false;
+  try { if (sessionStorage.getItem("mochi.azione") || sessionStorage.getItem("mochi.invito")) return false; } catch {}
+  if (ONLINE_MODE && (CHIAVI_OSPITE.some((k) => localStorage.getItem(k) !== null) || (store.user && accountHaPreferenze()))) return false;
+  return true;
+}
+const ONB_MODULI = ["turni", "spese", "focus", "pet"];
+function apriBenvenuto(passo = 1) {
+  LS.set("mochi.benvenuto", 1); // si vede una volta sola, anche se si chiude a metà
+  LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); // chi arriva adesso non ha bisogno delle novità
+  const punti = `<div class="onb-punti" aria-label="Passo ${passo} di 3">${[1, 2, 3].map((n) => `<i class="${n === passo ? "on" : ""}"></i>`).join("")}</div>`;
+  let h2, corpo;
+  if (passo === 1) {
+    h2 = "Che bello averti qui!";
+    corpo = `<p class="ospite-testo">Tre domande veloci per rendere ${esc(CUSTOM.nome_app)} tuo. Poi puoi cambiare tutto in Impostazioni.</p>
+      <div class="setrow col"><div><b>Che colori ti piacciono?</b></div><div class="palettes">${PALETTE.map(([id, nome, a, b, e]) => `<button class="${CUSTOM.colore === id ? "on" : ""}" data-act="onb-pal" data-v="${id}" aria-label="${nome}" aria-pressed="${CUSTOM.colore === id}" title="${nome}"><span class="sw" style="background:linear-gradient(145deg,${a}55,${b}88)">${e}</span><small>${nome}</small></button>`).join("")}</div></div>`;
+  } else if (passo === 2) {
+    h2 = "Come ti parlo?";
+    corpo = `<p class="ospite-testo">Serve solo a scrivere i testi nel modo giusto per te.</p>
+      <div class="onb-pron" role="group" aria-label="Come ti parlo">${PRONOMI.map(([k, n]) => `<button type="button" class="fbtn ${CUSTOM.pronomi === k ? "on" : ""}" data-act="onb-pron" data-v="${k}" aria-pressed="${CUSTOM.pronomi === k}">${k === "" ? "Meglio non dirlo" : n}</button>`).join("")}</div>`;
+  } else {
+    h2 = "Cosa ti serve?";
+    corpo = `<p class="ospite-testo">Accendi solo quello che ti serve: spegnere nasconde, non cancella niente.</p>
+      <div class="moduli">${ONB_MODULI.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="onb-mod" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>`;
+  }
+  openSheet(`<h2><span class="mbox">${mascot()}</span>${h2}</h2>${punti}${corpo}
+    <div class="actions"><button class="btn" data-act="onb-salta">Salta</button><button class="btn primary" data-act="onb-avanti" data-v="${passo}">${passo === 3 ? "Iniziamo!" : "Avanti"}</button></div>`);
+}
 async function boot() {
   leggiInvitoDaLink();
   leggiAzioneDaLink();
@@ -5527,10 +5567,10 @@ async function boot() {
   const th = LS.get("mochi.theme", "auto"); if (th !== "auto") document.documentElement.dataset.theme = th;
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-  if (!ONLINE_MODE) { showApp(); await loadAndRender(); maybeShowInstallHint();
+  if (!ONLINE_MODE) { showApp(); await loadAndRender(); const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
     // ospite con un link d'invito: l'invito resta da parte (lo propongo dopo l'accesso)
     eseguiAzione();
-    if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); maybeBiscotto(); festeApri(); return; }
+    if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (onb) { /* il benvenuto ha già segnato le novità come viste */ } else if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); if (!onb) { maybeBiscotto(); festeApri(); } return; }
 
   // Modalità online: mostra subito la cache, poi verifica la sessione
   let logged = false;
@@ -5547,11 +5587,9 @@ async function startOnline() {
   state.liste = LS.get("mochi.liste", []); if (!Array.isArray(state.liste)) state.liste = [];
   state.items = normalizeAll(LS.get("mochi.cache", [])); state.giorni = new Set(giorniCache()); render();
   await loadAndRender();
-  maybeShowInstallHint();
+  const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
   eseguiAzione();
-  maybeShowNovita();
-  maybeBiscotto();
-  festeApri();
+  if (!onb) { maybeShowNovita(); maybeBiscotto(); festeApri(); }
   proponiPassaggio();
   resyncPush();
   checkAdmin();
