@@ -798,13 +798,16 @@ create table if not exists public.turni_impostazioni (
   tipi          jsonb not null default '[]'::jsonb,
   ciclo         jsonb not null default '[]'::jsonb,
   ciclo_inizio  date,
+  ciclo_fine    date,                      -- ultimo giorno in cui il ciclo si ripete (vuoto = per sempre)
   updated_at    timestamptz not null default now()
 );
+alter table public.turni_impostazioni add column if not exists ciclo_fine date;
 alter table public.turni_impostazioni drop constraint if exists turni_impostazioni_ok;
 alter table public.turni_impostazioni add constraint turni_impostazioni_ok check (
   jsonb_typeof(tipi) = 'array' and jsonb_array_length(tipi) <= 12 and octet_length(tipi::text) <= 4000
   and jsonb_typeof(ciclo) = 'array' and jsonb_array_length(ciclo) <= 62 and octet_length(ciclo::text) <= 1200
   and (ciclo_inizio is null or ciclo_inizio between date '2000-01-01' and date '2100-12-31')
+  and (ciclo_fine is null or ciclo_fine between date '2000-01-01' and date '2100-12-31')
 );
 
 create table if not exists public.turni (
@@ -1139,13 +1142,13 @@ begin
   end if;
   -- turni della settimana dopo: prima i cambi a mano, poi il ciclo che si ripete
   if coalesce(md ->> 'turni', 'true') <> 'false' then
-    select ti.tipi, ti.ciclo, ti.ciclo_inizio into imp from public.turni_impostazioni ti where ti.user_id = p_user;
+    select ti.tipi, ti.ciclo, ti.ciclo_inizio, ti.ciclo_fine into imp from public.turni_impostazioni ti where ti.user_id = p_user;
     if found then
       lungo := jsonb_array_length(imp.ciclo);
       for d in select x::date from generate_series(p_dom + 1, p_dom + 7, interval '1 day') x loop
         select tu.tipo into k from public.turni tu where tu.user_id = p_user and tu.giorno = d;
         if not found then
-          k := case when lungo > 0 and imp.ciclo_inizio is not null and d >= imp.ciclo_inizio then imp.ciclo ->> ((d - imp.ciclo_inizio) % lungo) end;
+          k := case when lungo > 0 and imp.ciclo_inizio is not null and d >= imp.ciclo_inizio and (imp.ciclo_fine is null or d <= imp.ciclo_fine) then imp.ciclo ->> ((d - imp.ciclo_inizio) % lungo) end;
         end if;
         if k is not null and k <> '' then
           select x into t from jsonb_array_elements(imp.tipi) x where x ->> 'k' = k limit 1;

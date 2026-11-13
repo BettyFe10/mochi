@@ -23,3 +23,6 @@ Da lanciare con la versione "Pet" (prima di pubblicarla):
 
 Da lanciare con la versione "Più animali" (v35, prima di pubblicarla. Va lanciato INSIEME alla pubblicazione: la v34 già aperta sui telefoni non salva più peso e routine dopo lo script):
 - `16-animali.sql`: tabella `pet_animali` (fino a 5 animali per persona), `animale_id` su `pet_registro`, `items` e `spese`, funzione `pet_elimina_animale`. Migra la scheda attuale in un animale e i tag della v33 in animale_id. Nessun animale "principale" salvato: il primo creato è il default. Si può rilanciare.
+
+Da lanciare con la versione "Il ciclo dei turni può finire" (v45, prima di pubblicarla):
+- `17-turni-fine.sql`: colonna `ciclo_fine` su `turni_impostazioni` (l'ultimo giorno del ciclo, vuoto = per sempre) e funzione `riepilogo_numeri()` che la rispetta. Chi ha la app vecchia aperta continua a vedere il ciclo senza fine finché non la riapre.

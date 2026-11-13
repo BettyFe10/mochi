@@ -624,7 +624,7 @@ function cleanBarra(b) {
 const DEFAULT_CUSTOM = { nome_app: "Mochi", nome_mascotte: "", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
   moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO, barra: BARRA_DEF };
 // I pronomi: servono solo ad adattare i testi (Benvenuta / Benvenuto / Rieccoti). Solo "lei", "lui", "loro" o vuoto (= non specificato); tutto il resto scartato
-const PRONOMI = [["", "Non specificato"], ["lei", "Lei"], ["lui", "Lui"], ["loro", "Loro"]];
+const PRONOMI = [["", "Neutro"], ["lei", "Lei"], ["lui", "Lui"], ["loro", "Loro"]];
 const cleanPronomi = (p) => (typeof p === "string" && ["lei", "lui", "loro"].includes(p) ? p : "");
 // I fiori del giardino: solo modo e fiore conosciuti, tutto il resto scartato (arriva anche dall'account: mai fidarsi)
 const FIORI_UNO = ["classico", "margherita", "tulipano", "girasole", "rosa", "campanula"];
@@ -853,7 +853,7 @@ function openMascotPicker() {
    STATO E RENDER
    ========================================================= */
 const state = {
-  items: [], liste: [], umori: {}, turni: {}, turniImp: { tipi: [], ciclo: [], ciclo_inizio: null }, tab: "oggi", todoFilter: "tutte", noteFilter: "tutte",
+  items: [], liste: [], umori: {}, turni: {}, turniImp: { tipi: [], ciclo: [], ciclo_inizio: null, ciclo_fine: null }, tab: "oggi", todoFilter: "tutte", noteFilter: "tutte",
   calMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   calSel: todayStr(), recapMonth: null, synced: true,
   spese: { voci: [], budget: null }, speseMese: null, stAperti: new Set(), giorni: new Set(), pet: { righe: [] }
@@ -925,6 +925,7 @@ function nigiSays() {
   return `Giornata libera! Se ti viene in mente qualcosa, dimmelo e lo tengo io 💭`;
 }
 
+const unoO = (n, uno, molti) => (n === 1 ? uno : molti); // "1 appuntamento", "2 appuntamenti"
 function viewOggi() {
   const t = todayStr();
   const ev = state.items.filter((i) => i.kind === "event" && i.due_date === t).sort((a, b) => (a.done - b.done) || byDue(a, b));
@@ -938,9 +939,9 @@ function viewOggi() {
 
   let h = `<div class="bubble detto">${nigiSays()}</div>${invitoOspite()}`;
   h += `<div class="stats">
-    <button type="button" class="stat" data-tab="agenda" aria-label="${ev.length} appuntamenti oggi: apri l'agenda"><b>${ev.length}</b><span>appuntamenti</span></button>
+    <button type="button" class="stat" data-tab="agenda" aria-label="${ev.length} ${unoO(ev.length, "appuntamento", "appuntamenti")} oggi: apri l'agenda"><b>${ev.length}</b><span>${unoO(ev.length, "appuntamento", "appuntamenti")}</span></button>
     <button type="button" class="stat" data-tab="todo" aria-label="${todo.length + late.length} da fare: apri la lista"><b>${todo.length + late.length}</b><span>da fare</span></button>
-    <button type="button" class="stat" data-tab="todo" aria-label="${doneT.length} fatte oggi: apri la lista"><b>${doneT.length}</b><span>fatte oggi</span></button></div>`;
+    <button type="button" class="stat" data-tab="todo" aria-label="${doneT.length} ${unoO(doneT.length, "fatta", "fatte")} oggi: apri la lista"><b>${doneT.length}</b><span>${unoO(doneT.length, "fatta", "fatte")} oggi</span></button></div>`;
   h += riepilogoCard();
   { const tu = turnoDi(t); if (tu && tu.k !== "") h += rigaTurno(t, true); }
   // Prima le cose di oggi, poi serie, umore e pancino. Se non c'è niente, una riga sola.
@@ -1064,6 +1065,8 @@ const voceVisibile = (v) => (!v.m || mod(v.m)) && (!v.on || ONLINE_MODE) && (!v.
 // ---- Barra in basso del telefono: Oggi, + e Menu fissi, 2 posti a scelta (CUSTOM.barra). Se la scelta non è disponibile (modulo spento) si ripiega su Da fare, Agenda, Appunti
 const BARRA_NOME = { todo: "Da fare", agenda: "Agenda", appunti: "Appunti", turni: "Turni", spese: "Spese", focus: "Timer", casa: "Casetta", liste: "Liste" };
 const barraVoce = (id) => VOCI_MENU.find((v) => (v.atD || v.at).includes(`data-tab="${id}"`));
+// Nel menu a tendina delle Impostazioni: lo stesso nome che si legge sulla barra (il timer dice anche a cosa serve)
+const barraNomeScelta = (id) => (id === "focus" ? "Timer (Concentrazione)" : barraVoce(id).pet ? petTitolo() : BARRA_NOME[id] || barraVoce(id).t);
 const barraDisp = (id) => { const v = barraVoce(id); return !!v && voceVisibile(v); };
 function slotBarra() { const o = []; for (const id of [...CUSTOM.barra, ...BARRA_DEF, "appunti"]) if (!o.includes(id) && barraDisp(id)) o.push(id); return o.slice(0, 2); }
 function aggiornaSlotBarra() {
@@ -1073,10 +1076,14 @@ function aggiornaSlotBarra() {
     if (b.dataset.tab !== ids[i]) { b.dataset.tab = ids[i]; b.innerHTML = `<span class="i"><span class="emo">${v.e}</span><svg class="ico q" aria-hidden="true"><use href="#${v.ic}"/></svg></span><span class="bl ${v.pet ? "pet-lbl" : ""}">${v.pet ? esc(petTitolo()) : BARRA_NOME[ids[i]]}</span>`; }
   });
 }
-async function salvaBarra(nuova, testo) {
+// fuoco: selettore del controllo usato, per ridargli il focus dopo il ridisegno delle impostazioni
+async function salvaBarra(nuova, testo, fuoco) {
   const prima = slotBarra();
   await saveCustom({ barra: nuova });
-  if ($("#sheet").classList.contains("on")) riapriImpostazioni();
+  if ($("#sheet").classList.contains("on")) {
+    riapriImpostazioni();
+    if (fuoco) { let el = $(fuoco); if (!el && (el = $("#setBarra"))) el.tabIndex = -1; try { el && el.focus({ preventScroll: true }); } catch {} }
+  }
   toastAnnulla(testo, () => salvaBarra(prima, "Barra com'era prima"));
 }
 function costruisciBarra() {
@@ -1658,7 +1665,7 @@ function openSettings(gruppo) {
     <div class="setrow col"><div><b>Carattere</b><small>${esc(FONTI.find((x) => x[0] === CUSTOM.font)[1])}${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="fonts">${FONTI.map(([id, nome, fam]) => `<button class="${CUSTOM.font === id ? "on" : ""}" data-act="pick-font" data-v="${id}"><span class="aa" style="font-family:${fam}">Aa</span><small>${nome}</small></button>`).join("")}</div></div>
     <div class="setrow col mob-only" id="setBarra"><div><b>Barra in basso</b><small>Oggi, + e Menu restano dove sono. Scegli le due scorciatoie accanto al +${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
-      <div class="barra-sel">${[0, 1].map((i) => { const sel = slotBarra()[i]; return `<select class="input" id="cBarra${i}" aria-label="Scorciatoia ${i + 1}">${BARRA_OK.filter((id) => barraDisp(id) || id === sel).map((id) => `<option value="${id}" ${id === sel ? "selected" : ""}>${esc(barraVoce(id).t)}</option>`).join("")}</select>`; }).join("")}</div>
+      <div class="barra-sel">${[0, 1].map((i) => { const sel = slotBarra()[i]; return `<select class="input" id="cBarra${i}" aria-label="Scorciatoia ${i + 1}">${BARRA_OK.filter((id) => barraDisp(id) || id === sel).map((id) => `<option value="${id}" ${id === sel ? "selected" : ""}>${esc(barraNomeScelta(id))}</option>`).join("")}</select>`; }).join("")}</div>
       ${slotBarra().join() !== BARRA_DEF.join() ? `<div class="more-row"><button class="more" data-act="barra-ripristina">Ripristina (Da fare e Agenda)</button></div>` : ""}</div>
     <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
       <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
@@ -1673,7 +1680,7 @@ function openSettings(gruppo) {
   [0, 1].forEach((i) => $("#cBarra" + i)?.addEventListener("change", (e) => {
     const prima = slotBarra(), nuova = [...prima]; nuova[i] = e.target.value;
     if (nuova[0] === nuova[1]) nuova[1 - i] = prima[i]; // stessa scelta nell'altro posto: si scambiano
-    salvaBarra(nuova, "Barra aggiornata");
+    salvaBarra(nuova, "Barra aggiornata", "#cBarra" + i);
   }));
   const salvaCompleanno = async () => {
     const g = $("#cGiorno")?.value, m = $("#cMese")?.value; if (!g || !m) return;
@@ -2448,8 +2455,9 @@ function cleanTurniImp(r) {
   const tipi = [], visti = new Set();
   (Array.isArray(r?.tipi) ? r.tipi : []).forEach((t) => { const c = cleanTipo(t); if (c && !visti.has(c.k) && tipi.length < 12) { visti.add(c.k); tipi.push(c); } });
   const ciclo = (Array.isArray(r?.ciclo) ? r.ciclo : []).map(str).filter((k) => k === "" || RE_TK.test(k)).slice(0, 62);
-  const ini = str(r?.ciclo_inizio).slice(0, 10);
-  return { tipi, ciclo, ciclo_inizio: RE_YMD.test(ini) ? ini : null };
+  const dataVera = (s) => RE_YMD.test(s) && ymd(parseYmd(s)) === s; // 2026-13-45 ha la forma giusta ma non è una data
+  const ini = str(r?.ciclo_inizio).slice(0, 10), fine = str(r?.ciclo_fine).slice(0, 10);
+  return { tipi, ciclo, ciclo_inizio: dataVera(ini) ? ini : null, ciclo_fine: dataVera(fine) ? fine : null };
 }
 const TurniStore = {
   async carica() {
@@ -2460,7 +2468,7 @@ const TurniStore = {
     }
     const da = ymd(addDays(new Date(), -400));
     const [a, b] = await Promise.all([
-      store.sb.from("turni_impostazioni").select("tipi,ciclo,ciclo_inizio").maybeSingle(),
+      store.sb.from("turni_impostazioni").select("tipi,ciclo,ciclo_inizio,ciclo_fine").maybeSingle(),
       store.sb.from("turni").select("giorno,tipo").gte("giorno", da)
     ]);
     if (a.error) throw a.error; if (b.error) throw b.error;
@@ -2470,7 +2478,7 @@ const TurniStore = {
   _local() { LS.set("mochi.turni", { imp: state.turniImp, giorni: state.turni }); },
   async salvaImp(imp) {
     if (!ONLINE_MODE) { this._local(); return; }
-    const { error } = await store.sb.from("turni_impostazioni").upsert({ user_id: store.user.id, tipi: imp.tipi, ciclo: imp.ciclo, ciclo_inizio: imp.ciclo_inizio }, { onConflict: "user_id" });
+    const { error } = await store.sb.from("turni_impostazioni").upsert({ user_id: store.user.id, tipi: imp.tipi, ciclo: imp.ciclo, ciclo_inizio: imp.ciclo_inizio, ciclo_fine: imp.ciclo_fine }, { onConflict: "user_id" });
     if (error) throw error;
   },
   async segna(giorno, tipo) {
@@ -2493,8 +2501,8 @@ const tipoDa = (k) => (k === "" ? RIPOSO : state.turniImp.tipi.find((t) => t.k =
 const giorniTra = (a, b) => Math.round((Date.UTC(...b.split("-").map((x, i) => i === 1 ? x - 1 : +x)) - Date.UTC(...a.split("-").map((x, i) => i === 1 ? x - 1 : +x))) / 864e5);
 // Dal ciclo: che turno toccherebbe quel giorno (null = il ciclo non dice niente)
 function turnoDaCiclo(g) {
-  const { ciclo, ciclo_inizio } = state.turniImp;
-  if (!ciclo.length || !ciclo_inizio || g < ciclo_inizio) return null;
+  const { ciclo, ciclo_inizio, ciclo_fine } = state.turniImp;
+  if (!ciclo.length || !ciclo_inizio || g < ciclo_inizio || (ciclo_fine && g > ciclo_fine)) return null; // prima dell'inizio e dopo la fine il ciclo non dice niente
   return ciclo[giorniTra(ciclo_inizio, g) % ciclo.length];
 }
 // Il turno di un giorno: prima i cambi a mano, poi il ciclo
@@ -2552,8 +2560,9 @@ function viewTurni() {
     celle += `<button class="tday ${d.getMonth() !== m.getMonth() ? "out" : ""} ${s === todayStr() ? "today" : ""} ${t && t.k !== "" ? "on" : ""} ${t?.manuale ? "man" : ""}" ${t && t.colore ? `style="--tc:${TURNO_COLORI[t.colore - 1]}"` : ""} data-act="turno-giorno" data-v="${s}" aria-label="${d.getDate()} ${MESI[d.getMonth()]}${t ? `: ${esc(t.nome)}${t.inizio ? ` dalle ${t.inizio}` : ""}` : ""}"><span class="dn">${d.getDate()}</span>${t ? (t.k === "" ? `<span class="tn riposo" aria-hidden="true">💤</span>` : `<span class="tn"><span class="tn-c">${esc([...t.nome].slice(0, 5).join(""))}</span><span class="tn-l">${esc(t.nome)}</span></span>${t.inizio ? `<span class="th">${t.inizio}</span>` : ""}`) : ""}</button>`;
   }
   const o = oreMese(m), cicloTxt = imp.ciclo.length && imp.ciclo_inizio
-    ? `${imp.ciclo.length} giorni, dal ${parseYmd(imp.ciclo_inizio).getDate()} ${MESI[parseYmd(imp.ciclo_inizio).getMonth()]} ${parseYmd(imp.ciclo_inizio).getFullYear()}`
+    ? `${imp.ciclo.length} giorni, dal ${dataEstesa(imp.ciclo_inizio, true)}${imp.ciclo_fine ? ` al ${dataEstesa(imp.ciclo_fine, true)}` : ", senza fine"}`
     : "Nessun ciclo: segni i turni giorno per giorno";
+  const cicloFinito = imp.ciclo.length && imp.ciclo_fine && imp.ciclo_fine < todayStr();
   return `<div class="sec" style="margin-top:0"><h2><span class="emo">💼 </span>Turni di lavoro</h2></div>
     <div class="split turni"><div class="col-main">
       <div class="cal">${ANELLI}<div class="calhead"><button class="iconbtn" data-act="turni-mese" data-v="-1" aria-label="Mese prima">‹</button><h2>${MESI[m.getMonth()]} ${m.getFullYear()}</h2><button class="iconbtn" data-act="turni-mese" data-v="1" aria-label="Mese dopo">›</button></div><div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div><div class="days">${celle}</div></div>
@@ -2563,6 +2572,7 @@ function viewTurni() {
         ${Object.keys(o.per).length ? `<div class="ore-per">${imp.tipi.filter((t) => o.per[t.k]).map((t) => `<span>${chipTurno(t, "mini")} ${esc(t.nome)} ×${o.per[t.k]}</span>`).join("")}</div>` : ""}</div>
       <div class="sec"><h2>Il ciclo</h2><button class="fbtn" data-act="turni-ciclo">${imp.ciclo.length ? "Modifica" : "Imposta"}</button></div>
       <p style="margin:0 0 6px;color:var(--ink2)">${esc(cicloTxt)}</p>
+      ${cicloFinito ? `<p class="hint">Il ciclo è finito il ${esc(dataEstesa(imp.ciclo_fine))}. Tocca Modifica per prolungarlo.</p>` : ""}
       ${imp.ciclo.length ? `<div class="ciclo-seq">${imp.ciclo.map((k) => { const t = tipoDa(k); return t ? chipTurno(t, "mini") : ""; }).join("")}</div>` : ""}
       <div class="sec"><h2>Tipi di turno</h2>${imp.tipi.length < 12 ? `<button class="fbtn" data-act="turno-tipo-nuovo">+ Nuovo</button>` : ""}</div>
       <div class="list">${imp.tipi.map((t) => `<button class="turno-riga" data-act="turno-tipo" data-id="${t.k}">${chipTurno(t)}<span><b>${esc(t.nome)}</b><small>${esc(orarioTipo(t))}${t.inizio ? ` · ${fmtOre(minutiTipo(t))}` : ""}</small></span></button>`).join("")}</div>
@@ -2644,9 +2654,32 @@ async function eliminaTipoTurno() {
 }
 // Il ciclo che si ripete
 let cicloDraft = null;
+// "12 novembre" (con l'anno se non è quello di quest'anno o se lo chiedi)
+function dataEstesa(s, conAnno) { const d = parseYmd(s); return `${d.getDate()} ${MESI[d.getMonth()]}${conAnno || d.getFullYear() !== new Date().getFullYear() ? " " + d.getFullYear() : ""}`; }
+// L'ultimo giorno di "n mesi" a partire da s: 12 nov + 1 mese = 11 dic (se il giorno non esiste, l'ultimo del mese)
+function fineDopoMesi(s, n) {
+  const d = parseYmd(s); let t = new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
+  if (t.getDate() !== d.getDate()) t = new Date(d.getFullYear(), d.getMonth() + n + 1, 0);
+  return ymd(addDays(t, -1));
+}
+// Fino a quando si ripete: fine = mese | 3mesi | sempre | data | null (non ancora scelto: per un ciclo nuovo si deve scegliere)
+function cicloFineScelta(d) {
+  if (d.fine === "mese") return fineDopoMesi(d.inizio, 1);
+  if (d.fine === "3mesi") return fineDopoMesi(d.inizio, 3);
+  if (d.fine === "data") return RE_YMD.test(d.fineData || "") ? d.fineData : null;
+  return null;
+}
+function cicloFineTesto(d) {
+  if (d.fine === "sempre") return "Il ciclo si ripete senza fine.";
+  const f = cicloFineScelta(d);
+  if (!d.fine) return "Scegli fino a quando si ripete.";
+  if (!f) return "Scegli l'ultimo giorno.";
+  if (RE_YMD.test(d.inizio || "") && f < d.inizio) return "L'ultimo giorno è prima dell'inizio.";
+  return RE_YMD.test(d.inizio || "") ? `Il ciclo si ripete dal ${dataEstesa(d.inizio)} al ${dataEstesa(f)}.` : "";
+}
 function apriCiclo() {
   const imp = state.turniImp;
-  cicloDraft = { ciclo: [...imp.ciclo], inizio: imp.ciclo_inizio || todayStr() };
+  cicloDraft = { ciclo: [...imp.ciclo], inizio: imp.ciclo_inizio || todayStr(), fine: !imp.ciclo.length ? null : imp.ciclo_fine ? "data" : "sempre", fineData: imp.ciclo_fine || "" };
   disegnaCiclo();
 }
 function disegnaCiclo() {
@@ -2656,17 +2689,30 @@ function disegnaCiclo() {
     <div class="ciclo-seq grande">${d.ciclo.map((k, i) => { const t = tipoDa(k); return t ? `<button data-act="ciclo-togli" data-v="${i}" title="Togli">${chipTurno(t)}<small>${i + 1}</small></button>` : ""; }).join("") || `<span class="hint">Ancora vuoto: aggiungi i giorni qui sotto</span>`}</div>
     <div class="field"><label>Aggiungi un giorno</label><div class="tpicks mini">${[...state.turniImp.tipi, RIPOSO].map((t) => `<button class="tpick" data-act="ciclo-aggiungi" data-id="${t.k}" ${d.ciclo.length >= 62 ? "disabled" : ""}>${chipTurno(t)}<span><b>${esc(t.nome)}</b></span></button>`).join("")}</div></div>
     <div class="field"><label>Il giorno 1 del ciclo è</label><input class="input" type="date" id="cIni" value="${d.inizio}"></div>
+    <div class="field" id="cFineBox"><label id="cFineL">Fino a quando si ripete?</label>
+      <div class="pet-dt" role="group" aria-labelledby="cFineL">${[["mese", "Un mese"], ["3mesi", "3 mesi"], ["sempre", "Sempre"], ["data", "Scegli la data"]].map(([k, n]) => `<button type="button" class="fbtn ${d.fine === k ? "on" : ""}" data-act="ciclo-fine" data-v="${k}" aria-pressed="${d.fine === k}">${n}</button>`).join("")}</div>
+      ${d.fine === "data" ? `<input class="input" type="date" id="cFine" aria-label="Ultimo giorno del ciclo" value="${d.fineData || ""}" min="2000-01-01" max="2100-12-31" style="margin-top:8px">` : ""}
+      <p class="hint" id="cFineTxt" aria-live="polite">${esc(cicloFineTesto(d))}</p></div>
     <p class="hint">Tocca un giorno della sequenza per toglierlo. I cambi fatti a mano restano.</p>
     <div class="actions">${state.turniImp.ciclo.length ? `<button class="btn danger" data-act="ciclo-cancella">Niente ciclo</button>` : ""}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="ciclo-salva">Salva</button></div>`);
-  $("#cIni").addEventListener("input", (e) => { cicloDraft.inizio = e.target.value; });
+  const aggFine = () => { const t = $("#cFineTxt"); if (t) t.textContent = cicloFineTesto(cicloDraft); };
+  $("#cIni").addEventListener("input", (e) => { cicloDraft.inizio = e.target.value; aggFine(); });
+  $("#cFine")?.addEventListener("input", (e) => { cicloDraft.fineData = e.target.value; aggFine(); });
 }
 async function salvaCiclo(vuoto = false) {
   const d = cicloDraft;
   if (!vuoto) {
     if (!d.ciclo.length) { toast("Aggiungi almeno un giorno"); return; }
     if (!RE_YMD.test(d.inizio || "")) { toast("Scegli il giorno di inizio"); return; }
+    if (!d.fine) { toast("Scegli fino a quando si ripete"); $("#cFineBox")?.scrollIntoView({ block: "center" }); return; }
+    if (d.fine !== "sempre") {
+      const f = cicloFineScelta(d);
+      if (!f) { toast("Scegli l'ultimo giorno del ciclo"); $("#cFine")?.focus(); return; }
+      if (f < d.inizio) { toast("L'ultimo giorno deve essere dopo l'inizio"); $("#cFine")?.focus(); return; }
+    }
   }
-  if (await salvaImpTurni({ ...state.turniImp, ciclo: vuoto ? [] : d.ciclo, ciclo_inizio: vuoto ? null : d.inizio }, vuoto ? "Ciclo tolto" : "Ciclo salvato 🌸")) { closeSheet(); if (!vuoto) cheer(); }
+  const fine = vuoto || d.fine === "sempre" ? null : cicloFineScelta(d);
+  if (await salvaImpTurni({ ...state.turniImp, ciclo: vuoto ? [] : d.ciclo, ciclo_inizio: vuoto ? null : d.inizio, ciclo_fine: fine }, vuoto ? "Ciclo tolto" : "Ciclo salvato 🌸")) { closeSheet(); if (!vuoto) cheer(); }
 }
 
 /* =========================================================
@@ -3218,11 +3264,11 @@ async function eseguiPassaggio(btn) {
     await aBlocchi(um, 500, async (b) => giu(await sb.from("umori").upsert(b, { onConflict: "user_id,giorno", ignoreDuplicates: true })));
     // 3) turni: i tipi si uniscono (per codice), il ciclo resta quello dell'account se c'è; i giorni già segnati restano
     if (d.turni.imp.tipi.length || Object.keys(d.turni.giorni).length) {
-      const a = giu(await sb.from("turni_impostazioni").select("tipi,ciclo,ciclo_inizio").maybeSingle()).data;
+      const a = giu(await sb.from("turni_impostazioni").select("tipi,ciclo,ciclo_inizio,ciclo_fine").maybeSingle()).data;
       const acc = cleanTurniImp(a || {}), tipi = [...acc.tipi];
       d.turni.imp.tipi.forEach((t) => { if (tipi.length < 12 && !tipi.some((x) => x.k === t.k)) tipi.push(t); });
-      const imp = acc.ciclo.length ? { ...acc, tipi } : { tipi, ciclo: d.turni.imp.ciclo, ciclo_inizio: d.turni.imp.ciclo_inizio };
-      giu(await sb.from("turni_impostazioni").upsert({ user_id: me, tipi: imp.tipi, ciclo: imp.ciclo, ciclo_inizio: imp.ciclo_inizio }, { onConflict: "user_id" }));
+      const imp = acc.ciclo.length ? { ...acc, tipi } : { tipi, ciclo: d.turni.imp.ciclo, ciclo_inizio: d.turni.imp.ciclo_inizio, ciclo_fine: d.turni.imp.ciclo_fine ?? null };
+      giu(await sb.from("turni_impostazioni").upsert({ user_id: me, tipi: imp.tipi, ciclo: imp.ciclo, ciclo_inizio: imp.ciclo_inizio, ciclo_fine: imp.ciclo_fine }, { onConflict: "user_id" }));
       const tg = Object.entries(d.turni.giorni).map(([giorno, tipo]) => ({ user_id: me, giorno, tipo }));
       await aBlocchi(tg, 500, async (b) => giu(await sb.from("turni").upsert(b, { onConflict: "user_id,giorno", ignoreDuplicates: true })));
     }
@@ -5081,8 +5127,10 @@ let toastUndo = null;
 // Toast con "Annulla": per le modifiche che si fanno in un attimo e che si vogliono poter rimangiare
 function toastAnnulla(msg, fn) {
   const t = $("#toast"); toastUndo = fn; t.innerHTML = `<span>${esc(msg)}</span> <button type="button" class="ta" data-act="toast-annulla">Annulla</button>`;
-  t.classList.add("on", "con-azione"); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove("on", "con-azione"); toastUndo = null; }, 6000);
+  t.classList.add("on", "con-azione"); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove("on", "con-azione"); toastUndo = null; toastSvuota(); }, 6000);
 }
+// Finita l'uscita, il toast nascosto si svuota: "Annulla" non deve restare raggiungibile con Tab (solo se nel frattempo non è stato riusato)
+function toastSvuota() { setTimeout(() => { const t = $("#toast"); if (!t.classList.contains("on")) t.textContent = ""; }, 300); }
 function toast(msg) { const t = $("#toast"); toastUndo = null; t.classList.remove("con-azione"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2600); }
 /* Trascina giù la finestra per chiuderla (su telefono), come nelle app native.
    La finestra si muove SOLO se il dito parte:
@@ -5320,13 +5368,14 @@ document.addEventListener("click", async (e) => {
     case "pet-spesa-nuova": case "pet-sel": case "pet-apri": case "pet-indietro": case "pet-nuovo": case "pet-na-specie": case "pet-na-salva": case "pet-filtro": case "pet-s-tag": case "pet-scad-new": case "pet-scad-edit": case "pet-s-tipo": case "pet-s-altre": case "pet-scad-salva": case "pet-scad-del": case "pet-scad-fatta": case "pet-edit": case "pet-piu": case "pet-specie": case "pet-dt": case "pet-salva": case "pet-rimuovi": case "pet-spunta": case "pet-routine": case "pet-r-add": case "pet-r-del": case "pet-r-ripristina": case "pet-r-salva": case "pet-peso": case "pet-peso-salva": case "pet-peso-togli": await petAzione(act, v, el); break;
     case "pick-stagione": if (STAGIONI.some((x) => x[0] === v)) { await saveCustom({ stagione: v }); riapriImpostazioni(); } break;
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
-    case "onb-pal": if (PALETTE.some((x) => x[0] === v)) { await saveCustom({ colore: v }); apriBenvenuto(1); cheer(); } break;
-    case "onb-pron": if (PRONOMI.some((x) => x[0] === v)) { await saveCustom({ pronomi: v }); apriBenvenuto(2); } break;
-    case "onb-mod": if (ONB_MODULI.includes(v)) { await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: !CUSTOM.moduli[v] } }); apriBenvenuto(3); } break;
+    case "onb-pal": if (PALETTE.some((x) => x[0] === v)) { await saveCustom({ colore: v }); apriBenvenuto(1, { act, v }); cheer(); } break;
+    case "onb-pron": if (PRONOMI.some((x) => x[0] === v)) { await saveCustom({ pronomi: v }); apriBenvenuto(2, { act, v }); } break;
+    case "onb-mod": if (ONB_MODULI.includes(v)) { await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: !CUSTOM.moduli[v] } }); apriBenvenuto(3, { act, v }); } break;
     case "onb-salta": closeSheet(); break;
+    case "onb-indietro": apriBenvenuto(Math.max(1, (+v || 2) - 1)); break;
     case "onb-avanti": { const n = +v; if (n >= 3) { closeSheet(); cheer(); setTimeout(() => toast("Tocca il + e scrivi la prima cosa 🍙"), 400); } else apriBenvenuto(n + 1); break; }
-    case "barra-ripristina": salvaBarra([...BARRA_DEF], "Barra ripristinata"); break;
-    case "toast-annulla": { const f = toastUndo; toastUndo = null; $("#toast").classList.remove("on", "con-azione"); if (f) f(); break; }
+    case "barra-ripristina": salvaBarra([...BARRA_DEF], "Barra ripristinata", '#sheet [data-act="barra-ripristina"]'); break;
+    case "toast-annulla": { const f = toastUndo; toastUndo = null; $("#toast").classList.remove("on", "con-azione"); toastSvuota(); if (f) f(); break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
     case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(); break; }
     case "uovo": festaUovo(v, el); break;
@@ -5359,6 +5408,7 @@ document.addEventListener("click", async (e) => {
     case "turni-ciclo": apriCiclo(); break;
     case "ciclo-aggiungi": if (cicloDraft && cicloDraft.ciclo.length < 62 && (id === "" || id == null || tipoDa(id))) { cicloDraft.ciclo.push(id || ""); disegnaCiclo(); } break;
     case "ciclo-togli": if (cicloDraft) { cicloDraft.ciclo.splice(+v, 1); disegnaCiclo(); } break;
+    case "ciclo-fine": if (cicloDraft && ["mese", "3mesi", "sempre", "data"].includes(v)) { cicloDraft.fine = v; if (v === "data" && !cicloDraft.fineData) cicloDraft.fineData = fineDopoMesi(cicloDraft.inizio, 1); disegnaCiclo(); setTimeout(() => (v === "data" ? $("#cFine") : $('#sheet [data-act="ciclo-fine"].on'))?.focus(), 30); } break;
     case "ciclo-salva": salvaCiclo(); break;
     case "ciclo-cancella": salvaCiclo(true); break;
     case "fiori-apri": if (mod("umore")) { fioriAperto = true; closeSheet(); apriGiardino(); } break;
@@ -5538,10 +5588,13 @@ function benvenutoDovuto() {
   return true;
 }
 const ONB_MODULI = ["turni", "spese", "focus", "pet"];
-function apriBenvenuto(passo = 1) {
+// fuoco = { act, v }: il pulsante appena toccato, da ritrovare dopo il ridisegno (senza: il focus va al titolo, così viene letto)
+function apriBenvenuto(passo = 1, fuoco = null) {
+  passo = Math.min(3, Math.max(1, +passo || 1));
+  const y = fuoco ? $("#sheet").scrollTop : 0;
   LS.set("mochi.benvenuto", 1); // si vede una volta sola, anche se si chiude a metà
   LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); // chi arriva adesso non ha bisogno delle novità
-  const punti = `<div class="onb-punti" aria-label="Passo ${passo} di 3">${[1, 2, 3].map((n) => `<i class="${n === passo ? "on" : ""}"></i>`).join("")}</div>`;
+  const punti = `<div class="onb-punti" role="img" aria-label="Passo ${passo} di 3">${[1, 2, 3].map((n) => `<i class="${n === passo ? "on" : ""}"></i>`).join("")}</div>`;
   let h2, corpo;
   if (passo === 1) {
     h2 = "Che bello averti qui!";
@@ -5550,14 +5603,17 @@ function apriBenvenuto(passo = 1) {
   } else if (passo === 2) {
     h2 = "Come ti parlo?";
     corpo = `<p class="ospite-testo">Serve solo a scrivere i testi nel modo giusto per te.</p>
-      <div class="onb-pron" role="group" aria-label="Come ti parlo">${PRONOMI.map(([k, n]) => `<button type="button" class="fbtn ${CUSTOM.pronomi === k ? "on" : ""}" data-act="onb-pron" data-v="${k}" aria-pressed="${CUSTOM.pronomi === k}">${k === "" ? "Meglio non dirlo" : n}</button>`).join("")}</div>`;
+      <div class="onb-pron" role="group" aria-label="Come ti parlo">${PRONOMI.map(([k, n]) => `<button type="button" class="fbtn ${CUSTOM.pronomi === k ? "on" : ""}" data-act="onb-pron" data-v="${k}" aria-pressed="${CUSTOM.pronomi === k}">${n}</button>`).join("")}</div>`;
   } else {
     h2 = "Cosa ti serve?";
     corpo = `<p class="ospite-testo">Accendi solo quello che ti serve: spegnere nasconde, non cancella niente.</p>
       <div class="moduli">${ONB_MODULI.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="onb-mod" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")}</div>`;
   }
-  openSheet(`<h2><span class="mbox">${mascot()}</span>${h2}</h2>${punti}${corpo}
-    <div class="actions"><button class="btn" data-act="onb-salta">Salta</button><button class="btn primary" data-act="onb-avanti" data-v="${passo}">${passo === 3 ? "Iniziamo!" : "Avanti"}</button></div>`);
+  openSheet(`<h2 tabindex="-1"><span class="mbox">${mascot()}</span>${h2}</h2>${punti}${corpo}
+    <div class="actions onb-az"><button class="btn" data-act="onb-salta">Salta tutto</button>${passo > 1 ? `<button class="btn" data-act="onb-indietro" data-v="${passo}">Indietro</button>` : ""}<button class="btn primary" data-act="onb-avanti" data-v="${passo}">${passo === 3 ? "Iniziamo!" : "Avanti"}</button></div>`);
+  const dove = (fuoco && [...document.querySelectorAll("#sheet [data-act]")].find((b) => b.dataset.act === fuoco.act && b.dataset.v === fuoco.v)) || $("#sheet h2");
+  if (fuoco) $("#sheet").scrollTop = y;
+  try { dove.focus({ preventScroll: true }); } catch {}
 }
 async function boot() {
   leggiInvitoDaLink();
@@ -5610,7 +5666,7 @@ async function startOnline() {
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
 let loginMode = "login";
 function clearLocal() {
-  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione"].forEach((k) => localStorage.removeItem(k));
+  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione", "mochi.benvenuto"].forEach((k) => localStorage.removeItem(k));
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || k.startsWith("mochi.petCache.") || k.startsWith("mochi.petFesta.") || (k.startsWith("mochi.petDaInviare.") && !(LS.get(k, []) || []).length) || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
