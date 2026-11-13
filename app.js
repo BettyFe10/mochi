@@ -959,8 +959,7 @@ function viewOggi() {
   if (mod("tempo") && noDate.length) h += `<div class="sec"><h2>Quando hai tempo</h2></div><div class="list">${noDate.map(itemRow).join("")}</div>`;
   if (doneT.length) h += `<div class="sec"><h2>Fatte oggi<span class="emo"> 🎉</span></h2></div><div class="list">${doneT.map(itemRow).join("")}</div>`;
   const now = new Date(), cm = new Date(now.getFullYear(), now.getMonth(), 1);
-  let side = `<div class="desk-only"><div class="sec"><h2 style="text-transform:capitalize">${MESI[cm.getMonth()]}</h2></div>
-    <div class="cal mini">${monthGrid(cm, itemsByDay(), "", "cal-jump")}</div></div>`;
+  let side = `<div class="desk-only"><div class="cal mini">${ANELLI}<div class="calhead"><h2>${MESI[cm.getMonth()]}</h2></div>${monthGrid(cm, itemsByDay(), "", "cal-jump")}</div></div>`;
   side += `<div class="sec"><h2>Nei prossimi giorni</h2></div>`;
   side += soon.length ? `<div class="list">${soon.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Settimana tranquilla 🍃</div>`;
   return `<div class="split"><div class="col-main">${h}</div><div class="col-side">${side}</div></div>`;
@@ -1258,10 +1257,34 @@ function fuocoRimetti(el, f) {
   if (!n) return;
   try { n.focus({ preventScroll: true }); if (f.da != null && n.setSelectionRange) n.setSelectionRange(f.da, f.a); } catch {}
 }
+/* Cronologia: ogni cambio di pagina è un passo indietro per il tasto Indietro del browser, il tasto del mouse e il gesto del telefono.
+   Cambiare pagina aggiunge un passo; ridisegnare la stessa pagina no. Tornando indietro si chiude l'eventuale finestra aperta. */
+const TAB_VALIDE = ["oggi", "todo", "agenda", "appunti", "liste", "ricorrenti", "turni", "spese", "focus", "casa", "pet", "menu"];
+let cronTab = null, daCronologia = false;
+function cronologiaAggiorna() {
+  if (daCronologia) { daCronologia = false; cronTab = state.tab; return; }
+  try { if (cronTab === null) history.replaceState({ tab: state.tab }, ""); else if (cronTab !== state.tab) history.pushState({ tab: state.tab }, ""); } catch {}
+  cronTab = state.tab;
+}
+window.addEventListener("popstate", async (e) => {
+  if ($("#app").classList.contains("hidden")) return; // schermata di accesso: niente
+  const t = e.state && typeof e.state.tab === "string" && TAB_VALIDE.includes(e.state.tab) ? e.state.tab : "oggi";
+  // finestra aperta: Indietro chiude solo la finestra, la pagina resta dov'è
+  if ($("#sheet").classList.contains("on")) { closeSheet(); try { history.pushState({ tab: state.tab }, ""); } catch {} return; }
+  if (t === state.tab) return;
+  // si esce dalla Concentrazione mentre il timer corre: prima si chiede, come col tocco sulla barra
+  if (state.tab === "focus" && t !== "focus" && focusInCorso()) {
+    const esci = await ask({ title: "Interrompere la concentrazione?", text: "Se esci adesso la sessione si ferma e la piantina non va nella serra.", ok: "Esci e interrompi" });
+    if (!esci) { try { history.pushState({ tab: "focus" }, ""); } catch {} return; }
+    focusChiudi();
+  }
+  daCronologia = true; state.tab = t; render(); window.scrollTo({ top: 0 });
+});
 function render() {
   applyCustom();
   headerUpdate();
   if (PAGINA_MODULO[state.tab] && !mod(PAGINA_MODULO[state.tab])) state.tab = "oggi";
+  cronologiaAggiorna();
   // fuori dalla pagina Concentrazione non resta nessuna sessione a metà (timer, schermo acceso)
   if (state.tab !== "focus" && focusS) focusChiudi();
   if (!mod("liste")) { if (state.todoFilter.startsWith("l:")) state.todoFilter = "tutte"; if (state.noteFilter.startsWith("l:")) state.noteFilter = "tutte"; }
