@@ -1,5 +1,5 @@
 // Service worker di Mochi: funzionamento offline + notifiche push
-const CACHE = "mochi-v48";
+const CACHE = "mochi-v49";
 const SHELL = [
   "./",
   "./index.html",

@@ -9,7 +9,7 @@ const CONFIG_ONLINE = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
    "mochi.ospite" nel dispositivo: "si" = si usa come ospite; "passaggio" = l'ospite sta creando un account o entrando
    (le sue cose restano sul dispositivo finché non le porta nell'account). Si decide all'avvio: cambiare modo ricarica la pagina.
    ONLINE_MODE (= "in linea") vale quindi: collegata a Supabase E non ospite. */
-const PRIVACY_VERSIONE = "2026-11"; // versione dell'informativa accettata alla registrazione
+const PRIVACY_VERSIONE = "2026-11-13"; // versione dell'informativa accettata alla registrazione
 const OSPITE = CONFIG_ONLINE && (() => { try { return JSON.parse(localStorage.getItem("mochi.ospite")) === "si"; } catch { return false; } })();
 const ONLINE_MODE = CONFIG_ONLINE && !OSPITE;
 // Le notifiche push si attivano solo quando è configurata la chiave pubblica VAPID
