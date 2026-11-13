@@ -191,7 +191,7 @@ const LocalStore = {
   mode: "local",
   async init() { return true; },
   async list() { return normalizeAll(LS.get("mochi.items", [])); },
-  async save(it) { const all = LS.get("mochi.items", []); const i = all.findIndex((x) => x.id === it.id); i >= 0 ? (all[i] = it) : all.push(it); LS.set("mochi.items", all); },
+  async save(it) { const all = LS.get("mochi.items", []); const i = all.findIndex((x) => x.id === it.id); i >= 0 ? (all[i] = it) : all.push(it); LS.set("mochi.items", all); return "ok"; },
   async remove(id) { LS.set("mochi.items", LS.get("mochi.items", []).filter((x) => x.id !== id)); },
   subscribe() {}
 };
@@ -318,18 +318,20 @@ const SupaStore = {
     }
     LS.set("mochi.outbox", rest);
   },
+  // Esito: "ok" (arrivato al server), "coda" (senza rete: resta sul dispositivo e parte da solo), "rifiutato" (il server ha detto no: chi chiama non deve festeggiare)
   async save(it) {
     const row = this.clean(it);
     LS.set("mochi.cache", state.items);
     const { error } = await this.sb.from("items").upsert(row).then((r) => r, (e) => ({ error: { network: true, message: String(e) } }));
-    if (!error) { setSync(true); return; }
+    if (!error) { setSync(true); return "ok"; }
     if (this.manca(error)) return this.save(it);
     // errore di rete: riprova più tardi. Errore del server (limite, dato non valido): non insistere
-    if (error.network || /fetch|network|Failed/i.test(error.message || "")) { this.queue({ t: "save", it: row }); setSync(false); }
+    if (error.network || /fetch|network|Failed/i.test(error.message || "")) { this.queue({ t: "save", it: row }); setSync(false); return "coda"; }
     else {
       toast(/limite/i.test(error.message) ? "Hai raggiunto il limite di voci 🍱" : /row-level|policy/i.test(error.message) ? "Non hai più accesso a quella lista" : "Non sono riuscita a salvare");
       // riallineo con quello che c'è davvero sul server
-      setTimeout(() => loadAndRender(), 400);
+      setTimeout(() => loadAndRender(true), 400);
+      return "rifiutato";
     }
   },
   async remove(id) {
@@ -853,13 +855,15 @@ function openMascotPicker() {
    STATO E RENDER
    ========================================================= */
 const state = {
-  items: [], liste: [], umori: {}, turni: {}, turniImp: { tipi: [], ciclo: [], ciclo_inizio: null, ciclo_fine: null }, tab: "oggi", todoFilter: "tutte", noteFilter: "tutte",
+  items: [], liste: [], umori: {}, turni: {}, turniImp: { tipi: [], ciclo: [], ciclo_inizio: null, ciclo_fine: null }, tab: "oggi", todoFilter: "tutte", noteFilter: "tutte", cerca: "", fatteTutte: false,
   calMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   calSel: todayStr(), recapMonth: null, synced: true,
   spese: { voci: [], budget: null }, speseMese: null, stAperti: new Set(), giorni: new Set(), pet: { righe: [] }
 };
 
-function setSync(ok) { state.synced = ok; const el = $("#syncDot"); if (el) el.className = "sync" + (ok ? "" : " off"); }
+// Il testo accanto al pallino dice la verità: senza rete "offline", con la rete ma senza risposta dal server "non sincronizzato"
+const syncTesto = (ok) => (ok ? "sincronizzato" : navigator.onLine === false ? "offline" : "non sincronizzato");
+function setSync(ok) { state.synced = ok; const el = $("#syncDot"); if (el) { el.className = "sync" + (ok ? "" : " off"); el.innerHTML = "<i></i>" + syncTesto(ok); } }
 
 function greeting() {
   const h = new Date().getHours();
@@ -880,7 +884,7 @@ function headerUpdate() {
   $("#hello").textContent = greeting();
   const m = $("#motto"); if (m) m.innerHTML = `<span class="emo">💭 </span>${esc(fraseDelGiorno())}`;
   const d = new Date();
-  $("#today").innerHTML = `${GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getDate()} ${MESI[d.getMonth()]} ${OSPITE ? "· ospite" : ONLINE_MODE ? `· <span id="syncDot" class="sync${state.synced ? "" : " off"}"><i></i>${state.synced ? "sincronizzato" : "offline"}</span>` : "· modalità prova"}`;
+  $("#today").innerHTML = `${GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getDate()} ${MESI[d.getMonth()]} ${OSPITE ? "· ospite" : ONLINE_MODE ? `· <span id="syncDot" class="sync${state.synced ? "" : " off"}"><i></i>${syncTesto(state.synced)}</span>` : "· modalità prova"}`;
 }
 
 const byDue = (a, b) => (a.due_date || "9999") .localeCompare(b.due_date || "9999") || (a.due_time || "99").localeCompare(b.due_time || "99");
@@ -962,21 +966,55 @@ function viewOggi() {
   return `<div class="split"><div class="col-main">${h}</div><div class="col-side">${side}</div></div>`;
 }
 
+/* -------- Cerca (Da fare e Appunti): filtro in memoria su titolo, note e voci della lista da spuntare. Niente rete, niente di salvato.
+   Il campo sta FUORI da #risultati: mentre si scrive si ridisegna solo #risultati (filtri ed elenco), così il campo non perde focus né cursore.
+   state.cerca e state.fatteTutte valgono per la pagina aperta e si azzerano cambiando pagina (render). -------- */
+const cercaNorm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const cercaParole = () => { const p = cercaNorm(state.cerca).split(/\s+/).filter(Boolean); return p.length ? p : null; };
+// tutte le parole scritte devono esserci (in qualsiasi ordine), senza badare a maiuscole e accenti
+function cercaTrova(it, parole) {
+  const pm = petMarca(it);
+  const t = cercaNorm(`${it.title}\n${pm ? pm.resto : it.body || ""}\n${(Array.isArray(it.sottotask) ? it.sottotask : []).map((x) => x.t).join("\n")}`);
+  return parole.every((p) => t.includes(p));
+}
+let cercaEsito = "", cercaTab = "", cercaT = 0;
+const cercaVuoto = () => `<div class="empty"><div class="mbox">${mascot()}</div><div>Niente con questa ricerca.</div><div class="actions ospite-azioni"><button class="btn" data-act="cerca-svuota">Cancella la ricerca</button></div></div>`;
+// corpo = filtri + elenco (calcolato prima: decide anche il testo "3 risultati")
+const cercaPagina = (etichetta, corpo) => `<div class="cerca" role="search"><input class="input" type="search" id="cercaIn" value="${esc(state.cerca)}" placeholder="${etichetta}" aria-label="${etichetta}" enterkeyhint="search" maxlength="80" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="cerca-x" id="cercaX" data-act="cerca-svuota" aria-label="Cancella la ricerca"${state.cerca ? "" : " hidden"}>✕</button></div><div class="cerca-n" id="cercaN" aria-live="polite">${esc(cercaEsito)}</div><div id="risultati">${corpo}</div>`;
+// Mentre il campo Cerca ha il focus si aggiorna solo quello che sta sotto (anche per i ridisegni del minuto e del server): la tastiera del telefono resta su
+function cercaRidisegna() {
+  const r = $("#risultati"), i = $("#cercaIn"); if (!r || !i) return false;
+  r.innerHTML = state.tab === "todo" ? todoCorpo() : appuntiCorpo();
+  if (i.value !== state.cerca) i.value = state.cerca;
+  const n = $("#cercaN"); if (n && n.textContent !== cercaEsito) n.textContent = cercaEsito;
+  const x = $("#cercaX"); if (x) x.hidden = !state.cerca;
+  return true;
+}
 function viewTodo() {
-  const f = state.todoFilter;
+  const corpo = todoCorpo();
+  return state.items.some((i) => i.kind === "todo") ? cercaPagina("Cerca nelle cose da fare", corpo) : corpo;
+}
+function todoCorpo() {
+  const f = state.todoFilter, q = cercaParole();
   let list = state.items.filter((i) => i.kind === "todo");
   if (f === "lavoro" || f === "personale") list = list.filter((i) => i.area === f);
   if (f.startsWith("l:")) list = list.filter((i) => i.lista_id === f.slice(2));
+  if (q) list = list.filter((i) => cercaTrova(i, q));
+  cercaEsito = q ? (list.length ? plur(list.length, "risultato", "risultati") : "Nessun risultato") : "";
   const open = list.filter((i) => !i.done).sort(byDue);
-  const done = list.filter((i) => i.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || "")).slice(0, 15);
+  // senza ricerca: le ultime 15 completate (le altre con "Mostra tutte"); con la ricerca: tutte quelle trovate
+  const fatte = list.filter((i) => i.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+  const done = q || state.fatteTutte ? fatte : fatte.slice(0, 15);
   const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="todo-filter" data-v="${k}">${l}</button>`;
   let h = `<div class="filters">${fb("tutte", "Tutte")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
-  h += `<div class="sec"><h2>Da fare</h2><span class="count">${open.length}</span></div>`;
-  h += open.length ? `<div class="list">${open.map(itemRow).join("")}</div>`
+  if (q && !list.length) return h + cercaVuoto();
+  // con la ricerca, se ha trovato solo cose già fatte: niente "Tutto fatto!", sotto c'è l'elenco delle completate
+  if (!q || open.length) h += `<div class="sec"><h2>Da fare</h2><span class="count">${open.length}</span></div>` + (open.length ? `<div class="list">${open.map(itemRow).join("")}</div>`
     : !state.items.some((i) => i.kind === "todo") ? `<div class="empty"><div class="mbox">${mascot()}</div><div>Qui trovi le cose da fare. Scrivi come parli: <i>"chiamare il dentista domani"</i>.</div><div class="actions ospite-azioni"><button class="btn primary" data-act="new">Scrivi la prima cosa</button></div></div>`
     : !list.length ? `<div class="empty"><div class="mbox">${mascot()}</div><div>Con questo filtro non c'è niente.</div><div class="actions ospite-azioni"><button class="btn" data-act="todo-filter" data-v="tutte">Mostra tutte</button></div></div>`
-    : emptyBox(`Tutto fatto! ${MN()} è fiera di te 🌸`);
+    : emptyBox(`Tutto fatto! ${MN()} è fiera di te 🌸`));
   if (done.length) h += `<div class="sec" id="sez-completate"><h2>Completate</h2></div><div class="list">${done.map(itemRow).join("")}</div>`;
+  if (!q && fatte.length > 15) h += `<div class="cerca-piu"><button type="button" class="fbtn" data-act="fatte-tutte">${state.fatteTutte ? "Mostra solo le ultime 15" : `Mostra tutte le completate (${fatte.length})`}</button></div>`;
   return h;
 }
 
@@ -1152,7 +1190,7 @@ async function trascFine() {
   for (const v of cambiate) await store.save(v);
 }
 document.addEventListener("pointerdown", (e) => {
-  const el = e.target.closest(".notes .note"); if (!el || e.button > 0 || state.tab !== "appunti") return;
+  const el = e.target.closest(".notes .note"); if (!el || e.button > 0 || state.tab !== "appunti" || cercaParole()) return; // con la ricerca attiva si vede solo una parte: niente riordino
   trasc.el = el; trasc.x0 = e.clientX; trasc.y0 = e.clientY;
   if (e.pointerType === "touch") trasc.timer = setTimeout(() => { if (trasc.el === el) trascInizia(el, trasc.x0, trasc.y0); }, 380);
 });
@@ -1173,13 +1211,20 @@ document.addEventListener("click", (e) => { if (Date.now() - trasc.blocca < 350 
 document.addEventListener("contextmenu", (e) => { if (trasc.attivo || trasc.timer && e.target.closest(".notes .note")) e.preventDefault(); });
 
 function viewAppunti() {
-  const f = state.noteFilter;
+  const corpo = appuntiCorpo();
+  return state.items.some((i) => i.kind === "note") ? cercaPagina("Cerca negli appunti", corpo) : corpo;
+}
+function appuntiCorpo() {
+  const f = state.noteFilter, q = cercaParole();
   let list = state.items.filter((i) => i.kind === "note");
   if (f.startsWith("l:")) list = list.filter((i) => i.lista_id === f.slice(2));
   else if (f !== "tutte") list = list.filter((i) => i.area === f);
+  if (q) list = list.filter((i) => cercaTrova(i, q));
+  cercaEsito = q ? (list.length ? plur(list.length, "risultato", "risultati") : "Nessun risultato") : "";
   list.sort(ordineNote);
   const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="note-filter" data-v="${k}">${l}</button>`;
   let h = `<div class="filters">${fb("tutte", "Tutti")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
+  if (q && !list.length) return h + cercaVuoto();
   if (!list.length) return h + emptyBox("Nessun appunto. Idee, liste della spesa, password del wifi di casa della nonna... 📝");
   h += `<div class="notes">${list.map((n) => `<div class="note c${n.color || 1} ${n.pinned ? "fissa" : ""}" style="${bachecaStile(n.id)}" data-act="edit" data-id="${esc(n.id)}">
       ${n.pinned ? `<span class="pin">📌</span>` : ""}
@@ -1191,6 +1236,28 @@ function viewAppunti() {
 
 // Pagine che appartengono a un modulo: se è spento si torna a Oggi
 const PAGINA_MODULO = { turni: "turni", spese: "spese", liste: "liste", ricorrenti: "ricorrenti", focus: "focus", casa: "casa", pet: "pet" };
+/* Tastiera: il ridisegno (ogni minuto, a ogni novità dal server, al ritorno in primo piano) riscrive la pagina e il focus finirebbe sul body.
+   Prima di riscrivere ricordo chi aveva il focus DENTRO la pagina (id, oppure data-act + data-id + data-v) e dopo lo ridò all'elemento equivalente.
+   Se non c'è più, se la pagina è cambiata, se è aperta una finestra o se il focus era altrove (un campo fuori dalla pagina): non tocco niente. */
+let fuocoTab = "";
+const fuocoUguali = (el, f) => [...el.querySelectorAll("[data-act]")].filter((b) => b.dataset.act === f.act && (b.dataset.id || "") === f.id && (b.dataset.v || "") === f.v);
+function fuocoRicorda(el) {
+  const a = document.activeElement, stessa = fuocoTab === state.tab; fuocoTab = state.tab;
+  if (!stessa || !a || a === el || !el.contains(a) || $("#sheet").classList.contains("on")) return null;
+  const f = a.id ? { dom: a.id } : a.dataset.act ? { act: a.dataset.act, id: a.dataset.id || "", v: a.dataset.v || "" } : null;
+  if (!f) return null;
+  if (f.act) f.n = fuocoUguali(el, f).indexOf(a);
+  if (/^(INPUT|TEXTAREA)$/.test(a.tagName)) { try { f.da = a.selectionStart; f.a = a.selectionEnd; } catch {} }
+  return f;
+}
+function fuocoRimetti(el, f) {
+  if (!f || (document.activeElement && document.activeElement !== document.body)) return;
+  let n = null;
+  if (f.dom) { n = document.getElementById(f.dom); if (n && !el.contains(n)) n = null; }
+  else { const u = fuocoUguali(el, f); n = u[f.n] || (u.length === 1 ? u[0] : null); }
+  if (!n) return;
+  try { n.focus({ preventScroll: true }); if (f.da != null && n.setSelectionRange) n.setSelectionRange(f.da, f.a); } catch {}
+}
 function render() {
   applyCustom();
   headerUpdate();
@@ -1198,9 +1265,17 @@ function render() {
   // fuori dalla pagina Concentrazione non resta nessuna sessione a metà (timer, schermo acceso)
   if (state.tab !== "focus" && focusS) focusChiudi();
   if (!mod("liste")) { if (state.todoFilter.startsWith("l:")) state.todoFilter = "tutte"; if (state.noteFilter.startsWith("l:")) state.noteFilter = "tutte"; }
-  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, pet: viewPet, menu: viewMenu }[state.tab] || viewOggi)();
+  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, pet: viewPet, menu: viewMenu }[state.tab] || viewOggi);
+  // Cerca: vale per la pagina aperta, cambiando pagina si azzera. Se si sta scrivendo nel campo si ridisegna solo quello che c'è sotto
+  const stessaPagina = cercaTab === state.tab; cercaTab = state.tab;
+  if (!stessaPagina) { state.cerca = ""; state.fatteTutte = false; clearTimeout(cercaT); }
+  const soloSotto = stessaPagina && (state.tab === "todo" || state.tab === "appunti") && document.activeElement && document.activeElement.id === "cercaIn";
   const el = $("#view");
-  el.innerHTML = `<div class="view">${v}</div>`;
+  if (!soloSotto || !cercaRidisegna()) {
+    const fuoco = fuocoRicorda(el);
+    el.innerHTML = `<div class="view">${v()}</div>`;
+    fuocoRimetti(el, fuoco);
+  }
   aggiornaSlotBarra();
   document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => { const on = b.dataset.tab === state.tab; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   // telefono: se la pagina aperta non è nella barra in basso (né Oggi né uno dei due posti), resta accesa la voce Menu
@@ -1250,6 +1325,9 @@ function openSheet(html) {
 function closeSheet() {
   if (listaFlush) { const f = listaFlush; listaFlush = null; try { f(); } catch {} listaId = null; } // prima si salva, poi si scorda la lista
   const sh = $("#sheet");
+  // Voce NUOVA chiusa senza salvare (X, Annulla, Esc, sfondo, trascinamento) con qualcosa di scritto: la bozza si può riprendere dal toast.
+  // Dopo "Salva" la bozza è già stata messa via (draft = null in saveDraft), quindi qui non scatta.
+  const persa = draft && draft._new && $("#fTitle") && (String(draft.title || "").trim() || String(draft.body || "").trim() || (draft.sottotask || []).length) ? { b: draft, adv: advanced } : null;
   const avevaFocus = sh.contains(document.activeElement) || $("#toast").contains(document.activeElement); // anche da "Annulla" del toast, tappa del giro di Tab
   if (avevaFocus) document.activeElement.blur();
   $("#scrim").classList.remove("on"); sh.classList.remove("on"); sh.inert = true; document.body.classList.remove("sheet-open"); draft = null;
@@ -1260,6 +1338,7 @@ function closeSheet() {
   if (askResolve) { const r = askResolve; askResolve = null; r(null); }
   // finestre automatiche in attesa (novità, invito alla Home): una alla volta, dopo questa
   if (sheetQueue.length) { const next = sheetQueue.shift(); setTimeout(next, 450); }
+  if (persa) toastAnnulla("Bozza scartata", () => whenSheetFree(() => { draft = persa.b; advanced = persa.adv; drawEditor(); setTimeout(() => $("#fTitle")?.focus(), 250); }));
 }
 // Le finestre che si aprono da sole aspettano il loro turno invece di andare perse
 const sheetQueue = [];
@@ -1399,7 +1478,7 @@ function drawSt(focusNew = false) {
 let listaId = null, listaRighe = [], listaFlush = null, listaMenu = false;
 const listaItem = () => state.items.find((x) => x.id === listaId);
 function apriListaSpesa(it) {
-  listaId = it.id; listaMenu = false; listaRighe = (Array.isArray(it.sottotask) ? it.sottotask : []).map((x) => ({ ...x }));
+  listaId = it.id; listaMenu = false; listaCodaDetta = false; listaRighe = (Array.isArray(it.sottotask) ? it.sottotask : []).map((x) => ({ ...x }));
   listaFlush = () => { const i = $("#lsNuovo"); const v = i ? i.value.trim() : ""; if (v) listaRighe.push({ id: nuovoStId(new Set(listaRighe.map((x) => x.id))), t: taglia(v, 120), f: false }); listaSalva(); };
   openSheet(listaHtml(it));
   $("#sheet").classList.add("lista-full");
@@ -1412,7 +1491,8 @@ function listaSalva(extra = {}) {
   const fatto = tutte !== !!it.done ? { done: tutte, done_at: tutte ? new Date().toISOString() : null } : {};
   Object.assign(it, { sottotask: listaRighe.length ? listaRighe.map((x) => ({ ...x })) : null, updated_at: new Date().toISOString() }, fatto, extra);
   render();
-  Promise.resolve(store.save(it)).catch(() => toast("Non sono riuscita a salvare la lista"));
+  // senza rete lo dico una volta sola per lista aperta (e mai sopra un "Annulla" ancora in vista)
+  Promise.resolve(store.save(it)).then((e) => { if (e === "coda" && !listaCodaDetta && !toastUndo) { listaCodaDetta = true; toast(MSG_CODA); } }).catch(() => toast("Non sono riuscita a salvare la lista"));
 }
 // La data della lista (prima non si poteva cambiare): oggi, domani, nessuna o una a scelta; il promemoria si ricalcola come nella modifica normale
 function listaData(v) {
@@ -1430,6 +1510,14 @@ function listaRedraw(focusId) {
   const sh = $("#sheet"), top = sh.scrollTop, bar = sh.querySelector(".sheet-bar");
   sh.innerHTML = (bar ? bar.outerHTML : "") + listaHtml(it); sh.scrollTop = top; listaBind();
   if (focusId) $("#" + focusId)?.focus({ preventScroll: true });
+}
+// "Annulla" dopo aver tolto una voce: torna allo stesso posto (anche se nel frattempo la lista è stata chiusa)
+function listaRimetti(lid, riga, k) {
+  const it = state.items.find((x) => x.id === lid); if (!it) return;
+  const aperta = listaId === lid, pId = listaId, pR = listaRighe;
+  if (!aperta) { listaId = lid; listaRighe = (Array.isArray(it.sottotask) ? it.sottotask : []).map((x) => ({ ...x })); }
+  if (!listaRighe.some((r) => r.id === riga.id) && listaRighe.length < MAX_ST) { listaRighe.splice(Math.min(k, listaRighe.length), 0, { ...riga }); listaSalva(); }
+  if (aperta) listaRedraw(); else { listaId = pId; listaRighe = pR; }
 }
 function listaAggiungi(v) {
   const t = taglia(String(v || "").trim(), 120); if (!t) return false;
@@ -1499,12 +1587,16 @@ function previewParse() {
   h.innerHTML = bits.length ? `Ho capito: ${bits.join(" · ")}` : "&nbsp;";
 }
 
+// Dopo un salvataggio: il messaggio di successo solo se è arrivato davvero; senza rete lo dico chiaro; se il server ha rifiutato resta l'errore già mostrato
+const MSG_CODA = "Salvato su questo dispositivo: lo invio appena torna la rete";
+function toastEsito(esito, ok) { if (esito === "coda") toast(MSG_CODA); else if (esito !== "rifiutato" && ok) toast(ok); }
 async function saveDraft() {
   if (!draft) return;
   // una voce scritta nella lista ma senza premere Invio non va persa
   const sn = $("#stNew"); if (sn && sn.value.trim() && draft.sottotask.length < MAX_ST) draft.sottotask.push({ id: nuovoStId(new Set(draft.sottotask.map((x) => x.id))), t: taglia(sn.value.trim(), 120), f: false });
   const d = { ...draft }; const dataDefault = !!d._dateDefault; delete d._dateDefault;
   const t = $("#fTitle"); if (t) d.title = t.value;
+  const bozza = { ...draft, title: d.title }; // com'era scritta: se il server rifiuta, l'editor si riapre così
   // Interpreta il testo rapido solo per le nuove voci (senza sovrascrivere scelte manuali)
   if (d._new && d.kind !== "note") {
     const p = parseQuick(d.title || "");
@@ -1535,9 +1627,20 @@ async function saveDraft() {
   if (isNew && d.kind === "note") { const pos = state.items.filter((i) => i.kind === "note" && i.posizione != null).map((i) => i.posizione); if (pos.length) d.posizione = Math.min(...pos) - 1000; }
   Object.keys(d).filter((k) => k.startsWith("_")).forEach((k) => delete d[k]);
   const i = state.items.findIndex((x) => x.id === d.id);
+  const prec = i >= 0 ? state.items[i] : null;
   i >= 0 ? (state.items[i] = d) : state.items.push(d);
+  draft = null; // salvata: la chiusura qui sotto non è un annullamento
   closeSheet(); render();
-  await store.save(d);
+  const esito = await store.save(d);
+  if (esito === "rifiutato") {
+    // il server ha detto no (limite, lista non più accessibile, dato non valido): la voce torna com'era e la bozza si riapre, così il testo non va perso
+    const k = state.items.indexOf(d);
+    if (k >= 0) { if (prec) state.items[k] = prec; else state.items.splice(k, 1); LS.set("mochi.cache", state.items); }
+    render();
+    if (!$("#sheet").classList.contains("on")) { draft = bozza; drawEditor(); }
+    return;
+  }
+  if (esito === "coda") { toast(MSG_CODA); return; }
   if (isNew) {
     if (d.kind !== "event") festaParola(d.title);
     setTimeout(() => cheer(1200), 250);
@@ -1650,7 +1753,7 @@ function openSettings(gruppo) {
   const rName = ONLINE_MODE ? `<div class="setrow"><div><b>Il tuo nome</b><small>${esc(NOME || "Non impostato")} · ${esc(store.user?.email || "")}</small></div><button class="fbtn" data-act="set-name">Cambia</button></div>` : "";
   const rDati = ONLINE_MODE ? `<div class="setrow"><div><b>Esci</b><small>Su questo dispositivo</small></div><button class="fbtn" data-act="logout">Esci</button></div>
     <div class="setrow"><div><b>Privacy</b><small>Come vengono trattati i tuoi dati</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
-    <div class="setrow"><div><b style="color:var(--danger)">Elimina account</b><small>Cancella per sempre account e dati</small></div><button class="fbtn" style="color:var(--danger)" data-act="delete-account">Elimina</button></div>` : OSPITE ? `<div class="setrow"><div><b>Privacy</b><small>Come ospite le tue cose restano su questo dispositivo</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
+    <div class="setrow"><div><b style="color:var(--danger)">Elimina account</b><small>Elimina per sempre account e dati</small></div><button class="fbtn" style="color:var(--danger)" data-act="delete-account">Elimina</button></div>` : OSPITE ? `<div class="setrow"><div><b>Privacy</b><small>Come ospite le tue cose restano su questo dispositivo</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
     <div class="setrow"><div><b>Esci</b><small>Dalla modalità ospite</small></div><button class="fbtn" data-act="ospite-esci">Esci</button></div>` : `<div class="setrow"><div><b>Modalità prova</b><small>I dati restano solo su questo dispositivo</small></div></div>`;
   openSheet(`
     <h2><span class="mbox">${mascot()}</span>Impostazioni</h2>
@@ -2089,8 +2192,9 @@ const UmoriStore = {
     if (error) throw error;
   }
 };
-async function caricaUmori() {
-  try { state.umori = await UmoriStore.carica(); LS.set("mochi.umoriCache", state.umori); }
+// spento = modulo spento (con account): niente query, restano i dati dell'ultima volta (vedi caricaTutto)
+async function caricaUmori(spento) {
+  try { if (spento) throw 0; state.umori = await UmoriStore.carica(); LS.set("mochi.umoriCache", state.umori); }
   catch { state.umori = LS.get("mochi.umoriCache", {}) || {}; }
 }
 // Riquadro nella pagina Oggi
@@ -2121,7 +2225,7 @@ function apriUmore(giorno, dalGiardino = false) {
   openSheet(`<h2><span class="mbox">${mascot()}</span>${giorno === todayStr() ? "Com'è andata oggi?" : `Com'è andato ${GIORNI[d.getDay()]} ${d.getDate()}?`}</h2>
     <div class="facce grandi">${[1, 2, 3, 4, 5].map((l) => `<button class="${u.livello === l ? "on" : ""}" data-act="umore-scegli" data-v="${l}">${faccina(l, 46)}<small>${UMORI[l].nome}</small></button>`).join("")}</div>
     <div class="field"><label>Due parole, se vuoi</label><textarea class="input" id="uNota" maxlength="200" placeholder="Cosa ti ha fatto sorridere? O cosa ti ha pesato?">${esc(u.nota || "")}</textarea></div>
-    <div class="actions">${state.umori[giorno] ? `<button class="btn danger" data-act="umore-togli" data-id="${giorno}">Togli</button>` : ""}<button class="btn" data-act="umore-annulla">Annulla</button><button class="btn primary" data-act="umore-salva" data-id="${giorno}">Salva</button></div>`);
+    <div class="actions">${state.umori[giorno] ? `<button class="btn danger" data-act="umore-togli" data-id="${giorno}">Elimina</button>` : ""}<button class="btn" data-act="umore-annulla">Annulla</button><button class="btn primary" data-act="umore-salva" data-id="${giorno}">Salva</button></div>`);
   umoreScelto = u.livello;
 }
 let umoreScelto = 0;
@@ -2135,7 +2239,7 @@ async function salvaUmoreSheet(giorno) {
 }
 async function togliUmore(giorno) {
   const prima = state.umori[giorno]; delete state.umori[giorno]; tornaDaUmore(); render();
-  try { await UmoriStore.togli(giorno); } catch { state.umori[giorno] = prima; render(); toast("Non sono riuscita a toglierlo"); }
+  try { await UmoriStore.togli(giorno); } catch { state.umori[giorno] = prima; render(); toast("Non sono riuscita a eliminarlo"); }
 }
 
 // ---- I fiori del giardino: una tabella sola (id -> disegno). Per cambiare un fiore del set "un fiore per ogni umore"
@@ -2511,8 +2615,8 @@ const TurniStore = {
     if (error) throw error;
   }
 };
-async function caricaTurni() {
-  try { const r = await TurniStore.carica(); state.turniImp = r.imp; state.turni = r.giorni; LS.set("mochi.turniCache", r); }
+async function caricaTurni(spento) {
+  try { if (spento) throw 0; const r = await TurniStore.carica(); state.turniImp = r.imp; state.turni = r.giorni; LS.set("mochi.turniCache", r); }
   catch { const c = LS.get("mochi.turniCache", null); state.turniImp = cleanTurniImp(c?.imp); state.turni = c?.giorni && typeof c.giorni === "object" ? c.giorni : {}; }
 }
 const turniAttivi = () => mod("turni") && state.turniImp.tipi.length > 0;
@@ -2606,7 +2710,7 @@ function apriTurnoGiorno(g) {
   openSheet(`<h2><span class="mbox">${mascot()}</span>${GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getDate()} ${MESI[d.getMonth()]}</h2>
     <div class="tpicks">${state.turniImp.tipi.map(btn).join("")}${btn(RIPOSO)}</div>
     ${att?.manuale ? `<p class="hint">${daCiclo != null ? `Secondo il ciclo sarebbe: <b>${esc(tipoDa(daCiclo)?.nome || "nessun turno")}</b>` : "Segnato a mano"}</p>` : ""}
-    <div class="actions">${att?.manuale ? `<button class="btn" data-act="turno-togli" data-v="${g}">${daCiclo != null ? "Segui il ciclo" : "Togli"}</button>` : ""}<button class="btn primary" data-act="close">Fatto</button></div>`);
+    <div class="actions">${att?.manuale ? `<button class="btn" data-act="turno-togli" data-v="${g}">${daCiclo != null ? "Segui il ciclo" : "Elimina"}</button>` : ""}<button class="btn primary" data-act="close">Fatto</button></div>`);
 }
 async function scegliTurno(g, k) {
   if (!RE_YMD.test(g) || !(k === "" || tipoDa(k))) return;
@@ -2620,7 +2724,7 @@ async function scegliTurno(g, k) {
 async function togliTurno(g) {
   const prima = state.turni[g]; delete state.turni[g]; closeSheet(); render();
   try { await TurniStore.togli(g); LS.set("mochi.turniCache", { imp: state.turniImp, giorni: state.turni }); }
-  catch { state.turni[g] = prima; render(); toast("Non sono riuscita a toglierlo"); }
+  catch { state.turni[g] = prima; render(); toast("Non sono riuscita a eliminarlo"); }
 }
 async function salvaImpTurni(nuove, msg) {
   const prima = state.turniImp; state.turniImp = cleanTurniImp(nuove);
@@ -2647,7 +2751,7 @@ function disegnaTipoTurno() {
       <div class="field"><label>Fine</label><input class="input" type="time" id="tFine" value="${d.fine}"></div>
       <div class="field"><label>Pausa</label><select class="input" id="tPausa">${PAUSE.map((p) => `<option value="${p}" ${d.pausa === p ? "selected" : ""}>${p ? `${p} min` : "Nessuna"}</option>`).join("")}</select></div></div>
       <p class="hint" id="tOre"></p>` : ""}
-    <div class="actions">${d.k ? `<button class="btn danger" data-act="tipo-elimina">Elimina</button>` : ""}<button class="btn" data-act="tipo-indietro">Indietro</button><button class="btn primary" data-act="tipo-salva">Salva</button></div>`);
+    <div class="actions">${d.k ? `<button class="btn danger" data-act="tipo-elimina">Elimina</button>` : ""}<button class="btn" data-act="tipo-indietro">Annulla</button><button class="btn primary" data-act="tipo-salva">Salva</button></div>`);
   const leggi = () => { d.nome = $("#tNome").value; d.sigla = $("#tSigla").value; if ($("#tIni")) { d.inizio = $("#tIni").value; d.fine = $("#tFine").value; d.pausa = +$("#tPausa").value; } };
   const ore = () => { leggi(); const o = $("#tOre"); if (o) { const c = cleanTipo({ ...d, k: "x" }); o.textContent = c.inizio ? `${fmtOre(minutiTipo(c))} di lavoro${c.fine <= c.inizio ? " (finisce il giorno dopo)" : ""}` : "Controlla gli orari"; } };
   $("#sheet").querySelectorAll("input,select").forEach((el) => el.addEventListener("input", ore));
@@ -2806,8 +2910,8 @@ const SpeseStore = {
     if (error) throw error;
   }
 };
-async function caricaSpese() {
-  try { state.spese = await SpeseStore.carica(); LS.set("mochi.speseCache", state.spese); }
+async function caricaSpese(spento) {
+  try { if (spento) throw 0; state.spese = await SpeseStore.carica(); LS.set("mochi.speseCache", state.spese); }
   catch { const c = LS.get("mochi.speseCache", null); state.spese = { voci: (Array.isArray(c?.voci) ? c.voci : []).map(cleanSpesa).filter(Boolean), budget: cleanBudget(c?.budget) }; }
 }
 const speseDelMese = (m) => { const k = monthKey(m); return state.spese.voci.filter((v) => v.giorno.startsWith(k)); };
@@ -3308,7 +3412,7 @@ async function eseguiPassaggio(btn) {
     if (d.pet.length) await portaPetOspite(d.pet);
     // tutto arrivato: solo adesso si svuota il dispositivo
     finePassaggio();
-    closeSheet(); await loadAndRender();
+    closeSheet(); await loadAndRender(true);
     const n = quanteCose(d);
     openSheet(`<div class="recap"><div class="mbox">${mascot("happy")}</div><h2 class="fred">Fatto!</h2>
       <div class="say">Ho portato nell'account ${plur(n, "cosa", "cose")}${giaPieno ? ", insieme a quelle che c'erano già" : ""}. Ora le ritrovi su tutti i tuoi dispositivi 💗</div></div>
@@ -3613,8 +3717,7 @@ async function salvaPetScad() {
   const prima = it.remind_at; it.remind_at = computeRemind(it); if (it.remind_at !== prima) it.reminded = false;
   if (nuova) state.items.push(it);
   closeSheet(); petScDraft = null; render();
-  await store.save(it);
-  toast(nuova ? "Scadenza salvata 🐾" : "Scadenza aggiornata");
+  toastEsito(await store.save(it), nuova ? "Scadenza salvata 🐾" : "Scadenza aggiornata");
   if (nuova && it.remind_at && ONLINE_MODE) maybeAskPush();
 }
 async function eliminaPetScad() {
@@ -3633,7 +3736,7 @@ async function petProponiProssima(it) {
   if (!si) return;
   const n = newItem({ kind: "todo", title: it.title, body: petMarcaTesto({ tipo: m.tipo, rep: m.rep, anchor: m.anchor || +it.due_date.slice(8, 10) }) + m.resto, animale_id: it.animale_id || null, due_date: prox, remind: ["none", "morning", "1440"].includes(it.remind) ? it.remind : "morning", lista_id: null, area: "personale" });
   n.remind_at = computeRemind(n);
-  state.items.push(n); render(); await store.save(n); toast("Prossima scadenza aggiunta 🐾");
+  state.items.push(n); render(); toastEsito(await store.save(n), "Prossima scadenza aggiunta 🐾");
 }
 // Spese del pet: le spese esistenti con categoria "animali" (nessuna categoria nuova, il DB non ne accetta altre). Solo con il modulo spese acceso.
 const PET_CAT_SPESA = "animali";
@@ -5127,6 +5230,7 @@ function maybeAskPush() {
 
 async function exportData() {
   // chi usa il pet: nel file anche la scheda e le righe di routine e pesi (dal server, con un tempo massimo; senza rete quelle del dispositivo)
+  await caricaModuliSpenti(); // nel backup ci va tutto, anche i dati dei moduli spenti
   const usaPet = petPresente(CUSTOM.pet) || mod("pet") || state.pet.righe.length > 0;
   const petRighe = usaPet ? await Promise.race([petTutteLeRighe(), new Promise((ok) => setTimeout(() => ok(petUnici(state.pet.righe)), 5000))]) : [];
   const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), voci: state.items, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni },
@@ -5257,6 +5361,16 @@ async function spuntaVoce(it, el) {
   await store.save(it);
   if (it.done) petProponiProssima(it);
 }
+// Campo Cerca: lo stato si aggiorna subito, l'elenco dopo una piccola pausa (con tante voci la scrittura resta fluida)
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "cercaIn") return;
+  state.cerca = e.target.value.slice(0, 80);
+  clearTimeout(cercaT); cercaT = setTimeout(render, 120);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.target.id !== "cercaIn") return;
+  e.preventDefault(); clearTimeout(cercaT); render(); e.target.blur(); // Invio: risultati subito e tastiera giù
+});
 // Il + e la lettera N fanno la stessa cosa: nuova voce, con la data di oggi (in Agenda, del giorno scelto)
 // Il + è contestuale: in Spese apre subito una nuova spesa, in Turni il turno di oggi, in Agenda un appuntamento del giorno scelto, in Appunti un appunto
 function nuovaVoce() {
@@ -5313,7 +5427,12 @@ document.addEventListener("click", async (e) => {
     case "st-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); if (draft) drawSt(); break;
     case "st-sugg": if (draft && v) aggiungiSt(v); break;
     case "ls-spunta": { const x = listaRighe.find((r) => r.id === v); if (x) { x.f = !x.f; listaSalva(); listaRedraw(); } break; }
-    case "ls-del": listaRighe = listaRighe.filter((r) => r.id !== v); listaSalva(); listaRedraw(); break;
+    case "ls-del": {
+      const k = listaRighe.findIndex((r) => r.id === v); if (k < 0) break;
+      const tolta = listaRighe[k], lid = listaId;
+      listaRighe = listaRighe.filter((r) => r.id !== v); listaSalva(); listaRedraw();
+      toastAnnulla("Voce tolta", () => listaRimetti(lid, tolta, k)); break;
+    }
     case "ls-plus": { const n = $("#lsNuovo"); if (!n) break; if (listaAggiungi(n.value)) listaRedraw("lsNuovo"); else n.focus(); break; }
     case "ls-sugg": if (listaAggiungi(v)) listaRedraw("lsNuovo"); break;
     case "ls-data": if (["oggi", "domani", "nessuna"].includes(v)) listaData(v === "oggi" ? todayStr() : v === "domani" ? ymd(addDays(new Date(), 1)) : ""); break;
@@ -5383,6 +5502,7 @@ document.addEventListener("click", async (e) => {
       // I ricorrenti li manda il server: spegnendo il modulo vanno messi in pausa, altrimenti continuerebbero ad arrivare
       if (v === "ricorrenti" && ONLINE_MODE) { const r = await moduloRicorrenti(acceso); if (r === "annulla") { riapriImpostazioni(); break; } if (r === "errore") break; }
       if (v === "focus" && !acceso) focusChiudi();
+      if (acceso && moduloSpento(v) && CARICA_MODULO[v]) await CARICA_MODULO[v](); // modulo che si riaccende: prima arrivano i suoi dati, poi compare
       await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: acceso } });
       riapriImpostazioni();
       if (v === "ricorrenti" && acceso && ricorrenti.some((x) => !x.attiva)) toast("I tuoi promemoria ricorrenti sono in pausa: riattivali dalla pagina Ricorrenti");
@@ -5394,7 +5514,7 @@ document.addEventListener("click", async (e) => {
     case "pick-pronomi": { const p = v === "non" ? "" : v; if (PRONOMI.some((x) => x[0] === p)) { await saveCustom({ pronomi: p }); riapriImpostazioni(); } break; }
     case "onb-pal": if (PALETTE.some((x) => x[0] === v)) { await saveCustom({ colore: v }); apriBenvenuto(1, { act, v }); cheer(); } break;
     case "onb-pron": if (PRONOMI.some((x) => x[0] === v)) { await saveCustom({ pronomi: v }); apriBenvenuto(2, { act, v }); } break;
-    case "onb-mod": if (ONB_MODULI.includes(v)) { await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: !CUSTOM.moduli[v] } }); apriBenvenuto(3, { act, v }); } break;
+    case "onb-mod": if (ONB_MODULI.includes(v)) { if (moduloSpento(v) && CARICA_MODULO[v]) await CARICA_MODULO[v](); await saveCustom({ moduli: { ...CUSTOM.moduli, [v]: !CUSTOM.moduli[v] } }); apriBenvenuto(3, { act, v }); } break;
     case "onb-salta": closeSheet(); break;
     case "onb-indietro": apriBenvenuto(Math.max(1, (+v || 2) - 1)); break;
     case "onb-avanti": { const n = +v; if (n >= 3) { closeSheet(); cheer(); setTimeout(() => toast("Tocca il + e scrivi la prima cosa 🍙"), 400); } else apriBenvenuto(n + 1); break; }
@@ -5522,6 +5642,8 @@ document.addEventListener("click", async (e) => {
     }
     case "ask-cancel": finishAsk(false); break;
     case "todo-filter": state.todoFilter = v; render(); break;
+    case "cerca-svuota": clearTimeout(cercaT); state.cerca = ""; render(); $("#cercaIn")?.focus({ preventScroll: true }); break;
+    case "fatte-tutte": state.fatteTutte = !state.fatteTutte; render(); break;
     case "note-filter": state.noteFilter = v; render(); break;
     case "cal-move": state.calMonth = new Date(state.calMonth.getFullYear(), state.calMonth.getMonth() + +v, 1); render(); break;
     case "cal-sel": state.calSel = v; render(); break;
@@ -5590,11 +5712,32 @@ function showApp() {
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden"); $("#nav").classList.remove("hidden");
 }
-async function loadAndRender() {
+// Antirimbalzo: tornare in primo piano più volte di fila non deve rifare tutte le query.
+// - un caricamento già in corso viene riusato;
+// - senza "forza" si salta se l'ultimo è finito da meno di 5 secondi;
+// - con "forza" (avvio, accesso, dopo un salvataggio rifiutato, ritorno della rete, passaggio da ospite) si carica sempre: se uno è già in corso ne parte un altro subito dopo, uno solo.
+let caricoInCorso = null, caricoDopo = null, caricoFinito = 0;
+const CARICA_MODULO = { umore: () => caricaUmori(), turni: () => caricaTurni(), spese: () => caricaSpese() };
+const moduloSpento = (k) => ONLINE_MODE && !mod(k); // da ospite è tutto sul dispositivo: si carica sempre
+// i dati dei moduli spenti, presi dal server adesso (al massimo 5 secondi: senza rete valgono quelli del dispositivo)
+const caricaModuliSpenti = () => Promise.race([Promise.all(Object.keys(CARICA_MODULO).filter(moduloSpento).map((k) => CARICA_MODULO[k]())), new Promise((ok) => setTimeout(ok, 5000))]);
+function loadAndRender(forza) {
+  if (caricoInCorso) {
+    if (!forza) return caricoInCorso;
+    if (!caricoDopo) { const poi = () => { caricoDopo = null; return loadAndRender(true); }; caricoDopo = caricoInCorso.then(poi, poi); }
+    return caricoDopo;
+  }
+  if (!forza && Date.now() - caricoFinito < 5000) return Promise.resolve();
+  const p = caricaTutto().finally(() => { if (caricoInCorso === p) caricoInCorso = null; caricoFinito = Date.now(); });
+  return (caricoInCorso = p);
+}
+async function caricaTutto() {
   if (ONLINE_MODE && store.user) await loadListe();
-  await caricaUmori();
-  await caricaTurni();
-  await caricaSpese();
+  // Moduli spenti: le loro query non partono (restano i dati dell'ultima volta, dalla cache del dispositivo).
+  // Si ricaricano dal server appena servono: quando il modulo si riaccende (case "modulo", benvenuto) e prima del backup.
+  await caricaUmori(moduloSpento("umore"));
+  await caricaTurni(moduloSpento("turni"));
+  await caricaSpese(moduloSpento("spese"));
   state.items = await store.list();
   await caricaAnimali();
   petDaCache();
@@ -5653,7 +5796,7 @@ async function boot() {
   const th = LS.get("mochi.theme", "auto"); if (th !== "auto") document.documentElement.dataset.theme = th;
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-  if (!ONLINE_MODE) { showApp(); await loadAndRender(); const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
+  if (!ONLINE_MODE) { showApp(); await loadAndRender(true); const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
     // ospite con un link d'invito: l'invito resta da parte (lo propongo dopo l'accesso)
     eseguiAzione();
     if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (onb) { /* il benvenuto ha già segnato le novità come viste */ } else if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); if (!onb) { maybeBiscotto(); festeApri(); } return; }
@@ -5672,7 +5815,7 @@ async function startOnline() {
   showApp();
   state.liste = LS.get("mochi.liste", []); if (!Array.isArray(state.liste)) state.liste = [];
   state.items = normalizeAll(LS.get("mochi.cache", [])); state.giorni = new Set(giorniCache()); render();
-  await loadAndRender();
+  await loadAndRender(true);
   const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
   eseguiAzione();
   if (!onb) { maybeShowNovita(); maybeBiscotto(); festeApri(); }
@@ -5690,7 +5833,8 @@ async function startOnline() {
   });
   // Quando l'app torna in primo piano (es. da iPhone dopo ore) ricarica i dati
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadAndRender(); });
-  window.addEventListener("online", () => loadAndRender());
+  window.addEventListener("online", () => loadAndRender(true));
+  window.addEventListener("offline", () => setSync(false)); // la rete è caduta: lo dico subito, senza aspettare il prossimo salvataggio
 }
 
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
@@ -5778,6 +5922,10 @@ $("#loginForm").addEventListener("submit", async (e) => {
 
 // aggiorna saluto e "rimaste indietro" ogni minuto
 // (la pagina Concentrazione si aggiorna da sola ogni secondo: ridisegnarla farebbe ripartire le animazioni)
-setInterval(() => { if (!$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden") && state.tab !== "focus") render(); }, 60000);
+// con la pagina nascosta il giro si salta (niente lavoro a vuoto in sottofondo) e si recupera appena torna visibile
+let giroSaltato = false;
+function giroMinuto() { if (!$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden") && state.tab !== "focus") render(); }
+setInterval(() => { if (document.hidden) { giroSaltato = true; return; } giroMinuto(); }, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && giroSaltato) { giroSaltato = false; giroMinuto(); } });
 
 boot();

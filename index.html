@@ -205,6 +205,14 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
 #sheet h2[tabindex="-1"]:focus{outline:none}
 .onb-az .btn{flex:1 1 auto;padding-left:6px;padding-right:6px;white-space:nowrap}
 .onb-pron{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
+.cerca{position:relative;margin:0 0 8px}
+.cerca .input{width:100%;padding-right:48px;-webkit-appearance:none;appearance:none}
+.cerca input[type="search"]::-webkit-search-cancel-button,.cerca input[type="search"]::-webkit-search-decoration{-webkit-appearance:none;display:none}
+.cerca-x{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;font:inherit;font-size:16px;line-height:1;color:var(--ink2);cursor:pointer}
+.cerca-x[hidden]{display:none}
+.cerca-n{margin:0 4px 6px;font-size:13px;font-weight:700;color:var(--ink2)}
+.cerca-n:empty{display:none}
+.cerca-piu{text-align:center;margin:12px 0 4px}
 button.stat{width:100%;font:inherit;color:inherit;cursor:pointer;position:relative}
 /* indizio "si può toccare": una freccina nell'angolo, solo disegno (nessun testo), non sposta niente */
 button.stat::after{content:"";position:absolute;top:9px;right:9px;width:6px;height:6px;border-top:2px solid currentColor;border-right:2px solid currentColor;border-radius:1px;transform:rotate(45deg);opacity:.4;pointer-events:none}
