@@ -5897,7 +5897,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
     if (loginMode !== "forgot" && pass.length < 8) throw new Error("La password deve avere almeno 8 caratteri");
     if (loginMode === "login") {
       try { await store.login(email, pass); } catch (x) {
-        throw new Error(/confirm/i.test(x.message) ? "Prima conferma l'email: ti ho mandato un link 📬" : "Email o password non corrette 🙈");
+        throw new Error(/confirm/i.test(x.message) ? "Prima conferma l'email: ti ho mandato un link 📬 Se non lo vedi, guarda anche in Spam." : "Email o password non corrette 🙈");
       }
       startOnline();
     } else if (loginMode === "signup") {
@@ -5907,10 +5907,10 @@ $("#loginForm").addEventListener("submit", async (e) => {
         throw new Error(/registered|exists/i.test(x.message) ? "Questa email ha già un account" : /signup.*disabled|not allowed/i.test(x.message) ? "Le registrazioni sono chiuse" : x.message);
       });
       if (r === "logged") startOnline();
-      else { setLoginMode("login"); $("#lEmail").value = email; $("#lErr").style.color = "var(--mint-d)"; $("#lErr").textContent = "Ti ho mandato un'email: apri il link e poi entra 📬"; }
+      else { setLoginMode("login"); $("#lEmail").value = email; $("#lErr").style.color = "var(--mint-d)"; $("#lErr").textContent = "Ti ho mandato un'email: apri il link e poi entra 📬 Se non la vedi, guarda anche in Spam."; }
     } else if (loginMode === "forgot") {
       await store.forgot(email);
-      setLoginMode("login"); $("#lEmail").value = email; $("#lErr").style.color = "var(--mint-d)"; $("#lErr").textContent = "Fatto! Controlla la posta 📬";
+      setLoginMode("login"); $("#lEmail").value = email; $("#lErr").style.color = "var(--mint-d)"; $("#lErr").textContent = "Fatto! Controlla la posta 📬 Se non la vedi, guarda anche in Spam.";
     } else if (loginMode === "newpass") {
       await store.newPassword(pass);
       history.replaceState(null, "", location.pathname);
