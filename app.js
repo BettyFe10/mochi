@@ -941,7 +941,7 @@ function viewOggi() {
   h += `<div class="stats">
     <button type="button" class="stat" data-tab="agenda" aria-label="${ev.length} ${unoO(ev.length, "appuntamento", "appuntamenti")} oggi: apri l'agenda"><b>${ev.length}</b><span>${unoO(ev.length, "appuntamento", "appuntamenti")}</span></button>
     <button type="button" class="stat" data-tab="todo" aria-label="${todo.length + late.length} da fare: apri la lista"><b>${todo.length + late.length}</b><span>da fare</span></button>
-    <button type="button" class="stat" data-tab="todo" aria-label="${doneT.length} ${unoO(doneT.length, "fatta", "fatte")} oggi: apri la lista"><b>${doneT.length}</b><span>${unoO(doneT.length, "fatta", "fatte")} oggi</span></button></div>`;
+    <button type="button" class="stat" data-tab="todo" data-scroll="sez-completate" aria-label="${doneT.length} ${unoO(doneT.length, "fatta", "fatte")} oggi: apri la lista"><b>${doneT.length}</b><span>${unoO(doneT.length, "fatta", "fatte")} oggi</span></button></div>`;
   h += riepilogoCard();
   { const tu = turnoDi(t); if (tu && tu.k !== "") h += rigaTurno(t, true); }
   // Prima le cose di oggi, poi serie, umore e pancino. Se non c'è niente, una riga sola.
@@ -976,7 +976,7 @@ function viewTodo() {
     : !state.items.some((i) => i.kind === "todo") ? `<div class="empty"><div class="mbox">${mascot()}</div><div>Qui trovi le cose da fare. Scrivi come parli: <i>"chiamare il dentista domani"</i>.</div><div class="actions ospite-azioni"><button class="btn primary" data-act="new">Scrivi la prima cosa</button></div></div>`
     : !list.length ? `<div class="empty"><div class="mbox">${mascot()}</div><div>Con questo filtro non c'è niente.</div><div class="actions ospite-azioni"><button class="btn" data-act="todo-filter" data-v="tutte">Mostra tutte</button></div></div>`
     : emptyBox(`Tutto fatto! ${MN()} è fiera di te 🌸`);
-  if (done.length) h += `<div class="sec"><h2>Completate</h2></div><div class="list">${done.map(itemRow).join("")}</div>`;
+  if (done.length) h += `<div class="sec" id="sez-completate"><h2>Completate</h2></div><div class="list">${done.map(itemRow).join("")}</div>`;
   return h;
 }
 
@@ -1203,6 +1203,9 @@ function render() {
   el.innerHTML = `<div class="view">${v}</div>`;
   aggiornaSlotBarra();
   document.querySelectorAll(".nav .tab, .nav .side").forEach((b) => { const on = b.dataset.tab === state.tab; b.classList.toggle("on", on); if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  // telefono: se la pagina aperta non è nella barra in basso (né Oggi né uno dei due posti), resta accesa la voce Menu
+  const mm = document.querySelector('.nav .tab.mob-only[data-tab="menu"]');
+  if (mm && ![...document.querySelectorAll(".nav .tab:not(.desk-only)")].some((b) => b.dataset.tab === state.tab)) { mm.classList.add("on"); mm.setAttribute("aria-current", "page"); }
   document.querySelectorAll(".nav .side-admin").forEach((b) => b.classList.toggle("hidden", !isAdmin));
   festaDopoRender();
   document.querySelectorAll(".pet-lbl").forEach((nl) => { nl.textContent = petTitolo(); }); // barra mobile e menu desktop
@@ -1247,7 +1250,7 @@ function openSheet(html) {
 function closeSheet() {
   if (listaFlush) { const f = listaFlush; listaFlush = null; try { f(); } catch {} listaId = null; } // prima si salva, poi si scorda la lista
   const sh = $("#sheet");
-  const avevaFocus = sh.contains(document.activeElement);
+  const avevaFocus = sh.contains(document.activeElement) || $("#toast").contains(document.activeElement); // anche da "Annulla" del toast, tappa del giro di Tab
   if (avevaFocus) document.activeElement.blur();
   $("#scrim").classList.remove("on"); sh.classList.remove("on"); sh.inert = true; document.body.classList.remove("sheet-open"); draft = null;
   sbloccaPagina();
@@ -1411,6 +1414,17 @@ function listaSalva(extra = {}) {
   render();
   Promise.resolve(store.save(it)).catch(() => toast("Non sono riuscita a salvare la lista"));
 }
+// La data della lista (prima non si poteva cambiare): oggi, domani, nessuna o una a scelta; il promemoria si ricalcola come nella modifica normale
+function listaData(v) {
+  const it = listaItem(); if (!it) return;
+  if (v && (!validYmd(v) || v < "2000-01-01" || v > "2100-12-31")) { toast("Data non valida 📅"); listaRedraw(); return; }
+  if (it.kind === "note") return; // gli appunti non hanno data
+  const prima = it.remind_at;
+  if (it.remind === "auto") it.remind = "none"; // come nel salvataggio normale: "auto" non si può calcolare
+  it.due_date = v || null; if (!v) it.due_time = null;
+  it.remind_at = computeRemind(it); if (it.remind_at !== prima) it.reminded = false;
+  listaSalva(); listaRedraw();
+}
 function listaRedraw(focusId) {
   const it = listaItem(); if (!it) return;
   const sh = $("#sheet"), top = sh.scrollTop, bar = sh.querySelector(".sheet-bar");
@@ -1430,9 +1444,13 @@ function listaHtml(it) {
     <div class="ls-barra">
       <input class="ls-titolo" id="lsTit" maxlength="100" value="${esc(it.title)}" autocomplete="off" aria-label="Titolo della lista">
       ${listaRighe.length ? `<span class="ls-cont">${fatti}/${listaRighe.length}</span>` : ""}
+      ${it.kind !== "note" && it.due_date ? `<button type="button" class="ls-quando" data-act="ls-menu" aria-label="Data della lista: ${esc(niceDate(it.due_date))}. Tocca per cambiarla"><span class="emo">📅 </span>${esc(niceDate(it.due_date))}</button>` : ""}
       <button type="button" class="ls-menu-b ${listaMenu ? "on" : ""}" data-act="ls-menu" aria-expanded="${listaMenu}" aria-label="Opzioni della lista">⋯</button>
     </div>
     ${listaMenu ? `<div class="ls-menu">
+      ${it.kind === "note" ? "" : `<div class="ls-data" role="group" aria-labelledby="lsDataL"><b id="lsDataL">Data</b>
+        <div class="pet-dt">${[["oggi", "Oggi"], ["domani", "Domani"], ["nessuna", "Senza data"]].map(([k, n]) => `<button type="button" class="fbtn ${(k === "oggi" && it.due_date === todayStr()) || (k === "domani" && it.due_date === ymd(addDays(new Date(), 1))) || (k === "nessuna" && !it.due_date) ? "on" : ""}" data-act="ls-data" data-v="${k}">${n}</button>`).join("")}</div>
+        <input class="input" type="date" id="lsData" aria-label="Scegli un'altra data" value="${it.due_date || ""}" min="2000-01-01" max="2100-12-31"></div>`}
       <button class="pin-toggle mini-t ${it.pinned ? "on" : ""}" data-act="ls-pin" aria-pressed="${!!it.pinned}"><span><b>Fissa in alto</b></span><span class="sw2"></span></button>
       <button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="ls-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b></span><span class="sw2"></span></button>
     </div>` : ""}
@@ -1446,6 +1464,7 @@ function listaHtml(it) {
 function listaBind() {
   const n = $("#lsNuovo"); if (n) n.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (listaAggiungi(n.value)) listaRedraw("lsNuovo"); } });
   $("#lsTit")?.addEventListener("change", (e) => listaSalva({ title: taglia(e.target.value.trim(), 100) || "Spesa" }));
+  $("#lsData")?.addEventListener("change", (e) => listaData(e.target.value));
   document.querySelectorAll("#sheet [data-lsid]").forEach((i) => i.addEventListener("change", () => {
     const x = listaRighe.find((r) => r.id === i.dataset.lsid); if (!x) return;
     const t = taglia(i.value.trim(), 120); if (t) x.t = t; else listaRighe = listaRighe.filter((r) => r.id !== x.id);
@@ -5259,7 +5278,11 @@ document.addEventListener("click", async (e) => {
     }
     if (t === "menu") state.tabPrima = state.tab;
     if (t === "pet") PET_SCHERMA = false; // dal menu si riparte dall'elenco
-    state.tab = t; render(); window.scrollTo({ top: 0, behavior: "smooth" }); return;
+    state.tab = t; render();
+    // data-scroll: dopo il cambio pagina si scorre a quella sezione (se c'è), altrimenti in cima come sempre
+    const sez = tab.dataset.scroll ? document.getElementById(tab.dataset.scroll) : null;
+    if (sez) sez.scrollIntoView({ block: "start", behavior: menoMoto() ? "auto" : "smooth" }); else window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
   }
   if (e.target.id === "scrim") { closeSheet(); return; }
   const el = e.target.closest("[data-act]"); if (!el) return;
@@ -5293,6 +5316,7 @@ document.addEventListener("click", async (e) => {
     case "ls-del": listaRighe = listaRighe.filter((r) => r.id !== v); listaSalva(); listaRedraw(); break;
     case "ls-plus": { const n = $("#lsNuovo"); if (!n) break; if (listaAggiungi(n.value)) listaRedraw("lsNuovo"); else n.focus(); break; }
     case "ls-sugg": if (listaAggiungi(v)) listaRedraw("lsNuovo"); break;
+    case "ls-data": if (["oggi", "domani", "nessuna"].includes(v)) listaData(v === "oggi" ? todayStr() : v === "domani" ? ymd(addDays(new Date(), 1)) : ""); break;
     case "ls-pin": { const it = listaItem(); if (it) { listaSalva({ pinned: !it.pinned }); listaRedraw(); } break; }
     case "ls-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); listaRedraw(); break;
     case "ls-menu": listaMenu = !listaMenu; listaRedraw(); break;
@@ -5539,10 +5563,16 @@ document.addEventListener("keydown", (e) => {
   if (!box) return;
   const el = [...box.querySelectorAll(FOCUSABILI)].filter((x) => x.getClientRects().length && getComputedStyle(x).visibility !== "hidden" && !x.closest("[inert]"));
   if (!el.length) return;
+  // il toast con "Annulla" sta fuori dalla finestra: finché c'è, il suo pulsante è l'ultima tappa del giro
+  const ta = box.id === "sheet" && $("#toast").classList.contains("con-azione") ? $("#toast .ta") : null;
+  const ultimoDentro = el[el.length - 1];
+  if (ta) el.push(ta);
   const first = el[0], last = el[el.length - 1], ae = document.activeElement;
-  if (!box.contains(ae)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+  if (!box.contains(ae) && ae !== ta) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
   else if (e.shiftKey && ae === first) { e.preventDefault(); last.focus(); }
   else if (!e.shiftKey && ae === last) { e.preventDefault(); first.focus(); }
+  else if (ta && !e.shiftKey && ae === ultimoDentro) { e.preventDefault(); ta.focus(); }
+  else if (ta && e.shiftKey && ae === ta) { e.preventDefault(); ultimoDentro.focus(); }
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { if ($(".biscotto-wrap")) chiudiBiscotto(); else closeSheet(); return; }

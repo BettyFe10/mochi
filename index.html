@@ -205,7 +205,10 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
 #sheet h2[tabindex="-1"]:focus{outline:none}
 .onb-az .btn{flex:1 1 auto;padding-left:6px;padding-right:6px;white-space:nowrap}
 .onb-pron{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
-button.stat{width:100%;font:inherit;color:inherit;cursor:pointer}
+button.stat{width:100%;font:inherit;color:inherit;cursor:pointer;position:relative}
+/* indizio "si può toccare": una freccina nell'angolo, solo disegno (nessun testo), non sposta niente */
+button.stat::after{content:"";position:absolute;top:9px;right:9px;width:6px;height:6px;border-top:2px solid currentColor;border-right:2px solid currentColor;border-radius:1px;transform:rotate(45deg);opacity:.4;pointer-events:none}
+#sez-completate{scroll-margin-top:calc(var(--safe-t) + 12px)}
 .stat:active{transform:scale(.97)}
 .stat b{display:block;font-family:var(--ft);font-size:26px;color:var(--acc-t);line-height:1.1}
 .stat span{font-size:13px;color:var(--ink2);font-weight:700;line-height:1.25;display:block}
@@ -637,6 +640,10 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 .sheet.lista-full .ls-menu-b{width:40px;height:40px;flex:none;border-radius:50%;border:1.5px solid var(--line,rgba(0,0,0,.12));background:var(--card);font:inherit;font-size:20px;line-height:1;cursor:pointer;color:var(--ink)}
 .sheet.lista-full .ls-menu-b.on{background:var(--acc-t);color:#fff}
 .sheet.lista-full .ls-menu{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.sheet.lista-full .ls-quando{flex:none;border:1.5px solid var(--line,rgba(0,0,0,.12));background:var(--card);border-radius:999px;padding:6px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;color:var(--ink2)}
+.sheet.lista-full .ls-data{display:flex;flex-direction:column;gap:6px}
+.sheet.lista-full .ls-data b{font-size:13px}
+.sheet.lista-full .ls-data .pet-dt{display:flex;flex-wrap:wrap;gap:6px}
 .sheet.lista-full .ls-corpo{flex:1 0 auto;padding-bottom:12px}
 .sheet.lista-full .ls-fondo{position:sticky;bottom:calc(-1*(var(--safe-b) + 20px));background:var(--card);padding:8px 0 calc(var(--safe-b) + 12px);border-top:1px solid var(--line,rgba(0,0,0,.08))}
 .sheet.lista-full .ls-ricompri{display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;padding:0 0 8px;scrollbar-width:none}
@@ -1043,9 +1050,12 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="cartone"] .stat b{ color:var(--ink); font-size:30px }
 :root[data-stile="cartone"] .stat span{ color:var(--ink) }
 @media (max-width:1023px){
-  :root[data-stile="cartone"] .stat:nth-child(1){ transform:rotate(-2deg) }
-  :root[data-stile="cartone"] .stat:nth-child(2){ transform:rotate(1.5deg) translateY(3px) }
-  :root[data-stile="cartone"] .stat:nth-child(3){ transform:rotate(-1deg) }
+  /* --stat-rot: la stortura di ogni adesivo; alla pressione si aggiunge un leggero scale senza perderla */
+  :root[data-stile="cartone"] .stat:nth-child(1){ --stat-rot:rotate(-2deg) }
+  :root[data-stile="cartone"] .stat:nth-child(2){ --stat-rot:rotate(1.5deg) translateY(3px) }
+  :root[data-stile="cartone"] .stat:nth-child(3){ --stat-rot:rotate(-1deg) }
+  :root[data-stile="cartone"] .stat{ transform:var(--stat-rot) }
+  :root[data-stile="cartone"] .stat:active{ transform:var(--stat-rot) scale(.97) }
 }
 :root[data-stile="cartone"] .pancino{ background:var(--card) }
 :root[data-stile="cartone"] .sp-tot>b,:root[data-stile="cartone"] .ore-mese>b{ color:var(--ink) }
