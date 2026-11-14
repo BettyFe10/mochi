@@ -760,13 +760,18 @@ function umore(oggi) {
   return oggi >= 5 ? ["Al settimo cielo", "🌈"] : oggi >= 3 ? ["Felicissimo", "💗"] : oggi >= 1 ? ["Contento", "😊"] : ["Tranquillo", "🍵"];
 }
 const oggiCount = () => { const t = todayStr(); return bocconcini().filter((i) => ymd(new Date(i.done_at)) === t).length; };
+// Gli animali inseriti stanno accanto alla mascotte (emoji della specie, al massimo 3)
+function pancinoAnimali() {
+  const lista = ANIMALI.length ? ANIMALI : petPresente(CUSTOM.pet) ? [CUSTOM.pet] : [];
+  return lista.length ? `<span class="pc-pet" aria-hidden="true">${lista.slice(0, 3).map((x) => petSp(x.specie)[2]).join("")}</span>` : "";
+}
 function pancinoCard() {
   const tot = bocconcini().length, oggi = oggiCount(), [mood] = umore(oggi);
   const next = TRAGUARDI.find((t) => tot < t.n);
   const prevN = [...TRAGUARDI].reverse().find((t) => tot >= t.n)?.n || 0;
   const pct = next ? Math.round(((tot - prevN) / (next.n - prevN)) * 100) : 100;
   return `<button class="pancino" data-act="open-pancino">
-    <span class="mbox">${mascot(oggi ? "happy" : "")}</span>
+    <span class="mbox">${mascot(oggi ? "happy" : "")}${pancinoAnimali()}</span>
     <span class="pc-txt"><b>${esc(MN())} è ${mood.toLowerCase()}</b>
       <small>${oggi ? `Oggi ha mangiato ${oggi} ${oggi === 1 ? "bocconcino" : "bocconcini"} ${"🍣".repeat(Math.min(oggi, 5))}` : "Spunta una cosa fatta e gli dai un bocconcino"}</small>
       <span class="pc-bar"><i style="width:${pct}%"></i></span>
