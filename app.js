@@ -212,15 +212,17 @@ const SupaStore = {
     this.sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
     // Link di recupero password: Supabase apre la sessione e segnala PASSWORD_RECOVERY
     this.sb.auth.onAuthStateChange((ev) => { if (ev === "PASSWORD_RECOVERY") setLoginMode("newpass"); });
-    const { data } = await this.sb.auth.getSession();
+    const { data, error } = await this.sb.auth.getSession();
+    // token da rinnovare ma senza rete: non è una sessione finita, è la connessione che manca (si resta sulla cache)
+    if (!data.session && error && (error.name === "AuthRetryableFetchError" || error.status === 0)) throw error;
     this.user = data.session?.user || null;
     this.applyName();
     return !!this.user && !/type=recovery/.test(location.hash);
   },
   applyName() {
     const md = this.user?.user_metadata || {};
-    NOME = md.nome || "";
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null || md.barra != null || md.nome_mascotte != null) {
+    NOME = md.nome || ""; LS.set("mochi.nome", NOME);
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null || md.barra != null || md.nome_mascotte != null || md.semplice != null) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
       CUSTOM = cleanCustom({ nome_app: md.nome_app, nome_mascotte: md.nome_mascotte, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
         moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
@@ -235,11 +237,13 @@ const SupaStore = {
         // pet: quello dell'account (anche vuoto: "rimosso"), altrimenti resta quello di questo dispositivo
         pet: md.pet ?? CUSTOM.pet,
         // barra in basso: quella dell'account, altrimenti resta quella di questo dispositivo
-        barra: md.barra ?? CUSTOM.barra });
+        barra: md.barra ?? CUSTOM.barra,
+        // modo semplice: quello dell'account (anche spento), altrimenti resta quello di questo dispositivo
+        semplice: md.semplice ?? CUSTOM.semplice });
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet, barra: c.barra } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet, barra: c.barra, semplice: c.semplice } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -265,7 +269,7 @@ const SupaStore = {
   async setName(nome) {
     const { data, error } = await this.sb.auth.updateUser({ data: { nome } });
     if (error) throw error;
-    this.user = data.user; NOME = nome;
+    this.user = data.user; NOME = nome; LS.set("mochi.nome", NOME);
   },
   async deleteAccount() {
     const { error } = await this.sb.rpc("elimina_il_mio_account");
@@ -624,7 +628,7 @@ function cleanBarra(b) {
   return l.length === 2 ? l : [...BARRA_DEF];
 }
 const DEFAULT_CUSTOM = { nome_app: "Mochi", nome_mascotte: "", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
-  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO, barra: BARRA_DEF };
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO, barra: BARRA_DEF, semplice: false };
 // I pronomi: servono solo ad adattare i testi (Benvenuta / Benvenuto / Rieccoti). Solo "lei", "lui", "loro" o vuoto (= non specificato); tutto il resto scartato
 const PRONOMI = [["", "Neutro"], ["lei", "Lei"], ["lui", "Lui"], ["loro", "Loro"]];
 const cleanPronomi = (p) => (typeof p === "string" && ["lei", "lui", "loro"].includes(p) ? p : "");
@@ -652,16 +656,18 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), barra: cleanBarra(c.barra), nome_app: nome || DEFAULT_CUSTOM.nome_app, nome_mascotte: nomeM, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), barra: cleanBarra(c.barra), semplice: c.semplice === true, nome_app: nome || DEFAULT_CUSTOM.nome_app, nome_mascotte: nomeM, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
+// Modo semplice acceso? (solo "true" vale: ogni altro valore arrivato dall'account è scartato da cleanCustom)
+const semOn = () => CUSTOM.semplice === true;
 // Testi che si adattano: gen(neutro, lei, lui). Chi non sceglie (o sceglie "loro") legge sempre la forma neutra.
 const gen = (neutro, lei, lui) => (CUSTOM.pronomi === "lei" ? lei : CUSTOM.pronomi === "lui" ? lui : neutro);
 // Il modulo è acceso? (quelli che richiedono un account sono spenti in modalità prova)
 const mod = (k) => CUSTOM.moduli[k] !== false && !(MODULI.find((m) => m[0] === k)?.[5] && !ONLINE_MODE);
 // Il nome della mascotte: quello scelto dall'utente, altrimenti quello di default della mascotte (mascotte.js)
 const MN = () => CUSTOM.nome_mascotte || MASC.list[CUSTOM.mascotte].nome;
-const mascot = (cls = "") => withAcc(MASC.svg(CUSTOM.mascotte, { cls }), CUSTOM.mascotte);
+const mascot = (cls = "") => withAcc(MASC.svg(CUSTOM.mascotte, { cls }), CUSTOM.mascotte) + pancinoAnimali();
 
 function setLink(rel, href) {
   let l = document.querySelector(`link[rel="${rel}"]`);
@@ -678,7 +684,12 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => sy
 function applyCustom() {
   if (CUSTOM.colore === "fragola") delete document.documentElement.dataset.palette; else document.documentElement.dataset.palette = CUSTOM.colore;
   if (CUSTOM.font === "morbido") delete document.documentElement.dataset.font; else document.documentElement.dataset.font = CUSTOM.font;
-  document.documentElement.dataset.stile = CUSTOM.stile;
+  // modo semplice: aspetto sobrio e carattere leggibile, forzati solo a schermo (la scelta salvata dell'utente non cambia)
+  const sem = semOn();
+  document.documentElement.dataset.stile = sem ? "sobrio" : CUSTOM.stile;
+  if (sem) document.documentElement.dataset.font = "leggibile";
+  if (sem) document.documentElement.dataset.semplice = ""; else delete document.documentElement.dataset.semplice;
+  semNavSync();
   document.title = CUSTOM.nome_app;
   const bn = document.getElementById("brandName"); if (bn) bn.textContent = CUSTOM.nome_app;
   document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", CUSTOM.nome_app);
@@ -687,10 +698,11 @@ function applyCustom() {
   syncBarColor();
   stagioniAggiorna();
   festaTesta();
+  document.documentElement.toggleAttribute("data-pet", petEmojiLista().length > 0); // il posizionamento dell'animale vale solo se c'è un animale: senza, niente cambia
   for (const id of ["topMascot", "loginMascot"]) {
     const el = document.getElementById(id);
-    const key = CUSTOM.mascotte + "|" + (accWorn()?.id || "") + "|" + (festaCappello() || "");
-    if (el && el.dataset.m !== key) { el.innerHTML = mascot(); el.dataset.m = key; }
+    const key = CUSTOM.mascotte + "|" + (accWorn()?.id || "") + "|" + (festaCappello() || "") + "|" + (id === "topMascot" ? petEmojiLista().join("") : "");
+    if (el && el.dataset.m !== key) { el.innerHTML = id === "loginMascot" ? mascot().replace(/<span class="pc-pet".*$/s, "") : mascot(); el.dataset.m = key; }
   }
 }
 async function saveCustom(c) {
@@ -708,6 +720,7 @@ function cheer(ms = 1700) {
   cheerT = setTimeout(() => document.querySelectorAll(".mascotte").forEach((m) => m.classList.remove("happy")), ms);
 }
 function heartAt(el) {
+  if (semOn()) return;
   if (CUSTOM.stile === "sobrio") return; // niente cuoricini che salgono
   const r = el.getBoundingClientRect();
   const s = document.createElement("span");
@@ -761,17 +774,18 @@ function umore(oggi) {
 }
 const oggiCount = () => { const t = todayStr(); return bocconcini().filter((i) => ymd(new Date(i.done_at)) === t).length; };
 // Gli animali inseriti stanno accanto alla mascotte (emoji della specie, al massimo 3)
-function pancinoAnimali() {
-  const lista = ANIMALI.length ? ANIMALI : petPresente(CUSTOM.pet) ? [CUSTOM.pet] : [];
-  return lista.length ? `<span class="pc-pet" aria-hidden="true">${lista.slice(0, 3).map((x) => petSp(x.specie)[2]).join("")}</span>` : "";
+// Le emoji (al massimo 3). Chiamata anche molto presto (applyCustom): se la lista non esiste ancora, niente
+function petEmojiLista() {
+  try { const lista = ANIMALI.length ? ANIMALI : petPresente(CUSTOM.pet) ? [CUSTOM.pet] : []; return lista.slice(0, 3).map((x) => petSp(x.specie)[2]); } catch { return []; }
 }
+function pancinoAnimali() { const e = petEmojiLista(); return e.length ? `<span class="pc-pet" aria-hidden="true">${e.join("")}</span>` : ""; }
 function pancinoCard() {
   const tot = bocconcini().length, oggi = oggiCount(), [mood] = umore(oggi);
   const next = TRAGUARDI.find((t) => tot < t.n);
   const prevN = [...TRAGUARDI].reverse().find((t) => tot >= t.n)?.n || 0;
   const pct = next ? Math.round(((tot - prevN) / (next.n - prevN)) * 100) : 100;
   return `<button class="pancino" data-act="open-pancino">
-    <span class="mbox">${mascot(oggi ? "happy" : "")}${pancinoAnimali()}</span>
+    <span class="mbox">${mascot(oggi ? "happy" : "")}</span>
     <span class="pc-txt"><b>${esc(MN())} è ${mood.toLowerCase()}</b>
       <small>${oggi ? `Oggi ha mangiato ${oggi} ${oggi === 1 ? "bocconcino" : "bocconcini"} ${"🍣".repeat(Math.min(oggi, 5))}` : "Spunta una cosa fatta e gli dai un bocconcino"}</small>
       <span class="pc-bar"><i style="width:${pct}%"></i></span>
@@ -1251,7 +1265,7 @@ function fuocoRicorda(el) {
   const f = a.id ? { dom: a.id } : a.dataset.act ? { act: a.dataset.act, id: a.dataset.id || "", v: a.dataset.v || "" } : null;
   if (!f) return null;
   if (f.act) f.n = fuocoUguali(el, f).indexOf(a);
-  if (/^(INPUT|TEXTAREA)$/.test(a.tagName)) { try { f.da = a.selectionStart; f.a = a.selectionEnd; } catch {} }
+  if (/^(INPUT|TEXTAREA)$/.test(a.tagName)) { try { f.da = a.selectionStart; f.a = a.selectionEnd; } catch {} if (a.id === "semSpesaNuova") f.val = a.value; }
   return f;
 }
 function fuocoRimetti(el, f) {
@@ -1260,11 +1274,12 @@ function fuocoRimetti(el, f) {
   if (f.dom) { n = document.getElementById(f.dom); if (n && !el.contains(n)) n = null; }
   else { const u = fuocoUguali(el, f); n = u[f.n] || (u.length === 1 ? u[0] : null); }
   if (!n) return;
+  if (f.val != null && n.id === "semSpesaNuova" && !n.value) n.value = f.val; // modo semplice: il testo a metà non si perde
   try { n.focus({ preventScroll: true }); if (f.da != null && n.setSelectionRange) n.setSelectionRange(f.da, f.a); } catch {}
 }
 /* Cronologia: ogni cambio di pagina è un passo indietro per il tasto Indietro del browser, il tasto del mouse e il gesto del telefono.
    Cambiare pagina aggiunge un passo; ridisegnare la stessa pagina no. Tornando indietro si chiude l'eventuale finestra aperta. */
-const TAB_VALIDE = ["oggi", "todo", "agenda", "appunti", "liste", "ricorrenti", "turni", "spese", "focus", "casa", "pet", "menu"];
+const TAB_VALIDE = ["oggi", "todo", "agenda", "appunti", "liste", "ricorrenti", "turni", "spese", "focus", "casa", "pet", "menu", "s-todo", "s-agenda", "s-spesa", "s-aiuto"];
 let cronTab = null, daCronologia = false;
 function cronologiaAggiorna() {
   if (daCronologia) { daCronologia = false; cronTab = state.tab; return; }
@@ -1288,12 +1303,14 @@ window.addEventListener("popstate", async (e) => {
 function render() {
   applyCustom();
   headerUpdate();
+  // modo semplice: solo le sue pagine; spento, le sue pagine non esistono (si torna a Oggi)
+  if (semOn()) { if (!SEM_TABS.includes(state.tab)) state.tab = "s-todo"; } else if (/^s-/.test(state.tab)) state.tab = "oggi";
   if (PAGINA_MODULO[state.tab] && !mod(PAGINA_MODULO[state.tab])) state.tab = "oggi";
   cronologiaAggiorna();
   // fuori dalla pagina Concentrazione non resta nessuna sessione a metà (timer, schermo acceso)
   if (state.tab !== "focus" && focusS) focusChiudi();
   if (!mod("liste")) { if (state.todoFilter.startsWith("l:")) state.todoFilter = "tutte"; if (state.noteFilter.startsWith("l:")) state.noteFilter = "tutte"; }
-  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, pet: viewPet, menu: viewMenu }[state.tab] || viewOggi);
+  const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, pet: viewPet, menu: viewMenu, "s-todo": semViewTodo, "s-agenda": semViewAgenda, "s-spesa": semViewSpesa, "s-aiuto": semViewAiuto }[state.tab] || viewOggi);
   // Cerca: vale per la pagina aperta, cambiando pagina si azzera. Se si sta scrivendo nel campo si ridisegna solo quello che c'è sotto
   const stessaPagina = cercaTab === state.tab; cercaTab = state.tab;
   if (!stessaPagina) { state.cerca = ""; state.fatteTutte = false; clearTimeout(cercaT); }
@@ -1344,13 +1361,14 @@ function openSheet(html) {
   $("#sheet").classList.remove("lista-full");
   const ae = document.activeElement;
   if (!$("#sheet").classList.contains("on") && ae && ae !== document.body && !$("#sheet").contains(ae)) sheetOpener = ae;
-  $("#sheet").innerHTML = `<div class="sheet-bar"><div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">✕</button></div>${html}`;
+  $("#sheet").innerHTML = `<div class="sheet-bar"><div class="grab"></div><button class="sheet-x" data-act="close" aria-label="Chiudi">${semOn() ? "Chiudi" : "✕"}</button></div>${html}`;
   $("#sheet").scrollTop = 0;
   { const t = $("#sheet h2"); if (t) { t.id = "sheetTitolo"; $("#sheet").setAttribute("aria-labelledby", "sheetTitolo"); } else $("#sheet").removeAttribute("aria-labelledby"); } // la finestra prende il nome dal suo titolo
   bloccaPagina(); sheetSuTastiera();
   $("#scrim").classList.add("on"); $("#sheet").inert = false; $("#sheet").classList.add("on"); document.body.classList.add("sheet-open");
 }
 function closeSheet() {
+  if (semBozzaDaConfermare()) return; // modo semplice: un testo scritto non si butta senza chiedere
   if (listaFlush) { const f = listaFlush; listaFlush = null; try { f(); } catch {} listaId = null; } // prima si salva, poi si scorda la lista
   const sh = $("#sheet");
   // Voce NUOVA chiusa senza salvare (X, Annulla, Esc, sfondo, trascinamento) con qualcosa di scritto: la bozza si può riprendere dal toast.
@@ -1376,13 +1394,13 @@ function whenSheetFree(fn) {
 
 /* -------- conferme e domande dentro l'app (al posto delle finestre del browser) -------- */
 let askResolve = null;
-function ask({ title, text = "", ok = "Conferma", danger = false, input = false, value = "", placeholder = "", maxlength = 40, inputmode = "" }) {
+function ask({ title, text = "", ok = "Conferma", no = "Annulla", danger = false, input = false, value = "", placeholder = "", maxlength = 40, inputmode = "" }) {
   return new Promise((resolve) => {
     if (askResolve) { const r = askResolve; askResolve = null; r(null); }
     openSheet(`<h2><span class="mbox">${mascot()}</span>${esc(title)}</h2>
       ${text ? `<p style="margin:0 0 14px;color:var(--ink2);white-space:pre-line">${esc(text)}</p>` : ""}
       ${input ? `<div class="field"><input class="input big" id="askInput" maxlength="${maxlength}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off"${inputmode === "decimal" ? ' inputmode="decimal"' : ""}></div>` : ""}
-      <div class="actions"><button class="btn" data-act="ask-cancel">Annulla</button>
+      <div class="actions"><button class="btn" data-act="ask-cancel">${esc(no)}</button>
         <button class="btn ${danger ? "danger-full" : "primary"}" data-act="ask-ok">${esc(ok)}</button></div>`);
     askResolve = resolve;
     const i = $("#askInput");
@@ -1799,6 +1817,7 @@ function openSettings(gruppo) {
     ${rName}
     ${SG_FINE}
     ${sgApri("usare", "🧩", "Cosa vuoi usare", riassuntoUsare())}
+    <div class="setrow" id="setSemplice"><div><b>Modo semplice</b><small>Mostra solo Cose da fare, Appuntamenti e Spesa, con scritte e pulsanti molto più grandi. Non cancella niente: le altre funzioni restano dove sono e le ritrovi quando torni all'app completa.</small></div><button class="fbtn ${semOn() ? "on" : ""}" data-act="semplice-apri" aria-pressed="${semOn()}">${semOn() ? "Acceso" : "Spento"}</button></div>
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="moduli">${[["Funzioni", ["turni", "spese", "pet", "focus", "ricorrenti", "liste", "riepilogo", "tempo"]], ["Atmosfera e gioco", ["serie", "umore", "casa", "pancino", "biscotto", "feste", "stagioni"]]].map(([tit, ids]) => `<h3 class="msec">${tit}</h3>` + ids.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")).join("")}</div>
       ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
@@ -3386,11 +3405,11 @@ const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i +
 const giu = (r) => { if (r.error) throw r.error; return r; };
 // Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
 // (gli sblocchi della casetta si uniscono sempre: non si perdono mai)
-const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "nome_mascotte", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori", "barra"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
+const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "nome_mascotte", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori", "barra", "semplice"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
 async function portaPreferenze() {
   const copia = LS.get("mochi.ospite.custom", null); if (!copia) return; // solo la copia dell'ospite, mai le preferenze di chi è entrato
   const ospite = cleanCustom(copia);
-  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi), fiori: store.user?.user_metadata?.fiori != null ? CUSTOM.fiori : ospite.fiori, pronomi: cleanPronomi(store.user?.user_metadata?.pronomi) !== "" ? CUSTOM.pronomi : ospite.pronomi, pet: petPresente(cleanPet(store.user?.user_metadata?.pet)) ? CUSTOM.pet : ospite.pet, barra: store.user?.user_metadata?.barra != null ? CUSTOM.barra : ospite.barra } : { ...ospite });
+  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi), fiori: store.user?.user_metadata?.fiori != null ? CUSTOM.fiori : ospite.fiori, pronomi: cleanPronomi(store.user?.user_metadata?.pronomi) !== "" ? CUSTOM.pronomi : ospite.pronomi, pet: petPresente(cleanPet(store.user?.user_metadata?.pet)) ? CUSTOM.pet : ospite.pet, barra: store.user?.user_metadata?.barra != null ? CUSTOM.barra : ospite.barra, semplice: store.user?.user_metadata?.semplice != null ? CUSTOM.semplice : ospite.semplice } : { ...ospite });
   LS.set("mochi.custom", CUSTOM); applyCustom();
   await store.saveCustom(CUSTOM); // se non riesce, l'errore ferma il passaggio: la copia resta e si può riprovare
 }
@@ -4283,7 +4302,8 @@ function scenaCasa(id, { masc = CUSTOM.mascotte, mobili = null, conMascotte = tr
   let ms = "";
   if (conMascotte) {
     const vb = (MASC.list[masc] || MASC.list.mochi).viewBox;
-    ms = `<g class="casa-masc" data-act="casa-poke">${withAcc(MASC.svg(masc), masc).replace("<svg ", `<svg x="128" y="112" width="144" height="156" preserveAspectRatio="xMidYMax meet" `).replace(/viewBox="[^"]*"/, `viewBox="${vb}"`)}</g>`;
+    const pe = sagoma ? [] : petEmojiLista();
+    ms = `<g class="casa-masc" data-act="casa-poke">${withAcc(MASC.svg(masc), masc).replace("<svg ", `<svg x="128" y="112" width="144" height="156" preserveAspectRatio="xMidYMax meet" `).replace(/viewBox="[^"]*"/, `viewBox="${vb}"`)}${pe.length ? `<text x="284" y="266" font-size="28" text-anchor="end" aria-hidden="true">${pe.join("")}</text>` : ""}</g>`;
   }
   return `<svg class="casa-svg" viewBox="0 0 400 280" role="img" aria-label="${esc(label || c[1])}" xmlns="http://www.w3.org/2000/svg">
     <g class="cs-stanza">${dis.base}${dis.finestra}${dis.fissi}${strato("parete")}${strato("dietro")}${fd ? `<g class="festa-casa">${fd[0]}</g>` : ""}${strato("tappeto")}${uovo && uovoVisibile("casa") ? uovoCasaSvg() : ""}</g>
@@ -4320,7 +4340,7 @@ function viewCasa() {
 // Sblocchi: si calcolano dai numeri e si salvano per sempre; una festa per ogni cosa nuova (una volta sola)
 let sblocchiInCorso = false;
 async function aggiornaSblocchi() {
-  if (!mod("casa") || sblocchiInCorso) return;
+  if (!mod("casa") || sblocchiInCorso || semOn()) return; // modo semplice: niente regali e sorprese
   const tot = serie().totali, b = bocconciniTot(), h = CUSTOM.casa;
   const nuoveC = CASETTE.filter((c) => c[3] > 0 && tot >= c[3] && !h.casette.includes(c[0])).map((c) => c[0]);
   const nuoviM = MOBILI.filter((m) => b >= m[2] && !h.mobili.includes(m[0])).map((m) => m[0]);
@@ -4526,7 +4546,7 @@ function apriSerie() {
 }
 // Festa ai traguardi (3, 7, 14...): una volta sola per traguardo su questo dispositivo
 function festaSerie(prima) {
-  if (!mod("serie")) return;
+  if (!mod("serie") || semOn()) return;
   const s = serie(); if (s.attuale <= prima) return;
   const t = TRAGUARDI_SERIE.find((n) => n === s.attuale); if (!t) return;
   const k = "mochi.serie.feste." + (store.user?.id || "local"), viste = LS.get(k, []);
@@ -4743,7 +4763,7 @@ function stagioniAggiorna() {
   const cv = $("#stagioni"); if (!cv) return;
   // le stagioni, se accese; altrimenti un'ombra di effetto per la festa (solo nello stile Morbido); o una sorpresa breve
   const fe = festaOggi(), festaEff = fe && CUSTOM.stile === "morbido" ? FESTE[fe].effetto : null;
-  const tipo = !menoMoto() && !$("#app").classList.contains("hidden") ? burstAttivo() || (mod("stagioni") ? stagioneDiOggi() : festaEff) : null;
+  const tipo = !menoMoto() && !semOn() && !$("#app").classList.contains("hidden") ? burstAttivo() || (mod("stagioni") ? stagioneDiOggi() : festaEff) : null;
   const leggero = !burstAttivo() && !mod("stagioni");
   if (!tipo) { cancelAnimationFrame(stag.raf); stag.raf = 0; stag.tipo = null; stag.p = []; cv.classList.remove("on"); cv.getContext("2d")?.clearRect(0, 0, cv.width, cv.height); return; }
   if (tipo !== stag.tipo || !stag.p.length) {
@@ -5028,7 +5048,7 @@ const uovoVisibile = (dove) => festaOggi() === "pasqua" && !uovaTrovate().includ
 const uovoBtn = (dove) => `<button class="uovo-nasc u-${dove}" data-act="uovo" data-v="${dove}" aria-label="Un ovetto nascosto! Toccalo"><svg viewBox="0 0 24 30" aria-hidden="true"><ellipse cx="12" cy="17" rx="9.5" ry="12" fill="${{ oggi: "#ff9db5", agenda: "#9fd4ef", bacheca: "#ffe28a", menu: "#c9b2ff" }[dove] || "#b7e39a"}" stroke="rgba(74,47,58,.35)" stroke-width="2"/><path d="M3.5 17 l4.2 -3.6 l4.2 3.6 l4.2 -3.6 l4.2 3.6" stroke="#fff" stroke-width="2.6" fill="none" stroke-linejoin="round"/></svg></button>`;
 // Dopo ogni disegno della pagina: mette l'ovetto nel suo angolo (tranne la casetta, che lo ha dentro la scena)
 function festaDopoRender() {
-  festaTesta();
+  festaTesta(); if (semOn()) return; // modo semplice: niente uova di Pasqua e sorprese
   const v = $("#view .view"); if (!v) return;
   const dove = { oggi: "oggi", agenda: "agenda", appunti: "bacheca", menu: "menu" }[state.tab];
   if (!dove || !uovoVisibile(dove)) return;
@@ -5037,7 +5057,7 @@ function festaDopoRender() {
   host.insertAdjacentHTML("beforeend", uovoBtn(dove));
 }
 async function festaUovo(dove, el) {
-  if (!UOVA.includes(dove) || !uovoVisibile(dove)) return;
+  if (semOn() || !UOVA.includes(dove) || !uovoVisibile(dove)) return;
   const r = el.getBoundingClientRect();
   const nuove = [...uovaTrovate(), dove]; LS.set(uovaChiave(), nuove);
   confetti(r.left + r.width / 2, r.top + r.height / 2, 14); heartAt(el); cheer(1200); if (navigator.vibrate) navigator.vibrate(15);
@@ -5194,7 +5214,7 @@ async function checkAdmin() {
     isAdmin = await store.isAdmin(); if (!isAdmin) return;
     inbox = await store.readConsigli();
     adminUnread = inbox.filter((m) => !m.letto).length;
-    if (adminUnread) setTimeout(() => toast(`Hai ${adminUnread} ${adminUnread === 1 ? "messaggio nuovo" : "messaggi nuovi"} 📬`), 2500);
+    if (adminUnread && !semOn()) setTimeout(() => toast(`Hai ${adminUnread} ${adminUnread === 1 ? "messaggio nuovo" : "messaggi nuovi"} 📬`), 2500);
   } catch { isAdmin = false; }
 }
 const RE_EMAIL = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
@@ -5282,7 +5302,7 @@ function toastAnnulla(msg, fn) {
 }
 // Finita l'uscita, il toast nascosto si svuota: "Annulla" non deve restare raggiungibile con Tab (solo se nel frattempo non è stato riusato)
 function toastSvuota() { setTimeout(() => { const t = $("#toast"); if (!t.classList.contains("on")) t.textContent = ""; }, 300); }
-function toast(msg) { const t = $("#toast"); toastUndo = null; t.classList.remove("con-azione"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2600); }
+function toast(msg) { const t = $("#toast"); toastUndo = null; t.classList.remove("con-azione"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), semOn() ? 7000 : 2600); }
 /* Trascina giù la finestra per chiuderla (su telefono), come nelle app native.
    La finestra si muove SOLO se il dito parte:
    - dalla maniglia / intestazione (la fascia in alto), oppure
@@ -5365,6 +5385,7 @@ window.visualViewport?.addEventListener("resize", sheetSuTastiera);
 window.visualViewport?.addEventListener("scroll", sheetSuTastiera);
 
 function confetti(x, y, n = 18) {
+  if (semOn()) return;
   const cols = ["#ff8fb1", "#ff9e7a", "#ffd6e4", "#bfe8d4", "#e5dcff", "#fff1c2"];
   for (let i = 0; i < n; i++) {
     const c = document.createElement("i");
@@ -5728,10 +5749,249 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { if ($(".biscotto-wrap")) chiudiBiscotto(); else closeSheet(); return; }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "n" || e.key === "N")
-      && !$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden")) {
-    e.preventDefault(); nuovaVoce();
+      && !$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden") && !inAttesaSessione) {
+    e.preventDefault();
+    if (semOn()) { if (state.tab === "s-todo" || state.tab === "s-agenda") semForm(state.tab === "s-agenda" ? "evento" : "todo", null); return; }
+    nuovaVoce();
   }
 });
+
+/* =========================================================
+   MODO SEMPLICE
+   Un interruttore dentro Mochi (CUSTOM.semplice), stesso account e stessi dati: solo Cose da fare, Appuntamenti e Spesa,
+   con scritte e pulsanti grandi, niente gesti da scoprire, niente sorprese e ogni cancellazione con conferma.
+   Le cose sono le stesse di sempre: una cosa da fare è un item "todo", un appuntamento un item "event",
+   la Spesa è la lista da spuntare (sottotask) della spesa più recente ancora aperta.
+   Lo stile (Sobrio) e il carattere (leggibile) sono forzati solo a schermo, in applyCustom: la scelta salvata non cambia.
+   Le cose delle liste condivise si vedono e si spuntano, ma non si cambiano né si cancellano da qui.
+   ========================================================= */
+const SEM_VOCI = [["s-todo", "Da fare"], ["s-agenda", "Impegni"], ["s-spesa", "Spesa"]]; // etichette corte: la barra le scrive a 20 px
+const SEM_TABS = [...SEM_VOCI.map((v) => v[0]), "s-aiuto"];
+// Barra con soli 3 pulsanti e tasto "Aiuto" in alto: si aggiungono accendendo il modo semplice e si tolgono spegnendolo
+// (gli altri pulsanti della barra restano dove sono: a modo semplice acceso li nasconde il CSS, spento è la barra di sempre)
+function semNavSync() {
+  const on = semOn(), has = !!document.querySelector(".sem-only");
+  if (on === has) return;
+  document.querySelectorAll(".sem-only").forEach((e) => e.remove());
+  if (!on) return;
+  $("#nav .bar")?.insertAdjacentHTML("beforeend", SEM_VOCI.map(([k, n]) => `<button class="tab sem-only" data-tab="${k}">${n}</button>`).join(""));
+  $(".top")?.insertAdjacentHTML("beforeend", `<button class="sm-aiuto sem-only" data-tab="s-aiuto">Aiuto</button>`);
+}
+// La lista della spesa di cui si occupa il modo semplice: la più recente ancora aperta, meglio se non condivisa
+function semListaSpesa() {
+  const l = state.items.filter((i) => i.kind === "todo" && !i.done && isSpesa(i)).sort((x, y) => (y.updated_at || "").localeCompare(x.updated_at || ""));
+  return l.find((i) => !i.lista_id) || l[0] || null;
+}
+const semQuando = (it) => (it.due_date ? `${niceDate(it.due_date)}${it.due_time ? " alle " + it.due_time : ""}` : "");
+const semVuoto = (t) => `<p class="sm-vuoto">${esc(t)}</p>`;
+const semModifica = (it) => (it.lista_id ? "" : `<button class="sm-mod" data-act="sem-modifica" data-id="${esc(it.id)}" aria-label="Modifica: ${esc(it.title)}">Modifica</button>`); // le cose condivise: solo spunta
+function semRigaTodo(it) {
+  const q = semQuando(it);
+  return `<div class="sm-row${it.done ? " fatta" : ""}"><button class="sm-check" data-act="sem-spunta" data-id="${esc(it.id)}" aria-pressed="${it.done ? "true" : "false"}">
+      <span class="sm-box" aria-hidden="true"></span><span class="sm-t">${esc(it.title)}${q ? `<small>${esc(q)}</small>` : ""}</span>${it.done ? `<span class="sm-stato">Fatta</span>` : ""}</button>
+    ${semModifica(it)}</div>`;
+}
+function semViewTodo() {
+  const l = state.items.filter((i) => i.kind === "todo" && !isSpesa(i));
+  const aperte = l.filter((i) => !i.done).sort(byDue);
+  const fatte = l.filter((i) => i.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || "")).slice(0, 5);
+  return `<div class="sm-wrap"><h2 class="sm-h">Cose da fare</h2>
+    <button class="sm-btn" data-act="sem-nuova" data-v="todo">Aggiungi</button>
+    ${aperte.length ? `<div class="sm-list">${aperte.map(semRigaTodo).join("")}</div>` : semVuoto("Non c'è niente da fare. Se vuoi aggiungere una cosa, tocca il pulsante Aggiungi.")}
+    ${fatte.length ? `<h3 class="sm-h3">Già fatte</h3><div class="sm-list">${fatte.map(semRigaTodo).join("")}</div>` : ""}</div>`;
+}
+function semRigaEv(it) {
+  const d = parseYmd(it.due_date);
+  const giorno = `${GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getDate()} ${MESI[d.getMonth()]}`;
+  return `<div class="sm-row sm-ev"><div class="sm-t"><b>${esc(it.title)}</b><small>${esc(giorno)}${it.due_time ? ", alle " + esc(it.due_time) : ""}</small></div>
+    ${semModifica(it)}</div>`;
+}
+function semViewAgenda() {
+  const oggi = todayStr(), domani = ymd(addDays(new Date(), 1));
+  const ev = state.items.filter((i) => i.kind === "event" && i.due_date && i.due_date >= oggi).sort(byDue);
+  const gruppo = (titolo, l) => l.length ? `<h3 class="sm-h3">${titolo}</h3><div class="sm-list">${l.map(semRigaEv).join("")}</div>` : "";
+  return `<div class="sm-wrap"><h2 class="sm-h">Appuntamenti</h2>
+    <button class="sm-btn" data-act="sem-nuova" data-v="evento">Aggiungi</button>
+    ${ev.length ? gruppo("Oggi", ev.filter((i) => i.due_date === oggi)) + gruppo("Domani", ev.filter((i) => i.due_date === domani)) + gruppo("Più avanti", ev.filter((i) => i.due_date > domani)) : semVuoto("Non hai appuntamenti in programma. Se vuoi aggiungerne uno, tocca il pulsante Aggiungi.")}</div>`;
+}
+function semViewSpesa() {
+  const l = semListaSpesa(), st = l?.sottotask || [], cond = !!l?.lista_id; // nella lista condivisa niente "Togli": solo spunta e aggiungi
+  const daComprare = st.filter((x) => !x.f), comprate = st.filter((x) => x.f);
+  const riga = (x) => `<div class="sm-row${x.f ? " fatta" : ""}"><button class="sm-check" data-act="sem-spesa-spunta" data-v="${esc(x.id)}" aria-pressed="${x.f ? "true" : "false"}">
+      <span class="sm-box" aria-hidden="true"></span><span class="sm-t">${esc(x.t)}</span>${x.f ? `<span class="sm-stato">Comprato</span>` : ""}</button>
+    ${cond ? "" : `<button class="sm-mod" data-act="sem-spesa-togli" data-v="${esc(x.id)}" aria-label="Togli dalla lista: ${esc(x.t)}">Togli</button>`}</div>`;
+  return `<div class="sm-wrap"><h2 class="sm-h">Spesa</h2>
+    <form class="sm-add" id="semSpesaForm" autocomplete="off"><label for="semSpesaNuova">Cosa devi comprare?</label>
+      <input class="input" id="semSpesaNuova" maxlength="120" enterkeyhint="done"><button class="sm-btn" type="submit">Aggiungi</button></form>
+    ${daComprare.length ? `<div class="sm-list">${daComprare.map(riga).join("")}</div>` : semVuoto(st.length ? "Hai comprato tutto." : "La lista della spesa è vuota. Scrivi sopra che cosa ti serve e tocca Aggiungi.")}
+    ${comprate.length ? `<h3 class="sm-h3">Già comprate</h3><div class="sm-list">${comprate.map(riga).join("")}</div>${cond ? "" : `<button class="sm-btn sm-ghost" data-act="sem-spesa-pulisci">Togli le cose già comprate</button>`}` : ""}</div>`;
+}
+function semViewAiuto() {
+  return `<div class="sm-wrap"><h2 class="sm-h">Aiuto</h2>
+    <div class="sm-aiutobox"><h3>Cose da fare</h3><p>Tocca il pulsante Aggiungi e scrivi che cosa devi fare. Quando l'hai fatta, toccala: si segna come fatta. Per cambiarla o cancellarla tocca Modifica.</p></div>
+    <div class="sm-aiutobox"><h3>Appuntamenti</h3><p>Tocca Aggiungi, scrivi che appuntamento è e scegli il giorno e l'ora. Gli appuntamenti di oggi stanno in cima.</p></div>
+    <div class="sm-aiutobox"><h3>Spesa</h3><p>Scrivi quello che ti serve e tocca Aggiungi. Al supermercato tocca ogni cosa quando la metti nel carrello.</p></div>
+    <div class="sm-aiutobox"><h3>Niente si cancella da solo</h3><p>Prima di cancellare qualcosa ti chiedo sempre conferma. Se rispondi "No, tieni" resta tutto com'è.</p></div>
+    <button class="sm-btn sm-ghost" data-act="sem-esci">Torna all'app completa</button></div>`;
+}
+// Modulo per aggiungere o cambiare una cosa da fare o un appuntamento: pochi campi e un solo grande "Salva"
+let semChiudiOk = false;
+function semForm(tipo, id) {
+  const ev = tipo === "evento", it = id ? state.items.find((x) => x.id === id) : null;
+  if (id && (!it || it.lista_id)) return;
+  semChiudiOk = false;
+  const oggi = todayStr(), domani = ymd(addDays(new Date(), 1));
+  openSheet(`<form id="semForm" class="sm-form" data-tipo="${ev ? "evento" : "todo"}" data-id="${esc(it?.id || "")}" data-t="${esc(it?.title || "")}" data-d="${esc(it?.due_date || (ev ? oggi : ""))}" data-o="${esc(it?.due_time || "")}" autocomplete="off" novalidate>
+    <h2 class="sm-h">${it ? "Modifica" : ev ? "Nuovo appuntamento" : "Nuova cosa da fare"}</h2>
+    <div class="field"><label for="semTitolo">${ev ? "Che appuntamento è?" : "Che cosa devi fare?"}</label>
+      <input class="input" id="semTitolo" maxlength="120" value="${esc(it?.title || "")}" enterkeyhint="done"></div>
+    <div class="field"><label for="semData">${ev ? "Che giorno?" : "Per quando? (se non serve, lascia vuoto)"}</label>
+        <div class="sm-quick"><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${oggi}">Oggi</button><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${domani}">Domani</button>${ev ? "" : `<button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="">Senza data</button>`}</div>
+        <input class="input" type="date" id="semData" value="${esc(it?.due_date || (ev ? oggi : ""))}"></div>
+    ${ev ? `<div class="field"><label for="semOra">A che ora? (se non lo sai, lascia vuoto)</label>
+        <input class="input" type="time" id="semOra" value="${esc(it?.due_time || "")}"></div>` : ""}
+    <p class="sm-err" id="semErr" role="alert"></p>
+    <div class="sm-conf" id="semConf" hidden role="alertdialog" aria-labelledby="semConfT"><p id="semConfT"><b>Vuoi chiudere senza salvare?</b><br>Quello che hai scritto andrà perso.</p>
+      <button type="button" class="sm-btn sm-danger" data-act="sem-chiudi-si">Sì, chiudi senza salvare</button><button type="button" class="sm-btn" data-act="sem-chiudi-no">No, continua a scrivere</button></div>
+    <button class="sm-btn" type="submit">Salva</button>
+    ${it ? `<button type="button" class="sm-btn sm-danger" data-act="sem-cancella" data-id="${esc(it.id)}">Cancella</button>` : ""}
+  </form>`);
+  setTimeout(() => $("#semTitolo")?.focus(), 250);
+}
+// Chiudere il modulo (Chiudi, Esc, tocco fuori) con qualcosa di scritto: prima una domanda, il testo non si butta
+function semBozzaDaConfermare() {
+  const f = $("#semForm");
+  if (!f || semChiudiOk || !$("#sheet").classList.contains("on") || !$("#semTitolo")) return false;
+  const titolo = $("#semTitolo").value.replace(/\s+/g, " ").trim();
+  const nuovo = !f.dataset.id;
+  const cambiato = nuovo ? !!titolo : titolo !== f.dataset.t.replace(/\s+/g, " ").trim() || ($("#semData") && $("#semData").value !== f.dataset.d) || ($("#semOra") && $("#semOra").value !== f.dataset.o);
+  if (!cambiato) return false;
+  const c = $("#semConf"); if (!c) return false;
+  c.hidden = false; c.querySelector("[data-act=sem-chiudi-no]")?.focus({ preventScroll: false }); c.scrollIntoView({ block: "center" });
+  return true;
+}
+function semErrore(t, campo) { const e = $("#semErr"); if (e) e.textContent = t; if (campo) $(campo)?.focus(); }
+async function semSalva(f) {
+  const ev = f.dataset.tipo === "evento", old = f.dataset.id ? state.items.find((x) => x.id === f.dataset.id) : null;
+  if (f.dataset.id && (!old || old.lista_id)) { semChiudiOk = true; closeSheet(); return; }
+  const titolo = taglia($("#semTitolo").value.replace(/\s+/g, " ").trim(), 300);
+  if (!titolo) return semErrore(ev ? "Scrivi che appuntamento è." : "Scrivi che cosa devi fare.", "#semTitolo");
+  let data = old?.due_date || null, ora = old?.due_time || null;
+  if (ev) {
+    data = $("#semData").value; ora = $("#semOra").value || null;
+    if (!validYmd(data) || data < "2000-01-01" || data > "2100-12-31") return semErrore("Scegli il giorno dell'appuntamento.", "#semData");
+    if (ora && !RE_TIME.test(ora)) return semErrore("L'ora non è giusta. Riprova oppure lascia vuoto.", "#semOra");
+  } else if ($("#semData")) { // cosa da fare: la data è facoltativa
+    data = $("#semData").value || null;
+    if (data && (!validYmd(data) || data < "2000-01-01" || data > "2100-12-31")) return semErrore("La data non è giusta. Riprova oppure lascia vuoto.", "#semData");
+  }
+  const d = old ? { ...old } : newItem({ kind: ev ? "event" : "todo", area: "personale", lista_id: null });
+  d.title = titolo;
+  if (ev) { d.kind = "event"; d.due_date = data; d.due_time = ora; } else if ($("#semData")) d.due_date = data;
+  if (!d.due_date) d.due_time = null;
+  if (!old || !d.remind || d.remind === "auto" || (d.remind === "none" && !old.due_date)) d.remind = d.due_date ? defaultRemind(d) : "none";
+  const prima = old?.remind_at;
+  d.remind_at = computeRemind(d);
+  if (d.remind_at !== prima) d.reminded = false;
+  d.updated_at = new Date().toISOString();
+  const i = state.items.findIndex((x) => x.id === d.id);
+  i >= 0 ? (state.items[i] = d) : state.items.push(d);
+  semChiudiOk = true; closeSheet(); semChiudiOk = false; render();
+  const esito = await store.save(d);
+  if (esito === "rifiutato") { const k = state.items.indexOf(d); if (k >= 0) { if (old) state.items[k] = old; else state.items.splice(k, 1); LS.set("mochi.cache", state.items); } render(); return; }
+  toastEsito(esito, `Fatto! Ho salvato: ${titolo}`);
+}
+async function semCancella(id) {
+  const it = state.items.find((x) => x.id === id); if (!it || it.lista_id) return;
+  const si = await ask({ title: `Vuoi cancellare "${it.title}"?`, text: "Dopo non si può più rimettere.", ok: "Sì, cancella", no: "No, tieni", danger: true });
+  if (!si) { toast("Va bene, l'ho lasciata com'era."); return; }
+  state.items = state.items.filter((x) => x.id !== id);
+  render(); toast("Fatto! L'ho cancellata.");
+  await store.remove(id);
+}
+const semFocus = (sel) => setTimeout(() => $(sel)?.focus({ preventScroll: true }), 0);
+async function semSpesaAggiungi(testo) {
+  const t = taglia(str(testo).replace(/\s+/g, " ").trim(), 120);
+  if (!t) { toast("Scrivi prima che cosa devi comprare."); semFocus("#semSpesaNuova"); return; }
+  let l = semListaSpesa();
+  if (!l) l = newItem({ kind: "todo", title: "Lista della spesa", area: "personale", lista_id: null, remind: "none", sottotask: [] });
+  const st = l.sottotask || [];
+  if (st.some((x) => !x.f && chiaveSpesa(x.t) === chiaveSpesa(t))) { toast(`"${t}" è già nella lista.`); semFocus("#semSpesaNuova"); return; }
+  if (st.length >= MAX_ST) { toast("La lista è piena. Togli le cose già comprate e riprova."); return; }
+  l.sottotask = cleanSottotask(marcaSpesa([...st, { id: nuovoStId(new Set(st.map((x) => x.id))), t, f: false }], sceltaSpesa(l) === "on" || !st.length ? "on" : null)); // una lista nuova nasce con la scelta "spesa" scritta nelle righe
+  l.updated_at = new Date().toISOString();
+  const i = state.items.findIndex((x) => x.id === l.id);
+  i >= 0 ? (state.items[i] = l) : state.items.push(l);
+  render(); semFocus("#semSpesaNuova");
+  toastEsito(await store.save(l), `Fatto! Ho aggiunto: ${t}`);
+}
+document.addEventListener("submit", (e) => {
+  if (e.target.id === "semForm") { e.preventDefault(); semSalva(e.target); }
+  else if (e.target.id === "semSpesaForm") { e.preventDefault(); const i = $("#semSpesaNuova"); const t = i.value; i.value = ""; semSpesaAggiungi(t); }
+});
+document.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const act = el.dataset.act, v = el.dataset.v, id = el.dataset.id;
+  switch (act) {
+    case "semplice-apri": {
+      if (semOn()) { await semSpegni(); break; }
+      const si = await ask({ title: "Vuoi passare al modo semplice?", text: "Vedrai solo Cose da fare, Appuntamenti e Spesa, con scritte e pulsanti più grandi.\nNon si cancella niente: le altre funzioni restano dove sono. Per tornare all'app completa c'è un pulsante nella pagina Aiuto.", ok: "Sì, passa al modo semplice", no: "No, resto qui" });
+      if (!si) break;
+      LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0]));
+      state.tab = "s-todo"; await saveCustom({ semplice: true }); window.scrollTo({ top: 0 });
+      toast("Ecco il modo semplice. Se hai bisogno, tocca Aiuto in alto.");
+      break;
+    }
+    case "sem-esci": await semSpegni(); break;
+    case "sem-nuova": semForm(v === "evento" ? "evento" : "todo", null); break;
+    case "sem-modifica": semForm(state.items.find((x) => x.id === id)?.kind === "event" ? "evento" : "todo", id); break;
+    case "sem-giorno": if ((v === "" || validYmd(v)) && $("#semData")) $("#semData").value = v; break;
+    case "sem-cancella": semCancella(id); break;
+    case "sem-chiudi-si": semChiudiOk = true; closeSheet(); semChiudiOk = false; break;
+    case "sem-chiudi-no": { const c = $("#semConf"); if (c) c.hidden = true; $("#semTitolo")?.focus(); break; }
+    case "sem-spunta": {
+      const it = state.items.find((x) => x.id === id); if (!it) break;
+      it.done = !it.done; it.done_at = it.done ? new Date().toISOString() : null; it.updated_at = new Date().toISOString();
+      render(); semFocus(`[data-act="sem-spunta"][data-id="${CSS.escape(id)}"]`);
+      const esito = await store.save(it);
+      if (esito === "rifiutato") break;
+      toastEsito(esito, it.done ? "Fatto! L'ho segnata come fatta." : "Va bene, l'ho rimessa tra le cose da fare.");
+      break;
+    }
+    case "sem-spesa-spunta": {
+      const l = semListaSpesa(), x = l?.sottotask.find((s) => s.id === v); if (!x) break;
+      x.f = !x.f; l.updated_at = new Date().toISOString();
+      render(); semFocus(`[data-act="sem-spesa-spunta"][data-v="${CSS.escape(v)}"]`);
+      const esito = await store.save(l);
+      if (esito === "rifiutato") break;
+      toastEsito(esito, x.f ? `Fatto! Ho segnato: ${x.t}` : `Va bene, ${x.t} è di nuovo da comprare.`);
+      break;
+    }
+    case "sem-spesa-togli": {
+      let l = semListaSpesa(); const x = l?.sottotask.find((s) => s.id === v); if (!x || l.lista_id) break;
+      const si = await ask({ title: `Vuoi cancellare "${x.t}"?`, text: "Lo tolgo dalla lista della spesa.", ok: "Sì, cancella", no: "No, tieni", danger: true });
+      if (!si) { toast("Va bene, l'ho lasciato nella lista."); break; }
+      l = semListaSpesa(); if (!l || l.lista_id) break; // dopo la conferma l'elenco può essere stato aggiornato: riparto dalla versione attuale
+      l.sottotask = cleanSottotask(l.sottotask.filter((s) => s.id !== v)); l.updated_at = new Date().toISOString();
+      render(); toastEsito(await store.save(l), "Fatto! L'ho tolto dalla lista."); break;
+    }
+    case "sem-spesa-pulisci": {
+      let l = semListaSpesa(); if (!l || l.lista_id) break;
+      const si = await ask({ title: "Vuoi togliere le cose già comprate?", text: "Restano nella lista solo le cose che devi ancora comprare.", ok: "Sì, toglile", no: "No, tienile", danger: true });
+      if (!si) { toast("Va bene, ho lasciato tutto com'era."); break; }
+      l = semListaSpesa(); if (!l || l.lista_id) break;
+      l.sottotask = cleanSottotask(l.sottotask.filter((s) => !s.f)); l.updated_at = new Date().toISOString();
+      render(); toastEsito(await store.save(l), "Fatto! Ho tolto le cose già comprate."); break;
+    }
+  }
+});
+// Spegnere il modo semplice: una domanda in parole semplici, poi si torna all'app completa
+async function semSpegni() {
+  const si = await ask({ title: "Vuoi tornare all'app completa?", text: "Rivedrai tutte le funzioni di Mochi. Le tue cose restano tutte dove sono. Se vuoi, puoi riaccendere il modo semplice da Impostazioni.", ok: "Sì, torna all'app completa", no: "No, resto qui" });
+  if (!si) return;
+  state.tab = "oggi"; await saveCustom({ semplice: false }); window.scrollTo({ top: 0 });
+  toast("Eccoti nell'app completa.");
+}
 
 /* =========================================================
    AVVIO
@@ -5749,6 +6009,7 @@ const CARICA_MODULO = { umore: () => caricaUmori(), turni: () => caricaTurni(), 
 const moduloSpento = (k) => ONLINE_MODE && !mod(k); // da ospite è tutto sul dispositivo: si carica sempre
 // i dati dei moduli spenti, presi dal server adesso (al massimo 5 secondi: senza rete valgono quelli del dispositivo)
 const caricaModuliSpenti = () => Promise.race([Promise.all(Object.keys(CARICA_MODULO).filter(moduloSpento).map((k) => CARICA_MODULO[k]())), new Promise((ok) => setTimeout(ok, 5000))]);
+let primoCaricoFatto = false;
 function loadAndRender(forza) {
   if (caricoInCorso) {
     if (!forza) return caricoInCorso;
@@ -5756,23 +6017,22 @@ function loadAndRender(forza) {
     return caricoDopo;
   }
   if (!forza && Date.now() - caricoFinito < 5000) return Promise.resolve();
-  const p = caricaTutto().finally(() => { if (caricoInCorso === p) caricoInCorso = null; caricoFinito = Date.now(); });
+  const primo = !primoCaricoFatto; primoCaricoFatto = true; if (primo) indicatoreAttesa("carico", true);
+  const p = caricaTutto().finally(() => { if (primo) indicatoreAttesa("carico", false); if (caricoInCorso === p) caricoInCorso = null; caricoFinito = Date.now(); });
   return (caricoInCorso = p);
 }
 async function caricaTutto() {
-  if (ONLINE_MODE && store.user) await loadListe();
   // Moduli spenti: le loro query non partono (restano i dati dell'ultima volta, dalla cache del dispositivo).
   // Si ricaricano dal server appena servono: quando il modulo si riaccende (case "modulo", benvenuto) e prima del backup.
-  await caricaUmori(moduloSpento("umore"));
-  await caricaTurni(moduloSpento("turni"));
-  await caricaSpese(moduloSpento("spese"));
-  state.items = await store.list();
+  // I cinque caricamenti non dipendono l'uno dall'altro (ognuno ha il suo ripiego in cache): partono insieme
+  const [, , , , items] = await Promise.all([ONLINE_MODE && store.user ? loadListe() : null, caricaUmori(moduloSpento("umore")), caricaTurni(moduloSpento("turni")), caricaSpese(moduloSpento("spese")), store.list()]);
+  state.items = items;
   await caricaAnimali();
   petDaCache();
   const petPronto = caricaPet(); // in sottofondo: spunte di oggi e pesi dal server
   // giorni attivi: subito quelli che si conoscono, poi (in sottofondo) quelli salvati sul server
   const giorniPronti = caricaGiorni();
-  render(); maybeAutoRecap(); checkListeSconosciute();
+  render(); if (!semOn()) maybeAutoRecap(); checkListeSconosciute();
   giorniPronti.then(() => aggiornaSblocchi());
   petPronto.then((c) => { if (c && state.tab === "pet" && !$("#sheet").classList.contains("on")) render(); });
   if (await giorniPronti && !$("#sheet").classList.contains("on") && state.tab !== "focus") render();
@@ -5824,34 +6084,69 @@ async function boot() {
   const th = LS.get("mochi.theme", "auto"); if (th !== "auto") document.documentElement.dataset.theme = th;
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-  if (!ONLINE_MODE) { showApp(); await loadAndRender(true); const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
-    // ospite con un link d'invito: l'invito resta da parte (lo propongo dopo l'accesso)
-    eseguiAzione();
-    if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (onb) { /* il benvenuto ha già segnato le novità come viste */ } else if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); if (!onb) { maybeBiscotto(); festeApri(); } return; }
+  if (!ONLINE_MODE) { showApp(); await loadAndRender(true);
+    // modo semplice: nessuna finestra che si apre da sola (benvenuto, installazione, novità, biscotto, feste)
+    if (!semOn()) { const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
+      // ospite con un link d'invito: l'invito resta da parte (lo propongo dopo l'accesso)
+      eseguiAzione();
+      if (OSPITE) { let c = null; try { c = sessionStorage.getItem("mochi.invito"); } catch {} if (c && RE_INVITO.test(c)) setTimeout(() => toast("Crea un account per entrare nella lista"), 1200); } if (onb) { /* il benvenuto ha già segnato le novità come viste */ } else if (!OSPITE) maybeShowNovita(); else LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0])); if (!onb) { maybeBiscotto(); festeApri(); } }
+    return; }
 
-  // Modalità online: mostra subito la cache, poi verifica la sessione
+  // Modalità online: se il dispositivo ha già una sessione salvata e una cache, mostra subito le cose (come startOnline)
+  // mentre si verifica la sessione; se poi risulta assente o scaduta si torna all'accesso e si svuota quello che si era mostrato
+  const mostrata = sessioneSalvata() && LS.get("mochi.cache", null) !== null && !/type=recovery/.test(location.hash);
+  if (mostrata) { attesaSessione(true); NOME = str(LS.get("mochi.nome", "")).slice(0, 40); mostraCache(); }
   let logged = false;
   try { logged = await store.init(); } catch (e) {
+    attesaSessione(false);
+    // senza rete la sessione non e' stata verificata: appena la rete torna (e nessuna finestra e' aperta) si riparte da capo
+    window.addEventListener("online", () => { if (!store.user && !$("#app").classList.contains("hidden") && !$("#sheet").classList.contains("on")) location.reload(); }, { once: true });
+    if (mostrata) { setSync(false); render(); return; }
     if (LS.get("mochi.cache", null)) { showApp(); state.items = normalizeAll(LS.get("mochi.cache", [])); setSync(false); render(); return; }
     setLoginMode("login"); $("#lErr").textContent = "Connessione assente. Riprova tra poco."; return;
   }
-  if (/type=recovery/.test(location.hash)) { setLoginMode("newpass"); return; }
-  if (!logged) { const modo = LS.get("mochi.ospite.modo", "login"); localStorage.removeItem("mochi.ospite.modo"); setLoginMode(modo === "signup" && SIGNUP_OPEN ? "signup" : "login"); maybeShowInstallHint(); return; }
+  attesaSessione(false);
+  if (/type=recovery/.test(location.hash)) { if (mostrata) svuotaMostrata(); setLoginMode("newpass"); return; }
+  if (!logged) { if (mostrata) svuotaMostrata(); const modo = LS.get("mochi.ospite.modo", "login"); localStorage.removeItem("mochi.ospite.modo"); setLoginMode(modo === "signup" && SIGNUP_OPEN ? "signup" : "login"); maybeShowInstallHint(); return; }
   startOnline();
 }
-async function startOnline() {
+// Le cose salvate sul dispositivo, subito sullo schermo (prima di sapere se la sessione è ancora valida)
+function mostraCache() {
   showApp();
   state.liste = LS.get("mochi.liste", []); if (!Array.isArray(state.liste)) state.liste = [];
   state.items = normalizeAll(LS.get("mochi.cache", [])); state.giorni = new Set(giorniCache()); render();
+}
+// Chiave di sessione di Supabase nel dispositivo (sb-<progetto>-auth-token)
+const sessioneSalvata = () => { try { return Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k)); } catch { return false; } };
+// Finché non so se la sessione vale, la schermata si vede ma non si tocca (il database non è ancora collegato)
+let inAttesaSessione = false;
+// Se l'apertura tarda (rete lenta) compare "Un attimo, sto aprendo...": solo dopo 1,2 secondi, così non lampeggia quando è veloce
+const attesaFonti = new Set(); let attesaTimer = 0;
+function indicatoreAttesa(fonte, on) {
+  on ? attesaFonti.add(fonte) : attesaFonti.delete(fonte);
+  clearTimeout(attesaTimer);
+  if (attesaFonti.size) attesaTimer = setTimeout(() => document.documentElement.setAttribute("data-attesa", ""), 1200);
+  else document.documentElement.removeAttribute("data-attesa");
+}
+function attesaSessione(on) { indicatoreAttesa("sessione", on); inAttesaSessione = on; ["#app", "#nav"].forEach((s) => { const e = $(s); if (e) e.inert = on; }); }
+// Sessione assente: niente di quanto mostrato dalla cache deve restare in memoria né nella pagina
+function svuotaMostrata() {
+  state.items = []; state.liste = []; state.giorni = new Set(); state.umori = {}; state.turni = {}; state.spese = { voci: [], budget: null };
+  NOME = ""; $("#view").innerHTML = ""; $("#hello").textContent = "Ciao!";
+}
+async function startOnline() {
+  mostraCache();
   await loadAndRender(true);
-  const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
-  eseguiAzione();
-  if (!onb) { maybeShowNovita(); maybeBiscotto(); festeApri(); }
-  proponiPassaggio();
+  // modo semplice: nessuna finestra che si apre da sola (benvenuto, installazione, novità, biscotto, feste, inviti, risposte)
+  if (!semOn()) {
+    const onb = benvenutoDovuto(); if (onb) apriBenvenuto(); else maybeShowInstallHint();
+    eseguiAzione();
+    if (!onb) { maybeShowNovita(); maybeBiscotto(); festeApri(); }
+    proponiPassaggio();
+  }
   resyncPush();
   checkAdmin();
-  controllaRisposte();
-  invitoInSospeso();
+  if (!semOn()) { controllaRisposte(); invitoInSospeso(); }
   store.subscribe((p) => {
     if (p.eventType === "DELETE") state.items = state.items.filter((x) => x.id !== p.old?.id);
     else { const n = normalize(p.new); if (!n) return; const i = state.items.findIndex((x) => x.id === n.id); i >= 0 ? (state.items[i] = n) : state.items.push(n); }
@@ -5868,13 +6163,13 @@ async function startOnline() {
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
 let loginMode = "login";
 function clearLocal() {
-  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione", "mochi.benvenuto"].forEach((k) => localStorage.removeItem(k));
+  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione", "mochi.benvenuto", "mochi.nome"].forEach((k) => localStorage.removeItem(k));
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || k.startsWith("mochi.petCache.") || k.startsWith("mochi.petFesta.") || (k.startsWith("mochi.petDaInviare.") && !(LS.get(k, []) || []).length) || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
-  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; c.pet = cleanPet(null); c.barra = [...BARRA_DEF]; LS.set("mochi.custom", c); }
+  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; c.pet = cleanPet(null); c.barra = [...BARRA_DEF]; c.semplice = false; LS.set("mochi.custom", c); }
   state.pet.righe = [];
-  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null, barra: null });
+  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null, barra: null, semplice: false });
 }
 function setLoginMode(m) {
   loginMode = m;

@@ -264,7 +264,12 @@ button.stat::after{content:"";position:absolute;top:9px;right:9px;width:6px;heig
 .mascotte .acc{pointer-events:none}
 .pancino{display:flex;gap:var(--s3);align-items:center;width:100%;text-align:left;background:var(--card);border:2px solid var(--pink-l);border-radius:var(--r-xl);padding:var(--s3) var(--s4);margin:var(--s4) 0 0;box-shadow:var(--shadow);cursor:pointer;color:inherit;font:inherit}
 .pancino .mbox{width:62px;height:58px;flex:none}
-.pancino .mbox{position:relative}.pc-pet{position:absolute;right:-12px;bottom:-4px;font-size:20px;line-height:1;white-space:nowrap;background:var(--card);border-radius:999px;padding:2px 4px;box-shadow:var(--shadow)}
+:root[data-pet] :is(.mbox,.top .mascot,.nav .brand .mascot){position:relative}
+.pc-pet{position:absolute;right:-8px;bottom:-3px;font-size:var(--pet-fs,16px);line-height:1;white-space:nowrap;background:var(--card);border-radius:999px;padding:2px 4px;box-shadow:var(--shadow);pointer-events:none}
+.pancino .mbox{position:relative;--pet-fs:20px}.pancino .pc-pet{right:-12px;bottom:-4px}
+.empty .mbox,.recap .mbox,.login .mbox,.focus-scena .mbox{--pet-fs:26px}
+.sheet h2 .mbox{--pet-fs:12px}.sheet h2 .pc-pet{right:-6px;padding:1px 3px}
+.top .mascot{--pet-fs:14px}.top .mascot .pc-pet{right:-6px}
 .pc-txt{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
 .pc-txt b{font-size:15px}
 .pc-txt small{color:var(--ink2);font-size:13px}
@@ -1610,6 +1615,88 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
 :root[data-stile="morbido"] .cal.mini>.calhead{margin:0 -8px 8px}
 :root[data-stile="sobrio"] .cal.mini{margin-top:0}
 :root[data-stile="sobrio"] .cal.mini>.calhead{padding-top:8px}
+
+/* =========================================================
+   MODO SEMPLICE (:root[data-semplice][data-stile]): testo grande, bersagli di tocco da 56 px in su, parole al posto delle icone,
+   niente animazioni, niente particelle. Compare solo con l'interruttore acceso: spento non cambia niente
+   (i pulsanti .sem-only li crea app.js solo da acceso e li toglie da spento).
+   ========================================================= */
+:root[data-semplice][data-stile],:root[data-semplice][data-stile] body{font-size:20px;line-height:1.6;scroll-behavior:auto}
+:root[data-semplice][data-stile] *,:root[data-semplice][data-stile] *::before,:root[data-semplice][data-stile] *::after{animation:none!important;transition:none!important}
+:root[data-semplice][data-stile] :focus-visible{outline:4px solid var(--ink);outline-offset:3px}
+:root[data-semplice][data-stile] :is(#stagioni,.top .mascot,.top .motto,.top .iconbtn,.nav .brand,.nav .side-head,.nav .side,.nav .plus,.nav .tab:not(.sem-only)){display:none!important}
+/* in alto: saluto grande, data in chiaro, tasto Aiuto con la parola */
+:root[data-semplice][data-stile] .top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+:root[data-semplice][data-stile] .top .hello{display:block;flex:1 1 200px;min-width:0}
+:root[data-semplice][data-stile] .top .hello h1{font-size:28px;line-height:1.25;overflow-wrap:anywhere}
+:root[data-semplice][data-stile] .top .hello p{font-size:20px;line-height:1.4;white-space:normal;overflow:visible;margin:4px 0 0;font-weight:700;color:var(--ink2)}
+.sm-aiuto{flex:none;min-width:96px;min-height:56px;padding:0 20px;border-radius:16px;border:3px solid var(--ink);background:var(--card);color:var(--ink);font-size:20px;font-weight:800}
+/* barra in basso: tre pulsanti grandi con la parola (20 px) */
+:root[data-semplice][data-stile] .nav .bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;height:auto;min-height:76px;padding:8px 4px;max-width:640px;border:2px solid var(--line)}
+:root[data-semplice][data-stile] .nav .tab.sem-only{display:flex;min-height:60px;padding:8px 0;border-radius:14px;color:var(--ink);font-size:20px;font-weight:800;line-height:1.15;text-align:center;letter-spacing:-.2px}
+:root[data-semplice][data-stile] .nav .tab.sem-only.on{background:var(--sob-fill,var(--pink-d));color:#fff}
+@media (max-width:1023px){ :root[data-semplice][data-stile] .nav{padding-left:8px;padding-right:8px} }
+@media (max-width:1023px){ :root[data-semplice][data-stile] .app{padding-bottom:calc(var(--safe-b) + 140px)} }
+@media (min-width:1024px){
+  :root[data-semplice][data-stile] .nav{width:300px}
+  :root[data-semplice][data-stile] .app{margin-left:300px}
+  :root[data-semplice][data-stile] .nav .bar{display:flex;flex-direction:column;gap:12px;min-height:0;padding:0;border:0}
+  :root[data-semplice][data-stile] .nav .tab.sem-only{justify-content:flex-start;padding:12px 20px;font-size:22px;min-height:64px;text-align:left;letter-spacing:0}
+  :root[data-semplice][data-stile] .nav .tab.sem-only:hover:not(.on){background:var(--bg2)}
+  :root[data-semplice][data-stile] .top .hello h1{font-size:30px}
+}
+/* le pagine */
+.sm-wrap{max-width:720px;margin:0}
+.sm-h{font-size:28px;line-height:1.25;margin:8px 0 16px;font-weight:800}
+.sm-h3{font-size:22px;line-height:1.3;margin:28px 0 10px;font-weight:800}
+.sm-btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:64px;padding:12px 20px;margin:0 0 16px;border-radius:16px;border:3px solid var(--sob-fill,var(--pink-d));background:var(--sob-fill,var(--pink-d));color:#fff;font-size:22px;font-weight:800;line-height:1.2;cursor:pointer}
+.sm-btn.sm-ghost{background:var(--card);color:var(--ink);border-color:var(--ink)}
+.sm-btn.sm-danger{background:var(--card);color:var(--danger);border-color:var(--danger)}
+.sm-list{display:flex;flex-direction:column;gap:12px;margin:0 0 8px}
+.sm-row{display:flex;align-items:stretch;gap:10px}
+.sm-check{flex:1;min-width:0;display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 14px;text-align:left;border-radius:16px;background:var(--card);border:2px solid var(--line);color:var(--ink);font-size:22px;font-weight:700;line-height:1.3}
+.sm-box{flex:none;width:36px;height:36px;border-radius:8px;border:3px solid var(--ink);background:var(--bg);display:grid;place-items:center}
+.sm-check[aria-pressed="true"] .sm-box{background:var(--sob-fill,var(--pink-d));border-color:var(--sob-fill,var(--pink-d))}
+.sm-check[aria-pressed="true"] .sm-box::after{content:"";width:11px;height:19px;border:solid #fff;border-width:0 5px 5px 0;transform:rotate(45deg) translate(-2px,-2px)}
+.sm-t{flex:1;min-width:0;overflow-wrap:anywhere}
+.sm-t b,.sm-t small{display:block}
+.sm-t small{font-size:20px;font-weight:600;line-height:1.35;color:var(--ink2)}
+.sm-stato{flex:none;font-size:20px;font-weight:800;color:var(--ink2)}
+@media (max-width:479px){ .sm-stato{display:none} } /* sui telefoni stretti schiacciava il testo una lettera per riga: bastano la spunta e il titolo "Già comprate" / "Già fatte" */
+.sm-row.fatta .sm-t{color:var(--ink2)}
+.sm-ev .sm-t{padding:12px 14px;border-radius:16px;background:var(--card);border:2px solid var(--line);font-size:22px;font-weight:700;line-height:1.3}
+.sm-mod{flex:none;min-width:92px;min-height:64px;padding:0 12px;border-radius:16px;background:var(--card);border:2px solid var(--ink);color:var(--ink);font-size:20px;font-weight:800}
+.sm-add label,.sm-form .field label{display:block;font-size:20px;font-weight:800;margin:0 0 8px;color:var(--ink)}
+.sm-add .input{margin-bottom:12px}
+:root[data-semplice][data-stile] .input,:root[data-semplice][data-stile] textarea.input,:root[data-semplice][data-stile] select.input{font-size:22px;min-height:64px;padding:12px 16px;border-width:3px;border-radius:16px}
+.sm-quick{display:flex;gap:10px}
+.sm-quick .sm-btn{margin-bottom:10px;min-height:56px;font-size:20px}
+.sm-err{min-height:1.5em;margin:0 0 12px;color:var(--danger);font-size:20px;font-weight:800}
+.sm-conf{margin:0 0 16px;padding:14px 16px;border:3px solid var(--danger);border-radius:16px;background:var(--card)}
+.sm-conf[hidden]{display:none}
+.sm-conf p{margin:0 0 12px;font-size:20px;line-height:1.5}
+.sm-conf .sm-btn:last-child{margin-bottom:0}
+.sm-vuoto{margin:0 0 16px;padding:16px 18px;border:2px dashed var(--ink2);border-radius:16px;font-size:20px}
+.sm-aiutobox{margin:0 0 14px;padding:14px 18px;background:var(--card);border:2px solid var(--line);border-radius:16px}
+.sm-aiutobox h3{margin:0 0 6px;font-size:22px}
+.sm-aiutobox p{margin:0;font-size:20px;line-height:1.55}
+/* finestre (moduli e conferme) e avvisi */
+:root[data-semplice][data-stile] .sheet{font-size:20px;max-width:640px}
+:root[data-semplice][data-stile] .sheet h2{font-size:28px;line-height:1.25}
+:root[data-semplice][data-stile] .sheet .mbox{display:none}
+:root[data-semplice][data-stile] .sheet p{font-size:20px;line-height:1.55}
+:root[data-semplice][data-stile] .sheet-bar{height:72px}
+:root[data-semplice][data-stile] .sheet-x{width:auto;min-width:96px;height:56px;padding:0 20px;border-radius:16px;border:3px solid var(--ink);background:var(--card);color:var(--ink);font-size:20px;font-weight:800}
+:root[data-semplice][data-stile] .sheet .actions{flex-direction:column;gap:12px}
+:root[data-semplice][data-stile] .btn{min-height:64px;font-size:22px;border-radius:16px;border:3px solid var(--ink);background:var(--card);color:var(--ink)}
+:root[data-semplice][data-stile] .btn.primary{background:var(--sob-fill,var(--pink-d));border-color:var(--sob-fill,var(--pink-d));color:#fff;box-shadow:none}
+:root[data-semplice][data-stile] .btn.danger-full{background:#b3263f;border-color:#b3263f;color:#fff;box-shadow:none}
+:root[data-semplice][data-stile] .toast{font-size:22px;line-height:1.4;padding:16px 22px;border-radius:16px;max-width:92vw}
+/* "Un attimo, sto aprendo...": compare solo se l'apertura tarda (html[data-attesa], messo dal codice dopo 1,2 s) */
+:root[data-attesa] body::after{content:"Un attimo, sto aprendo le tue cose...";position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);transform:translateX(-50%);z-index:9999;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;padding:9px 18px;border-radius:999px;background:var(--card);color:var(--ink);border:2px solid var(--pink-d,var(--ink2));box-shadow:0 6px 18px rgba(0,0,0,.18);font-weight:700;font-size:15px;line-height:1.3;text-align:center;pointer-events:none;animation:attesaPulsa 1.6s ease-in-out infinite}
+:root[data-semplice][data-attesa] body::after{font-size:20px;border-width:3px}
+@keyframes attesaPulsa{50%{opacity:.78}}
+@media (prefers-reduced-motion:reduce){:root[data-attesa] body::after{animation:none}}
 </style>
 </head>
 <body>
