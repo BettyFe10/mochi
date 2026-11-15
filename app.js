@@ -222,7 +222,7 @@ const SupaStore = {
   applyName() {
     const md = this.user?.user_metadata || {};
     NOME = md.nome || ""; LS.set("mochi.nome", NOME);
-    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null || md.barra != null || md.nome_mascotte != null || md.semplice != null) {
+    if (md.nome_app || md.mascotte || md.accessorio || md.colore || md.font || md.stile || md.moduli || md.stagione || md.suono || md.casa || md.spesa_reparti != null || md.compleanno != null || md.ricordi != null || md.fiori != null || md.pronomi != null || md.pet != null || md.barra != null || md.nome_mascotte != null || md.semplice != null || md.calColori != null) {
       // le preferenze nuove (moduli, stagione, suono) che l'account non ha ancora restano quelle di questo dispositivo
       CUSTOM = cleanCustom({ nome_app: md.nome_app, nome_mascotte: md.nome_mascotte, mascotte: md.mascotte, accessorio: md.accessorio, colore: md.colore, font: md.font, stile: md.stile,
         moduli: md.moduli ?? CUSTOM.moduli, stagione: md.stagione ?? CUSTOM.stagione, suono: md.suono ?? CUSTOM.suono,
@@ -238,12 +238,14 @@ const SupaStore = {
         pet: md.pet ?? CUSTOM.pet,
         // barra in basso: quella dell'account, altrimenti resta quella di questo dispositivo
         barra: md.barra ?? CUSTOM.barra,
+        // colori del calendario: quelli dell'account, altrimenti restano quelli di questo dispositivo
+        calColori: md.calColori ?? CUSTOM.calColori,
         // modo semplice: quello dell'account (anche spento), altrimenti resta quello di questo dispositivo
         semplice: md.semplice ?? CUSTOM.semplice });
       LS.set("mochi.custom", CUSTOM); applyCustom();
     }
   },
-  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet, barra: c.barra, semplice: c.semplice } }); if (error) throw error; this.user = data.user; },
+  async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet, barra: c.barra, semplice: c.semplice, calColori: c.calColori } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
   async login(email, password) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
@@ -484,7 +486,7 @@ const MODULI = [
   ["casa", "🏡", "La casetta", "La casa della mascotte, con i mobili in regalo", true],
   ["umore", "🌷", "Com'è andata la giornata", "Faccine nel calendario e giardino del mese", true],
   ["ricorrenti", "🔁", "Promemoria ricorrenti", "Bevi acqua, fai una pausa...", true, true],
-  ["liste", "👭", "Liste condivise", "Liste da usare insieme ad altre persone", true, true],
+  ["liste", "👭", "Le mie liste", "Le tue liste (Salute, Casa...), da tenere per te o da usare con altre persone", true, true],
   ["biscotto", "🥠", "Biscotto della fortuna", "Una frase da aprire ogni mattina", true],
   ["pancino", "🍣", "Il pancino", "La mascotte mangia le cose che fai e riceve regali", true],
   ["stagioni", "❄️", "Stagioni", "Neve, pioggia, sole o foglie sullo sfondo", false],
@@ -623,12 +625,31 @@ function cleanPetAltri(a, nome) {
 }
 // La barra in basso del telefono: Oggi, Menu e + sono fissi, gli altri 2 posti li sceglie chi usa l'app (solo id conosciuti, niente doppioni)
 const BARRA_OK = ["todo", "agenda", "appunti", "turni", "spese", "focus", "casa", "pet", "liste"], BARRA_DEF = ["todo", "agenda"];
+// Colori del calendario: 8 colori con id fisso. Nel codice si usa SOLO l'hex preso da qui, mai un valore arrivato da fuori
+const CAL_COLORI = [["rosa", "Rosa", "#e0507f"], ["blu", "Blu", "#3f7fd6"], ["verde", "Verde", "#2f9460"], ["giallo", "Giallo", "#b7860b"], ["viola", "Viola", "#7e5ed6"], ["arancio", "Arancio", "#d9692a"], ["turchese", "Turchese", "#1f8f94"], ["grigio", "Grigio", "#7b8190"]];
+const RE_CALCHIAVE = /^(personale|lavoro|l:[A-Za-z0-9-]{1,64})$/;
+function cleanCalColori(o) {
+  const r = {};
+  if (!o || typeof o !== "object" || Array.isArray(o)) return r;
+  let n = 0;
+  for (const k of Object.keys(o).slice(0, 200)) {
+    if (n >= 24) break;
+    if (typeof k === "string" && RE_CALCHIAVE.test(k) && typeof o[k] === "string" && CAL_COLORI.some((x) => x[0] === o[k])) { r[k] = o[k]; n++; }
+  }
+  return r;
+}
+const calId = (key) => { const c = CAL_COLORI.find((x) => x[0] === (CUSTOM.calColori || {})[key]); if (c) return c[0]; if (key === "personale") return "rosa"; if (key === "lavoro") return "blu"; let h = 0; for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return CAL_COLORI.slice(2)[h % 6][0]; };
+const calHex = (key) => CAL_COLORI.find((x) => x[0] === calId(key))[2];
+const calChiave = (it) => (it.lista_id && listaById(it.lista_id) ? "l:" + it.lista_id : it.area === "lavoro" ? "lavoro" : "personale");
+const calColoreDi = (it) => calHex(calChiave(it));
+// "colorato" = scelto dall'utente oppure di una lista condivisa; altrimenti Personale e Lavoro restano con i colori del tema di sempre
+const calScelto = (key) => key.startsWith("l:") || !!(CUSTOM.calColori || {})[key];
 function cleanBarra(b) {
   const l = Array.isArray(b) ? [...new Set(b.filter((x) => typeof x === "string" && BARRA_OK.includes(x)))].slice(0, 2) : [];
   return l.length === 2 ? l : [...BARRA_DEF];
 }
 const DEFAULT_CUSTOM = { nome_app: "Mochi", nome_mascotte: "", mascotte: "mochi", accessorio: "auto", colore: "fragola", font: "morbido", stile: "morbido",
-  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO, barra: BARRA_DEF, semplice: false };
+  moduli: Object.fromEntries(MODULI.map((m) => [m[0], m[4]])), stagione: "auto", suono: "campanella", casa: CASA_VUOTA, spesa_reparti: true, compleanno: "", ricordi: [], fiori: { modo: "uno", fiore: "classico" }, pronomi: "", pet: PET_VUOTO, barra: BARRA_DEF, semplice: false, calColori: {} };
 // I pronomi: servono solo ad adattare i testi (Benvenuta / Benvenuto / Rieccoti). Solo "lei", "lui", "loro" o vuoto (= non specificato); tutto il resto scartato
 const PRONOMI = [["", "Neutro"], ["lei", "Lei"], ["lui", "Lui"], ["loro", "Loro"]];
 const cleanPronomi = (p) => (typeof p === "string" && ["lei", "lui", "loro"].includes(p) ? p : "");
@@ -656,7 +677,7 @@ function cleanCustom(c) {
   const moduli = Object.fromEntries(MODULI.map(([k, , , , def]) => [k, typeof m[k] === "boolean" ? m[k] : def]));
   const stagione = typeof c.stagione === "string" && STAGIONI.some((x) => x[0] === c.stagione) ? c.stagione : "auto";
   const suono = typeof c.suono === "string" && SUONI.some((x) => x[0] === c.suono) ? c.suono : "campanella";
-  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), barra: cleanBarra(c.barra), semplice: c.semplice === true, nome_app: nome || DEFAULT_CUSTOM.nome_app, nome_mascotte: nomeM, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
+  return { colore, font, stile, moduli, stagione, suono, casa: cleanCasa(c.casa), spesa_reparti: c.spesa_reparti !== false, compleanno: cleanCompleanno(c.compleanno), ricordi: cleanRicordi(c.ricordi), fiori: cleanFiori(c.fiori), pronomi: cleanPronomi(c.pronomi), pet: cleanPet(c.pet), barra: cleanBarra(c.barra), calColori: cleanCalColori(c.calColori), semplice: c.semplice === true, nome_app: nome || DEFAULT_CUSTOM.nome_app, nome_mascotte: nomeM, mascotte: typeof c.mascotte === "string" && Object.prototype.hasOwnProperty.call(MASC.list, c.mascotte) ? c.mascotte : DEFAULT_CUSTOM.mascotte, accessorio: acc };
 }
 let CUSTOM = cleanCustom(LS.get("mochi.custom", DEFAULT_CUSTOM));
 // Modo semplice acceso? (solo "true" vale: ogni altro valore arrivato dall'account è scartato da cleanCustom)
@@ -908,7 +929,7 @@ function headerUpdate() {
 
 const byDue = (a, b) => (a.due_date || "9999") .localeCompare(b.due_date || "9999") || (a.due_time || "99").localeCompare(b.due_time || "99");
 
-function itemRow(it) {
+function itemRow(it, colora) {
   const area = it.area === "lavoro" ? "lavoro" : "personale";
   const left = it.kind === "event"
     ? `<span class="evdot"><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>`
@@ -927,7 +948,8 @@ function itemRow(it) {
   // lista da spuntare: "3/7" si apre e si spunta senza aprire l'editor
   const st = it.sottotask || [], aperto = st.length && state.stAperti.has(it.id);
   if (st.length) chips.push(`<button class="chip st-chip ${aperto ? "on" : ""} ${st.every((x) => x.f) ? "tutte" : ""}" data-act="st-apri" data-id="${esc(it.id)}" aria-expanded="${aperto ? "true" : "false"}" aria-label="Lista da spuntare: ${st.filter((x) => x.f).length} su ${st.length}">☑ ${st.filter((x) => x.f).length}/${st.length}<span class="st-fr">${aperto ? "▴" : "▾"}</span></button>`);
-  return `<div class="item ${area} ${it.done ? "done" : ""}" data-act="edit" data-id="${esc(it.id)}">
+  const ck = colora === true ? calChiave(it) : "", cc = ck && calScelto(ck);
+  return `<div class="item ${area} ${it.done ? "done" : ""}${cc ? " cc" : ""}"${cc ? ` style="--cc:${calHex(ck)}"` : ""} data-act="edit" data-id="${esc(it.id)}">
     ${left}
     <div class="body"><div class="t"><button type="button" class="t-btn" data-act="edit" data-id="${esc(it.id)}">${esc(it.title)}</button></div><div class="meta">${chips.join("")}</div>${aperto ? `<div class="st-lista">${voceListaHtml(it)}</div>` : ""}</div>
   </div>`;
@@ -1051,13 +1073,22 @@ function monthGrid(m, map, sel, act) {
     const d = addDays(start, k), s = ymd(d);
     if (k >= 35 && d.getMonth() !== m.getMonth()) break;
     const its = map[s] || [];
-    const dots = its.slice(0, 3).map((i) => `<i class="${i.area === "lavoro" ? "l" : ""}"></i>`).join("");
+    const chiavi = its.map(calChiave); // un pallino per cosa (al massimo 3), del colore della sua categoria
+    const dots = chiavi.slice(0, 3).map((k) => calScelto(k) ? `<i class="cc" style="--cc:${calHex(k)}"></i>` : `<i class="${k === "lavoro" ? "l" : ""}"></i>`).join("");
     const um = mod("umore") ? state.umori[s] : null, tu = act === "cal-sel" ? turnoDi(s) : null;
     cells += `<button class="day ${d.getMonth() !== m.getMonth() ? "out" : ""} ${s === todayStr() ? "today" : ""} ${s === sel ? "sel" : ""} ${um ? "has-um" : ""} ${tu && tu.k !== "" ? "conturno" : ""}" ${um ? `style="--um:${UMORI[um.livello].colore}"` : ""} data-act="${act}" data-v="${s}"><span class="dn">${d.getDate()}</span><span class="dots">${dots}</span>${tu && tu.k !== "" ? `<span class="tday-s" style="--tc:${TURNO_COLORI[tu.colore - 1]}">${esc(tu.sigla)}</span>` : ""}</button>`;
   }
   return `<div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div><div class="days">${cells}</div>`;
 }
 
+// Legenda dei colori sotto il calendario: Personale, Lavoro e le liste condivise che hanno cose in quel mese
+function calLegenda(m, map) {
+  const usate = new Set(); const pre = ymd(new Date(m.getFullYear(), m.getMonth(), 1)).slice(0, 7);
+  for (const [d, l] of Object.entries(map)) if (d.startsWith(pre)) l.forEach((i) => usate.add(calChiave(i)));
+  const voce = (k, e, n) => `<span class="cal-chip"><i class="${calScelto(k) ? "cc" : k === "lavoro" ? "l" : ""}"${calScelto(k) ? ` style="--cc:${calHex(k)}"` : ""}></i>${e ? `<span class="emo">${esc(e)} </span>` : ""}${esc(n)}</span>`;
+  const liste = state.liste.filter((l) => usate.has("l:" + l.id)).map((l) => voce("l:" + l.id, l.emoji, l.nome)).join("");
+  return `<div class="cal-leg" aria-label="Colori del calendario">${voce("personale", "🌷", "Personale")}${voce("lavoro", "💼", "Lavoro")}${liste}</div>`;
+}
 const ANELLI = `<span class="anelli" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>`; // la spirale del calendario da tavolo (solo disegno)
 function viewAgenda() {
   const m = state.calMonth;
@@ -1070,12 +1101,13 @@ function viewAgenda() {
         <button class="iconbtn" data-act="cal-move" data-v="-1" aria-label="Mese prima">‹</button>
         <h2>${MESI[m.getMonth()]} ${m.getFullYear()}</h2>
         <button class="iconbtn" data-act="cal-move" data-v="1" aria-label="Mese dopo">›</button></div>${monthGrid(m, map, state.calSel, "cal-sel")}</div>
+      ${calLegenda(m, map)}
     </div>
     <div class="col-side">
       <div class="sec"><h2>${GIORNI[sd.getDay()].replace(/^./, (c) => c.toUpperCase())} ${sd.getDate()} ${MESI[sd.getMonth()]}</h2>
         <button class="fbtn" data-act="new-on-day">+ Aggiungi</button></div>
       ${rigaTurno(state.calSel)}
-      ${sel.length ? `<div class="list">${sel.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:12px">${(() => { const tu = turnoDi(state.calSel); return tu && tu.inizio ? "Nient'altro in programma" : "Giornata libera 🌤️"; })()}</div>`}
+      ${sel.length ? `<div class="list">${sel.map((i) => itemRow(i, true)).join("")}</div>` : `<div class="empty" style="padding:12px">${(() => { const tu = turnoDi(state.calSel); return tu && tu.inizio ? "Nient'altro in programma" : "Giornata libera 🌤️"; })()}</div>`}
       ${!mod("umore") ? "" : state.calSel <= todayStr() ? (state.umori[state.calSel]
         ? `<button class="umore-riga" data-act="umore-apri" data-v="${state.calSel}">${faccina(state.umori[state.calSel].livello, 30)}<span><b>${UMORI[state.umori[state.calSel].livello].nome}</b>${state.umori[state.calSel].nota ? `<small>${esc(state.umori[state.calSel].nota)}</small>` : ""}</span></button>`
         : `<button class="umore-riga vuota" data-act="umore-apri" data-v="${state.calSel}"><span class="pallino"></span><span><b>Com'è andata?</b><small>Tocca per colorare questo giorno</small></span></button>`) : ""}
@@ -1101,7 +1133,7 @@ const VOCI_MENU = [
   { g: "q", at: 'data-tab="todo"', e: "✅", ic: "i-todo", t: "Da fare", s: () => "Le cose da fare, con le scadenze", soloMenu: 1 },
   { g: "q", at: 'data-tab="agenda"', e: "📅", ic: "i-agenda", t: "Agenda", s: () => "Il calendario con gli appuntamenti", soloMenu: 1 },
   { g: "q", at: 'data-tab="appunti"', e: "📝", ic: "i-appunti", t: "Appunti", s: () => "Idee, liste, cose da tenere", soloMenu: 1 },
-  { g: "q", m: "liste", at: 'data-act="open-liste"', atD: 'data-tab="liste"', e: "👭", ic: "i-liste", t: "Liste condivise", s: () => (state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") },
+  { g: "q", m: "liste", at: 'data-act="open-liste"', atD: 'data-tab="liste"', e: "👭", ic: "i-liste", t: "Le mie liste", s: () => (state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") },
   { g: "q", m: "ricorrenti", at: 'data-act="open-ricorrenti"', atD: 'data-act="open-ricorrenti" data-tab="ricorrenti"', e: "🔁", ic: "i-ricorrenti", t: "Ricorrenti", s: () => "Bevi acqua, fai una pausa..." },
   { g: "q", m: "turni", at: 'data-tab="turni"', e: "💼", ic: "i-turni", t: "Turni di lavoro", s: () => (turniAttivi() ? `${fmtOre(oreMese(new Date()).min)} questo mese` : "Il calendario del lavoro") },
   { g: "q", m: "spese", at: 'data-tab="spese"', e: "👛", ic: "i-spese", t: "Spese", s: () => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; } },
@@ -1423,6 +1455,7 @@ function finishAsk(confirmed) {
 function openEditor(it, isNew) {
   // _autoRemind: il promemoria lo sceglie Mochi finché l'utente non lo cambia a mano
   // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
+  listaDopo = null;
   const pm = petMarca(it);
   draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
   // Finestra più leggera: data, promemoria, lista e note compaiono già aperti solo se la voce li usa; altrimenti stanno dietro "+ Data, promemoria e note"
@@ -1431,10 +1464,40 @@ function openEditor(it, isNew) {
   setTimeout(() => { const i = $("#fTitle"); if (i && isNew) i.focus(); }, 250);
 }
 
+// Categoria (v52): Personale, Lavoro e le liste in una sola riga di chip; il pallino e' il colore del calendario
+const catListaSel = (d) => (!d._pet && d.lista_id && listeUsate().find((l) => l.id === d.lista_id)) || null;
+const catBloccata = (d) => !!(d.lista_id && d.user_id && d.user_id !== myId()); // voce altrui in una lista: non si puo' renderla privata
+function catChips(d) {
+  const sel = catListaSel(d), blocca = catBloccata(d);
+  const chip = (v, emo, nome, key, on, dis) => `<button type="button" class="cat ${on ? "on" : ""}" data-act="d-cat" data-v="${esc(v)}" aria-pressed="${on}" ${dis ? "disabled" : ""}><i class="cat-dot" style="--cc:${calHex(key)}"></i><span class="cat-t">${emo}${esc(nome)}</span><span class="cat-ok" aria-hidden="true">✓</span></button>`;
+  const lista = d._pet ? [] : listeUsate();
+  return chip("personale", '<span class="emo">🌷 </span>', "Personale", "personale", !d.lista_id && d.area !== "lavoro", blocca)
+    + chip("lavoro", '<span class="emo">💼 </span>', "Lavoro", "lavoro", !d.lista_id && d.area === "lavoro", blocca)
+    + lista.map((l) => chip("l:" + l.id, esc(l.emoji) + " ", l.nome, "l:" + l.id, !!sel && sel.id === l.id, false)).join("")
+    + (ONLINE_MODE && mod("liste") && !d._pet ? `<button type="button" class="catnew" data-act="d-nuova-lista"><span class="cat-t">+ Nuova lista</span></button>` : "");
+}
+function catFrase(d) {
+  const sel = catListaSel(d);
+  if (!sel) return catBloccata(d) ? "Questa cosa è di una lista: non puoi renderla privata, ma puoi spostarla in un'altra lista" : d.lista_id && !d._pet ? "Questa cosa sta in una lista che ora non riesco a vedere: resta dov'è, anche se cambi Personale o Lavoro" : "Solo tu la vedi";
+  const blocco = catBloccata(d) ? " Non puoi renderla privata: è di un'altra persona." : "";
+  if (sel.membri.length <= 1) return "Lista solo tua: la vedi solo tu" + blocco;
+  const altri = sel.membri.filter((m) => m.user_id !== myId()).map((m) => esc(m.nome)).join(", ");
+  return `Condivisa con ${altri || "altre persone"}: la vedono e la spuntano anche loro${blocco}`;
+}
+function catScegli(v) {
+  if (!draft) return;
+  if (v.startsWith("l:")) { const l = listeUsate().find((x) => x.id === v.slice(2)); if (!l || draft._pet) return; draft.lista_id = l.id; }
+  else if (v === "personale" || v === "lavoro") { if (catBloccata(draft)) return; draft.area = v; if (catListaSel(draft)) draft.lista_id = null; /* lista non nota: si cambia solo l'area, la cosa resta dov'è */ }
+  else return;
+  const row = $("#sheet .cat-row"); if (row) row.innerHTML = catChips(draft); // solo la riga: titolo e cursore restano dove sono
+  const f = $("#catFrase"); if (f) f.innerHTML = catFrase(draft);
+  const s = $("#fLista"); if (s) s.value = draft.lista_id || "";
+  const b = row && row.querySelector("button.on"); if (b) b.focus();
+}
+
 function drawEditor() {
   const d = draft;
   const kindBtn = (k, l) => `<button class="${d.kind === k ? "on" : ""}" data-act="d-kind" data-v="${k}">${l}</button>`;
-  const areaBtn = (k, l, c) => `<button class="${c} ${d.area === k ? "on" : ""}" data-act="d-area" data-v="${k}">${l}</button>`;
   const isNote = d.kind === "note";
   openSheet(`
     <h2><span class="mbox">${mascot()}</span>${d._new ? (isNote ? "Cosa annoti?" : d.kind === "event" ? "Che appuntamento hai?" : "Cosa c'è da fare?") : "Modifica"}</h2>
@@ -1443,9 +1506,9 @@ function drawEditor() {
       <input class="input big" id="fTitle" maxlength="300" placeholder="${isNote ? "Titolo dell'appunto" : "Es. dentista giovedì alle 17"}" value="${esc(d.title)}" autocomplete="off" enterkeyhint="done">
       ${d._new && !isNote ? `<div class="hint" id="fHint">Scrivi come parli: oggi, domani, venerdì, 12/11, alle 15, #lavoro</div>` : ""}
     </div>
-    <div class="field"><div class="areas">${areaBtn("personale", '<span class="emo">🌷 </span>Personale', "per")}${areaBtn("lavoro", '<span class="emo">💼 </span>Lavoro', "lav")}</div></div>
-    ${listeUsate().length && !d._pet ? `<div class="field"><label>Dove</label><select class="input" id="fLista">
-      <option value="" ${d.lista_id && d.user_id && d.user_id !== myId() ? "disabled" : ""}>🔒 Solo mia</option>${state.liste.map((l) => `<option value="${esc(l.id)}" ${d.lista_id === l.id ? "selected" : ""}>${esc(l.emoji)} ${esc(l.nome)} · condivisa</option>`).join("")}</select></div>` : ""}
+    <div class="field cat-field"><label id="catLbl">Categoria</label><div class="areas cat-row" role="group" aria-labelledby="catLbl">${catChips(d)}</div>
+      <div class="hint cat-frase" id="catFrase" aria-live="polite">${catFrase(d)}</div>
+      ${listeUsate().length && !d._pet ? `<select id="fLista" hidden tabindex="-1" aria-hidden="true"><option value="" ${d.lista_id && d.user_id && d.user_id !== myId() ? "disabled" : ""}>Solo mia</option>${state.liste.map((l) => `<option value="${esc(l.id)}" ${d.lista_id === l.id ? "selected" : ""}>${esc(l.emoji)} ${esc(l.nome)}</option>`).join("")}</select>` : ""}</div>
     ${!advanced ? `<div class="more-row"><button class="more" data-act="d-more">+ Data, promemoria e note</button><button class="more" data-act="d-lista">+ Lista da spuntare</button></div>` : `
       ${!isNote ? `<div class="row">
         <div class="field"><label>Giorno</label><input class="input" type="date" id="fDate" value="${d.due_date || ""}"></div>
@@ -1913,6 +1976,20 @@ function setTheme(v) {
   syncBarColor();
 }
 // Riapre le impostazioni dopo una scelta senza tornare in cima alla finestra
+// Colori del calendario dopo una nuova scelta: via le chiavi di liste che non ci sono piu' (se le liste sono note), la nuova per prima (non rischia il limite di 24)
+function calColoriNuovi(k, v) {
+  const resto = {}; const note = new Set(state.liste.map((l) => "l:" + l.id));
+  for (const [kk, vv] of Object.entries(CUSTOM.calColori || {})) if (kk !== k && (!kk.startsWith("l:") || !state.liste.length || note.has(kk))) resto[kk] = vv;
+  return { [k]: v, ...resto };
+}
+function calColApri() {
+  const righe = [["personale", "🌷", "Personale"], ["lavoro", "💼", "Lavoro"], ...state.liste.map((l) => ["l:" + l.id, l.emoji, l.nome])];
+  openSheet(`<h2><span class="mbox">${mascot()}</span>Colori del calendario</h2>
+    <p style="margin:0 0 10px;color:var(--ink2)">Ogni cosa nel calendario prende il colore della sua lista.</p>
+    ${righe.map(([k, e, n]) => { const cur = calId(k); return `<div class="setrow col calcol-riga"><div><b>${e ? `<span class="emo">${esc(e)} </span>` : ""}${esc(n)}</b></div>
+      <div class="calcol-pal" role="group" aria-label="Colore di ${esc(n)}">${CAL_COLORI.map(([id, nome, hex]) => `<button type="button" class="calcol-p${cur === id ? " on" : ""}" style="--cc:${hex}" data-act="calcol-pick" data-k="${esc(k)}" data-v="${id}" aria-label="${nome}" aria-pressed="${cur === id}"><span aria-hidden="true">${cur === id ? "✓" : ""}</span></button>`).join("")}</div></div>`; }).join("")}
+    <div class="actions"><button class="btn" data-act="calcol-reset">Ripristina i colori</button><button class="btn primary" data-act="calcol-chiudi">Fatto</button></div>`);
+}
 function riapriImpostazioni() { const y = $("#sheet").scrollTop; openSettings(); $("#sheet").scrollTop = y; }
 
 function b64ToU8(b64) {
@@ -2057,9 +2134,10 @@ function openListe() { if ($("#sheet").classList.contains("on")) closeSheet(); s
 function viewListe() {
   if (!ONLINE_MODE) return OSPITE ? invitoAccount("Le liste condivise si usano insieme ad altre persone: crea un account per usare questa funzione.") : emptyBox("Le liste condivise funzionano quando l'app è collegata a un account 🌸");
   const me = myId();
-  return `<div class="sec" style="margin-top:0"><h2><span class="emo">👭 </span>Liste condivise</h2></div>
-    <p style="margin:0 0 12px;color:var(--ink2)">Tutto quello che metti in una lista lo vedono, modificano e spuntano tutte le persone della lista. Le altre tue cose restano private.</p>
-    <div class="list">${state.liste.map((l) => `
+  return `<div class="sec" style="margin-top:0"><h2><span class="emo">👭 </span>Le mie liste</h2></div>
+    <p style="margin:0 0 12px;color:var(--ink2)">Crea le liste che ti servono (Salute, Lavoro, Casa...). Le tieni solo per te, oppure invita altre persone: allora vedono e spuntano tutto quello che c'è dentro.</p>
+    <div class="list">${[["personale", "🌷", "Personale"], ["lavoro", "💼", "Lavoro"]].map(([k, e, n]) => { const cur = calId(k); return `<div class="lcard"><div class="lcard-h"><span class="e">${e}</span><div><b>${n}</b><small>Solo tua · scegli il colore nel calendario</small></div></div>
+        <div class="calcol-pal" role="group" aria-label="Colore di ${n}">${CAL_COLORI.map(([id, nome, hex]) => `<button type="button" class="calcol-p${cur === id ? " on" : ""}" style="--cc:${hex}" data-act="calcol-pick" data-k="${k}" data-v="${id}" aria-label="${nome}" aria-pressed="${cur === id}"><span aria-hidden="true">${cur === id ? "✓" : ""}</span></button>`).join("")}</div></div>`; }).join("")}${state.liste.map((l) => `
       <div class="lcard">
         <div class="lcard-h"><span class="e">${esc(l.emoji)}</span><div><b>${esc(l.nome)}</b>
           <small>${l.membri.map((m) => esc(m.user_id === me ? "tu" : m.nome)).join(", ")}</small></div></div>
@@ -2072,9 +2150,10 @@ function viewListe() {
       </div>`).join("") || `<div class="empty" style="padding:8px">Ancora nessuna lista. Creane una, ad esempio "Casa" o "Spesa" 🛒</div>`}</div>
     <div class="actions" style="margin-top:14px"><button class="btn" data-act="l-codice">Ho un codice</button><button class="btn primary" data-act="l-nuova">+ Nuova lista</button></div>`;
 }
-let listaDraft = { id: null, nome: "", emoji: "🏠" };
+let listaDopo = null; // modulo di una cosa lasciato aperto per creare una lista: dopo il salvataggio ci si torna con la lista scelta
+let listaDraft = { id: null, nome: "", emoji: "🏠", colore: null };
 function openListaEditor(l) {
-  listaDraft = l ? { id: l.id, nome: l.nome, emoji: l.emoji } : { id: null, nome: "", emoji: "🏠" };
+  listaDraft = l ? { id: l.id, nome: l.nome, emoji: l.emoji, colore: calId("l:" + l.id) } : { id: null, nome: "", emoji: "🏠", colore: null };
   drawListaEditor();
 }
 function drawListaEditor() {
@@ -2084,6 +2163,8 @@ function drawListaEditor() {
       <label for="lsEmoji" style="margin-top:10px">Aggiungi la tua emoji</label>
       <input class="input" id="lsEmoji" maxlength="8" placeholder="Scrivi una emoji" value="${EMOJI_LISTE.includes(listaDraft.emoji) ? "" : esc(listaDraft.emoji)}" autocomplete="off" aria-describedby="lsEmojiAiuto">
       <p class="hint" id="lsEmojiAiuto">Una sola emoji, dalla tastiera</p></div>
+    <div class="field"><label>Colore nel calendario</label><div class="calcol-pal" role="group" aria-label="Colore nel calendario">${CAL_COLORI.map(([id, nome, hex]) => `<button type="button" class="calcol-p${listaDraft.colore === id ? " on" : ""}" style="--cc:${hex}" data-act="l-colore" data-v="${id}" aria-label="${nome}" aria-pressed="${listaDraft.colore === id}"><span aria-hidden="true">${listaDraft.colore === id ? "✓" : ""}</span></button>`).join("")}</div>
+      <p class="hint">Lo vedi solo tu: chi è nella lista sceglie il suo.</p></div>
     <div class="actions"><button class="btn" data-act="l-indietro">Indietro</button><button class="btn primary" data-act="l-salva">Salva</button></div>`);
   const i = $("#lsNome"); i.addEventListener("input", () => { listaDraft.nome = i.value; });
   const ie = $("#lsEmoji");
@@ -2113,10 +2194,13 @@ async function salvaLista(btn) {
   const mia = $("#lsEmoji")?.value.trim();
   if (mia && !emojiValida(mia)) { toast("Scrivi una sola emoji, oppure scegline una 🌸"); return; }
   btn.disabled = true;
+  const wasEdit = !!listaDraft.id;
   try {
     if (listaDraft.id) await store.modificaLista(listaDraft.id, nome, listaDraft.emoji);
     else { const id = await store.creaLista(nome, listaDraft.emoji); toast(`Lista creata! Ora invita qualcuno ${listaDraft.emoji}`); listaDraft.id = id; }
-    await loadListe(); render(); openListe();
+    if (listaDraft.colore && CAL_COLORI.some((x) => x[0] === listaDraft.colore) && RE_ID.test(String(listaDraft.id))) await saveCustom({ calColori: calColoriNuovi("l:" + listaDraft.id, listaDraft.colore) });
+    await loadListe(); render();
+    if (listaDopo && listaDraft.id && !wasEdit) { draft = listaDopo; listaDopo = null; if (listeUsate().some((x) => x.id === listaDraft.id)) draft.lista_id = listaDraft.id; drawEditor(); } else { listaDopo = null; openListe(); }
   } catch (e) { btn.disabled = false; toast(/massimo/.test(e?.message || "") ? e.message : "Non sono riuscita a salvarla"); }
 }
 
@@ -2172,7 +2256,7 @@ function leggiInvitoDaLink() {
 }
 function invitoInSospeso() {
   let c = null; try { c = sessionStorage.getItem("mochi.invito"); sessionStorage.removeItem("mochi.invito"); } catch {}
-  if (c && RE_INVITO.test(c) && !mod("liste")) { setTimeout(() => toast("Per usare l'invito accendi le Liste condivise in Impostazioni"), 1200); return; }
+  if (c && RE_INVITO.test(c) && !mod("liste")) { setTimeout(() => toast("Per usare l'invito accendi Le mie liste in Impostazioni"), 1200); return; }
   if (c && RE_INVITO.test(c)) setTimeout(() => whenSheetFree(() => proponiInvito(c)), 1200);
 }
 async function esciLista(id) {
@@ -3405,11 +3489,11 @@ const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i +
 const giu = (r) => { if (r.error) throw r.error; return r; };
 // Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
 // (gli sblocchi della casetta si uniscono sempre: non si perdono mai)
-const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "nome_mascotte", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori", "barra", "semplice"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
+const accountHaPreferenze = () => { const md = store.user?.user_metadata || {}; return ["nome_app", "nome_mascotte", "mascotte", "accessorio", "colore", "font", "stile", "moduli", "stagione", "suono", "casa", "compleanno", "ricordi", "fiori", "barra", "semplice", "calColori"].some((k) => md[k] != null) || cleanPronomi(md.pronomi) !== "" || petPresente(cleanPet(md.pet)); };
 async function portaPreferenze() {
   const copia = LS.get("mochi.ospite.custom", null); if (!copia) return; // solo la copia dell'ospite, mai le preferenze di chi è entrato
   const ospite = cleanCustom(copia);
-  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi), fiori: store.user?.user_metadata?.fiori != null ? CUSTOM.fiori : ospite.fiori, pronomi: cleanPronomi(store.user?.user_metadata?.pronomi) !== "" ? CUSTOM.pronomi : ospite.pronomi, pet: petPresente(cleanPet(store.user?.user_metadata?.pet)) ? CUSTOM.pet : ospite.pet, barra: store.user?.user_metadata?.barra != null ? CUSTOM.barra : ospite.barra, semplice: store.user?.user_metadata?.semplice != null ? CUSTOM.semplice : ospite.semplice } : { ...ospite });
+  CUSTOM = cleanCustom(accountHaPreferenze() ? { ...CUSTOM, casa: unisciCasa(CUSTOM.casa, ospite.casa), ricordi: unisciRicordi(CUSTOM.ricordi, ospite.ricordi), fiori: store.user?.user_metadata?.fiori != null ? CUSTOM.fiori : ospite.fiori, pronomi: cleanPronomi(store.user?.user_metadata?.pronomi) !== "" ? CUSTOM.pronomi : ospite.pronomi, pet: petPresente(cleanPet(store.user?.user_metadata?.pet)) ? CUSTOM.pet : ospite.pet, barra: store.user?.user_metadata?.barra != null ? CUSTOM.barra : ospite.barra, semplice: store.user?.user_metadata?.semplice != null ? CUSTOM.semplice : ospite.semplice, calColori: { ...ospite.calColori, ...CUSTOM.calColori } } : { ...ospite });
   LS.set("mochi.custom", CUSTOM); applyCustom();
   await store.saveCustom(CUSTOM); // se non riesce, l'errore ferma il passaggio: la copia resta e si può riprovare
 }
@@ -5574,6 +5658,10 @@ document.addEventListener("click", async (e) => {
     case "uovo": festaUovo(v, el); break;
     case "compleanno-togli": await saveCustom({ compleanno: "" }); riapriImpostazioni(); toast("Compleanno tolto"); break;
     case "open-custom": openMascotPicker(); break;
+    case "calcol-apri": calColApri(); break;
+    case "calcol-chiudi": openSettings(); break;
+    case "calcol-pick": { const k = el.dataset.k; if (RE_CALCHIAVE.test(k || "") && CAL_COLORI.some((x) => x[0] === v)) { const y = $("#sheet").scrollTop; await saveCustom({ calColori: calColoriNuovi(k, v) }); if ($("#sheet .calcol-riga")) { calColApri(); $("#sheet").scrollTop = y; } else if (state.tab === "liste" && !$("#sheet").classList.contains("on")) { const w = window.scrollY; render(); window.scrollTo({ top: w }); } toast("Colore salvato 🎨"); } break; }
+    case "calcol-reset": { const ok = await ask({ title: "Ripristinare i colori?", text: "Tornano quelli di partenza.", ok: "Ripristina" }); if (ok) { await saveCustom({ calColori: {} }); calColApri(); toast("Colori ripristinati"); } else calColApri(); break; }
     case "open-pancino": openPancino(); break;
     case "open-consiglio": openConsiglio(); if (ONLINE_MODE) store.mieiConsigli().then((r) => { mieiMsg = r.filter((m) => m && typeof m.testo === "string"); if ($("#cTesto")) openConsiglio(); }).catch(() => {}); break;
     case "open-inbox": openInbox(); break;
@@ -5625,8 +5713,9 @@ document.addEventListener("click", async (e) => {
     case "ric-salva": salvaRicorrente(el); break;
     case "ric-toggle": toggleRicorrente(id); break;
     case "ric-elimina": eliminaRicorrente(id); break;
-    case "l-nuova": openListaEditor(null); break;
+    case "l-nuova": listaDopo = null; openListaEditor(null); break;
     case "l-modifica": openListaEditor(listaById(id)); break;
+    case "l-colore": if (CAL_COLORI.some((x) => x[0] === v)) { listaDraft.colore = v; drawListaEditor(); } break;
     case "l-emoji": listaDraft.emoji = EMOJI_LISTE.includes(v) ? v : "🏠"; drawListaEditor(); break;
     case "l-indietro": closeSheet(); break;
     case "l-salva": salvaLista(el); break;
@@ -5665,6 +5754,8 @@ document.addEventListener("click", async (e) => {
       if (draft._autoRemind && !draft._remindManual && v !== "note" && draft.remind !== "auto") draft.remind = defaultRemind(draft);
       drawEditor(); break;
     case "d-area": draft.area = v; drawEditor(); break;
+    case "d-cat": catScegli(v); break;
+    case "d-nuova-lista": if (!draft) break; { const t = $("#fTitle"); if (t) draft.title = t.value; } listaDopo = draft; openListaEditor(null); break;
     case "d-lista":
     case "d-more": advanced = true;
       if (draft._new && draft.title) { const p = parseQuick(draft.title); draft.due_date = p.date && draft._dateDefault ? p.date : (draft.due_date || p.date); draft.due_time = draft.due_time || p.time; }
@@ -5746,12 +5837,17 @@ document.addEventListener("keydown", (e) => {
   else if (ta && e.shiftKey && ae === ta) { e.preventDefault(); ultimoDentro.focus(); }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { if ($(".biscotto-wrap")) chiudiBiscotto(); else closeSheet(); return; }
+  if (e.key === "Escape") {
+    if ($(".biscotto-wrap")) chiudiBiscotto();
+    else if (semOn() && state.tab === "s-aiuto" && !$("#sheet").classList.contains("on")) { state.tab = "s-todo"; render(); window.scrollTo({ top: 0 }); } // modo semplice: Esc chiude Aiuto
+    else closeSheet();
+    return;
+  }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
   if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "n" || e.key === "N")
       && !$("#sheet").classList.contains("on") && !$("#app").classList.contains("hidden") && !inAttesaSessione) {
     e.preventDefault();
-    if (semOn()) { if (state.tab === "s-todo" || state.tab === "s-agenda") semForm(state.tab === "s-agenda" ? "evento" : "todo", null); return; }
+    if (semOn()) { if (state.tab === "s-todo" || state.tab === "s-agenda") semForm(state.tab === "s-agenda" ? "evento" : "todo", null, state.tab === "s-agenda" ? semCalSel : ""); return; }
     nuovaVoce();
   }
 });
@@ -5771,11 +5867,18 @@ const SEM_TABS = [...SEM_VOCI.map((v) => v[0]), "s-aiuto"];
 // (gli altri pulsanti della barra restano dove sono: a modo semplice acceso li nasconde il CSS, spento è la barra di sempre)
 function semNavSync() {
   const on = semOn(), has = !!document.querySelector(".sem-only");
-  if (on === has) return;
-  document.querySelectorAll(".sem-only").forEach((e) => e.remove());
-  if (!on) return;
-  $("#nav .bar")?.insertAdjacentHTML("beforeend", SEM_VOCI.map(([k, n]) => `<button class="tab sem-only" data-tab="${k}">${n}</button>`).join(""));
-  $(".top")?.insertAdjacentHTML("beforeend", `<button class="sm-aiuto sem-only" data-tab="s-aiuto">Aiuto</button>`);
+  if (on !== has) {
+    document.querySelectorAll(".sem-only").forEach((e) => e.remove());
+    if (!on) return;
+    $("#nav .bar")?.insertAdjacentHTML("beforeend", SEM_VOCI.map(([k, n]) => `<button class="tab sem-only" data-tab="${k}">${n}</button>`).join(""));
+    $(".top")?.insertAdjacentHTML("beforeend", `<button class="sm-aiuto sem-only" data-tab="s-aiuto" aria-label="Aiuto e impostazioni">Aiuto</button>`);
+  }
+  // il pulsante in alto: "Aiuto" sulle pagine, "Chiudi" dentro la pagina Aiuto (torna alla home del modo semplice)
+  const b = on ? $(".sm-aiuto") : null;
+  if (b) {
+    const dentro = state.tab === "s-aiuto", testo = dentro ? "Chiudi" : "Aiuto";
+    if (b.textContent !== testo) { b.textContent = testo; b.dataset.tab = dentro ? "s-todo" : "s-aiuto"; b.setAttribute("aria-label", dentro ? "Chiudi aiuto e impostazioni" : "Aiuto e impostazioni"); }
+  }
 }
 // La lista della spesa di cui si occupa il modo semplice: la più recente ancora aperta, meglio se non condivisa
 function semListaSpesa() {
@@ -5784,10 +5887,13 @@ function semListaSpesa() {
 }
 const semQuando = (it) => (it.due_date ? `${niceDate(it.due_date)}${it.due_time ? " alle " + it.due_time : ""}` : "");
 const semVuoto = (t) => `<p class="sm-vuoto">${esc(t)}</p>`;
-const semModifica = (it) => (it.lista_id ? "" : `<button class="sm-mod" data-act="sem-modifica" data-id="${esc(it.id)}" aria-label="Modifica: ${esc(it.title)}">Modifica</button>`); // le cose condivise: solo spunta
-function semRigaTodo(it) {
+// Una cosa è "condivisa" se sta in una lista con altre persone, o in una lista che non conosco (nel dubbio solo spunta).
+// Una lista con un solo membro (lei) si comporta come una cosa privata: si cambia e si cancella, e resta nella sua lista.
+const semCondivisa = (it) => { if (!it || !it.lista_id) return false; const l = listaById(it.lista_id); return !l || (l.membri || []).length > 1; };
+const semModifica = (it) => (semCondivisa(it) ? "" : `<button class="sm-mod" data-act="sem-modifica" data-id="${esc(it.id)}" aria-label="Modifica: ${esc(it.title)}">Modifica</button>`); // le cose condivise: solo spunta
+function semRigaTodo(it, colora) {
   const q = semQuando(it);
-  return `<div class="sm-row${it.done ? " fatta" : ""}"><button class="sm-check" data-act="sem-spunta" data-id="${esc(it.id)}" aria-pressed="${it.done ? "true" : "false"}">
+  return `<div class="sm-row${it.done ? " fatta" : ""}${colora === true ? " sm-cc" : ""}"${colora === true ? ` style="--cc:${calColoreDi(it)}"` : ""}><button class="sm-check" data-act="sem-spunta" data-id="${esc(it.id)}" aria-pressed="${it.done ? "true" : "false"}">
       <span class="sm-box" aria-hidden="true"></span><span class="sm-t">${esc(it.title)}${q ? `<small>${esc(q)}</small>` : ""}</span>${it.done ? `<span class="sm-stato">Fatta</span>` : ""}</button>
     ${semModifica(it)}</div>`;
 }
@@ -5800,22 +5906,58 @@ function semViewTodo() {
     ${aperte.length ? `<div class="sm-list">${aperte.map(semRigaTodo).join("")}</div>` : semVuoto("Non c'è niente da fare. Se vuoi aggiungere una cosa, tocca il pulsante Aggiungi.")}
     ${fatte.length ? `<h3 class="sm-h3">Già fatte</h3><div class="sm-list">${fatte.map(semRigaTodo).join("")}</div>` : ""}</div>`;
 }
-function semRigaEv(it) {
+function semRigaEv(it, colora) {
   const d = parseYmd(it.due_date);
   const giorno = `${GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase())} ${d.getDate()} ${MESI[d.getMonth()]}`;
-  return `<div class="sm-row sm-ev"><div class="sm-t"><b>${esc(it.title)}</b><small>${esc(giorno)}${it.due_time ? ", alle " + esc(it.due_time) : ""}</small></div>
+  return `<div class="sm-row sm-ev${colora === true ? " sm-cc" : ""}"${colora === true ? ` style="--cc:${calColoreDi(it)}"` : ""}><div class="sm-t"><b>${esc(it.title)}</b><small>${esc(giorno)}${it.due_time ? ", alle " + esc(it.due_time) : ""}</small></div>
     ${semModifica(it)}</div>`;
+}
+// Calendario grande del modo semplice (mese e giorno scelto: variabili proprie, quelle dell'app normale non si toccano)
+let semCalMese = null, semCalSel = null; // "AAAA-MM" e "AAAA-MM-GG"
+const semNomeGiorno = (d) => GIORNI[d.getDay()].replace(/^./, (c) => c.toUpperCase());
+function semCalMap() {
+  const m = itemsByDay();
+  for (const k of Object.keys(m)) { m[k] = m[k].filter((i) => !isSpesa(i)); if (!m[k].length) delete m[k]; }
+  return m;
+}
+function semCalGriglia(mese, map) {
+  const [y, mm] = mese.split("-").map(Number), first = new Date(y, mm - 1, 1), start = addDays(first, -((first.getDay() + 6) % 7)), oggi = todayStr();
+  let celle = "";
+  for (let k = 0; k < 42; k++) {
+    const d = addDays(start, k), s = ymd(d);
+    if (k >= 35 && d.getMonth() !== mm - 1) break;
+    if (d.getMonth() !== mm - 1) { celle += `<span class="sm-day vuoto" aria-hidden="true"></span>`; continue; }
+    const its = map[s] || [], n = its.length;
+    const chiavi = [...new Set(its.map(calChiave))];
+    const pallini = chiavi.slice(0, 3).map((c) => `<i class="${its.filter((i) => calChiave(i) === c).every((i) => i.done) ? "fatto" : ""}" style="--cc:${calHex(c)}"></i>`).join("") + (chiavi.length > 3 ? `<i class="altro"></i>` : "");
+    const label = `${semNomeGiorno(d)} ${d.getDate()}${s === oggi ? ", oggi" : ""}${n ? `, ${n} ${n === 1 ? "cosa" : "cose"}` : ""}`;
+    celle += `<button type="button" class="sm-day${s === oggi ? " oggi" : ""}${s === semCalSel ? " sel" : ""}" data-act="sem-cal-sel" data-v="${s}" aria-pressed="${s === semCalSel}" aria-label="${esc(label)}"><span class="n">${d.getDate()}</span><span class="pl" aria-hidden="true">${pallini}</span></button>`;
+  }
+  return `<div class="sm-dow" aria-hidden="true">${["L", "M", "M", "G", "V", "S", "D"].map((x) => `<span>${x}</span>`).join("")}</div><div class="sm-days">${celle}</div>`;
 }
 function semViewAgenda() {
   const oggi = todayStr(), domani = ymd(addDays(new Date(), 1));
+  if (!semCalMese || !/^\d{4}-\d{2}$/.test(semCalMese)) semCalMese = oggi.slice(0, 7);
+  if (!semCalSel || !validYmd(semCalSel)) semCalSel = oggi;
+  const map = semCalMap(), [y, mm] = semCalMese.split("-").map(Number);
+  const sel = parseYmd(semCalSel), delGiorno = (map[semCalSel] || []).slice().sort(byDue);
+  const evG = delGiorno.filter((i) => i.kind === "event"), todoG = delGiorno.filter((i) => i.kind === "todo");
   const ev = state.items.filter((i) => i.kind === "event" && i.due_date && i.due_date >= oggi).sort(byDue);
-  const gruppo = (titolo, l) => l.length ? `<h3 class="sm-h3">${titolo}</h3><div class="sm-list">${l.map(semRigaEv).join("")}</div>` : "";
+  const gruppo = (titolo, l) => l.length ? `<h4 class="sm-h4">${titolo}</h4><div class="sm-list">${l.map((i) => semRigaEv(i)).join("")}</div>` : "";
   return `<div class="sm-wrap"><h2 class="sm-h">Appuntamenti</h2>
-    <button class="sm-btn" data-act="sem-nuova" data-v="evento">Aggiungi</button>
-    ${ev.length ? gruppo("Oggi", ev.filter((i) => i.due_date === oggi)) + gruppo("Domani", ev.filter((i) => i.due_date === domani)) + gruppo("Più avanti", ev.filter((i) => i.due_date > domani)) : semVuoto("Non hai appuntamenti in programma. Se vuoi aggiungerne uno, tocca il pulsante Aggiungi.")}</div>`;
+    <div class="sm-cal"><div class="sm-cal-top"><h3 class="sm-cal-t" id="semCalT" aria-live="polite">${MESI[mm - 1].replace(/^./, (c) => c.toUpperCase())} ${y}</h3>
+      <div class="sm-cal-nav"><button type="button" class="sm-mod" data-act="sem-cal-mese" data-v="-1">Mese prima</button><button type="button" class="sm-mod" data-act="sem-cal-mese" data-v="1">Mese dopo</button></div>
+      <button type="button" class="sm-mod sm-cal-oggi" data-act="sem-cal-oggi">Oggi</button></div>
+      <div role="group" aria-labelledby="semCalT">${semCalGriglia(semCalMese, map)}</div></div>
+    <h3 class="sm-h3 sm-giorno">${esc(semNomeGiorno(sel))} ${sel.getDate()} ${MESI[sel.getMonth()]}</h3>
+    ${delGiorno.length ? `<div class="sm-list">${evG.map((i) => semRigaEv(i, true)).join("")}${todoG.map((i) => semRigaTodo(i, true)).join("")}</div>` : semVuoto("Niente in programma per questo giorno.")}
+    <button class="sm-btn" data-act="sem-nuova" data-v="evento" data-g="${esc(semCalSel)}">Aggiungi un appuntamento</button>
+    <button class="sm-btn sm-ghost" data-act="sem-nuova" data-v="todo" data-g="${esc(semCalSel)}">Aggiungi una cosa da fare</button>
+    <h3 class="sm-h3">Prossimi appuntamenti</h3>
+    ${ev.length ? gruppo("Oggi", ev.filter((i) => i.due_date === oggi)) + gruppo("Domani", ev.filter((i) => i.due_date === domani)) + gruppo("Più avanti", ev.filter((i) => i.due_date > domani)) : semVuoto("Non hai appuntamenti in programma. Se vuoi aggiungerne uno, scegli il giorno qui sopra e tocca Aggiungi un appuntamento.")}</div>`;
 }
 function semViewSpesa() {
-  const l = semListaSpesa(), st = l?.sottotask || [], cond = !!l?.lista_id; // nella lista condivisa niente "Togli": solo spunta e aggiungi
+  const l = semListaSpesa(), st = l?.sottotask || [], cond = !!l && semCondivisa(l); // nella lista condivisa niente "Togli": solo spunta e aggiungi
   const daComprare = st.filter((x) => !x.f), comprate = st.filter((x) => x.f);
   const riga = (x) => `<div class="sm-row${x.f ? " fatta" : ""}"><button class="sm-check" data-act="sem-spesa-spunta" data-v="${esc(x.id)}" aria-pressed="${x.f ? "true" : "false"}">
       <span class="sm-box" aria-hidden="true"></span><span class="sm-t">${esc(x.t)}</span>${x.f ? `<span class="sm-stato">Comprato</span>` : ""}</button>
@@ -5826,28 +5968,54 @@ function semViewSpesa() {
     ${daComprare.length ? `<div class="sm-list">${daComprare.map(riga).join("")}</div>` : semVuoto(st.length ? "Hai comprato tutto." : "La lista della spesa è vuota. Scrivi sopra che cosa ti serve e tocca Aggiungi.")}
     ${comprate.length ? `<h3 class="sm-h3">Già comprate</h3><div class="sm-list">${comprate.map(riga).join("")}</div>${cond ? "" : `<button class="sm-btn sm-ghost" data-act="sem-spesa-pulisci">Togli le cose già comprate</button>`}` : ""}</div>`;
 }
+// Promemoria (notifiche): stato letto dal dispositivo, la riga compare solo se il dispositivo e l'account li possono avere
+let semPush = null; // null = sto controllando; "on" | "off" | "bloccati"
+const semPushDisponibile = () => ONLINE_MODE && !!store.user && PUSH_READY && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+async function semPushLeggi() {
+  if (!semPushDisponibile()) return;
+  let n = "off";
+  try { n = Notification.permission === "denied" ? "bloccati" : (await pushActive()) ? "on" : "off"; } catch {}
+  if (n !== semPush) { semPush = n; if (semOn() && state.tab === "s-aiuto") render(); }
+}
+function semRigaImp(titolo, stato, bottone) {
+  return `<div class="sm-setrow"><div class="sm-t"><b>${esc(titolo)}</b><small>${esc(stato)}</small></div>${bottone || ""}</div>`;
+}
 function semViewAiuto() {
-  return `<div class="sm-wrap"><h2 class="sm-h">Aiuto</h2>
+  const conto = ONLINE_MODE && !!store.user;
+  let imp = "";
+  if (conto) imp += semRigaImp("Come vuoi che ti chiami", NOME || "Non l'hai ancora scritto", `<button class="sm-mod" data-act="sem-nome">Cambia</button>`);
+  if (semPushDisponibile()) {
+    setTimeout(semPushLeggi, 0);
+    imp += semPush === "on" ? semRigaImp("Promemoria", "Attivi", `<button class="sm-mod" data-act="sem-push-off">Spegni</button>`)
+      : semPush === "off" ? semRigaImp("Promemoria", "Spenti", `<button class="sm-mod" data-act="sem-push-on">Accendi</button>`)
+      : semPush === "bloccati" ? semRigaImp("Promemoria", "Spenti: il telefono non me lo permette")
+      : semRigaImp("Promemoria", "Controllo...");
+  }
+  if (conto) imp += semRigaImp("Esci dall'account", "Su questo telefono dovrai rientrare con email e password", `<button class="sm-mod" data-act="sem-logout">Esci</button>`);
+  return `<div class="sm-wrap"><h2 class="sm-h">Aiuto e impostazioni</h2>
     <div class="sm-aiutobox"><h3>Cose da fare</h3><p>Tocca il pulsante Aggiungi e scrivi che cosa devi fare. Quando l'hai fatta, toccala: si segna come fatta. Per cambiarla o cancellarla tocca Modifica.</p></div>
     <div class="sm-aiutobox"><h3>Appuntamenti</h3><p>Tocca Aggiungi, scrivi che appuntamento è e scegli il giorno e l'ora. Gli appuntamenti di oggi stanno in cima.</p></div>
     <div class="sm-aiutobox"><h3>Spesa</h3><p>Scrivi quello che ti serve e tocca Aggiungi. Al supermercato tocca ogni cosa quando la metti nel carrello.</p></div>
     <div class="sm-aiutobox"><h3>Niente si cancella da solo</h3><p>Prima di cancellare qualcosa ti chiedo sempre conferma. Se rispondi "No, tieni" resta tutto com'è.</p></div>
+    <h2 class="sm-h sm-h-imp">Impostazioni</h2>
+    ${imp ? `<div class="sm-list">${imp}</div>` : ""}
     <button class="sm-btn sm-ghost" data-act="sem-esci">Torna all'app completa</button></div>`;
 }
 // Modulo per aggiungere o cambiare una cosa da fare o un appuntamento: pochi campi e un solo grande "Salva"
 let semChiudiOk = false;
-function semForm(tipo, id) {
+function semForm(tipo, id, giorno) {
   const ev = tipo === "evento", it = id ? state.items.find((x) => x.id === id) : null;
-  if (id && (!it || it.lista_id)) return;
+  if (id && (!it || semCondivisa(it))) return;
   semChiudiOk = false;
   const oggi = todayStr(), domani = ymd(addDays(new Date(), 1));
-  openSheet(`<form id="semForm" class="sm-form" data-tipo="${ev ? "evento" : "todo"}" data-id="${esc(it?.id || "")}" data-t="${esc(it?.title || "")}" data-d="${esc(it?.due_date || (ev ? oggi : ""))}" data-o="${esc(it?.due_time || "")}" autocomplete="off" novalidate>
+  const dd = !it && typeof giorno === "string" && validYmd(giorno) && giorno >= "2000-01-01" && giorno <= "2100-12-31" ? giorno : ""; // il giorno scelto nel calendario
+  openSheet(`<form id="semForm" class="sm-form" data-tipo="${ev ? "evento" : "todo"}" data-id="${esc(it?.id || "")}" data-t="${esc(it?.title || "")}" data-d="${esc(it?.due_date || dd || (ev ? oggi : ""))}" data-o="${esc(it?.due_time || "")}" autocomplete="off" novalidate>
     <h2 class="sm-h">${it ? "Modifica" : ev ? "Nuovo appuntamento" : "Nuova cosa da fare"}</h2>
     <div class="field"><label for="semTitolo">${ev ? "Che appuntamento è?" : "Che cosa devi fare?"}</label>
       <input class="input" id="semTitolo" maxlength="120" value="${esc(it?.title || "")}" enterkeyhint="done"></div>
     <div class="field"><label for="semData">${ev ? "Che giorno?" : "Per quando? (se non serve, lascia vuoto)"}</label>
         <div class="sm-quick"><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${oggi}">Oggi</button><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${domani}">Domani</button>${ev ? "" : `<button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="">Senza data</button>`}</div>
-        <input class="input" type="date" id="semData" value="${esc(it?.due_date || (ev ? oggi : ""))}"></div>
+        <input class="input" type="date" id="semData" value="${esc(it?.due_date || dd || (ev ? oggi : ""))}"></div>
     ${ev ? `<div class="field"><label for="semOra">A che ora? (se non lo sai, lascia vuoto)</label>
         <input class="input" type="time" id="semOra" value="${esc(it?.due_time || "")}"></div>` : ""}
     <p class="sm-err" id="semErr" role="alert"></p>
@@ -5873,7 +6041,7 @@ function semBozzaDaConfermare() {
 function semErrore(t, campo) { const e = $("#semErr"); if (e) e.textContent = t; if (campo) $(campo)?.focus(); }
 async function semSalva(f) {
   const ev = f.dataset.tipo === "evento", old = f.dataset.id ? state.items.find((x) => x.id === f.dataset.id) : null;
-  if (f.dataset.id && (!old || old.lista_id)) { semChiudiOk = true; closeSheet(); return; }
+  if (f.dataset.id && (!old || semCondivisa(old))) { semChiudiOk = true; closeSheet(); return; }
   const titolo = taglia($("#semTitolo").value.replace(/\s+/g, " ").trim(), 300);
   if (!titolo) return semErrore(ev ? "Scrivi che appuntamento è." : "Scrivi che cosa devi fare.", "#semTitolo");
   let data = old?.due_date || null, ora = old?.due_time || null;
@@ -5902,7 +6070,7 @@ async function semSalva(f) {
   toastEsito(esito, `Fatto! Ho salvato: ${titolo}`);
 }
 async function semCancella(id) {
-  const it = state.items.find((x) => x.id === id); if (!it || it.lista_id) return;
+  const it = state.items.find((x) => x.id === id); if (!it || semCondivisa(it)) return;
   const si = await ask({ title: `Vuoi cancellare "${it.title}"?`, text: "Dopo non si può più rimettere.", ok: "Sì, cancella", no: "No, tieni", danger: true });
   if (!si) { toast("Va bene, l'ho lasciata com'era."); return; }
   state.items = state.items.filter((x) => x.id !== id);
@@ -5943,7 +6111,34 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "sem-esci": await semSpegni(); break;
-    case "sem-nuova": semForm(v === "evento" ? "evento" : "todo", null); break;
+    case "sem-nome": {
+      if (!(ONLINE_MODE && store.user)) break;
+      const n = await ask({ title: "Come vuoi che ti chiami?", input: true, value: NOME || "", placeholder: "Il tuo nome", ok: "Salva", no: "Annulla" });
+      if (n === null || !String(n).trim()) break;
+      try { await store.setName(String(n).trim().slice(0, 40)); render(); toast(`Fatto! Ti chiamo ${NOME}.`); } catch { toast("Non sono riuscita a salvarlo. Riprova."); }
+      break;
+    }
+    case "sem-push-on": if (semPushDisponibile()) { await enablePush(); await semPushLeggi(); } break;
+    case "sem-push-off": {
+      if (!semPushDisponibile()) break;
+      const si = await ask({ title: "Vuoi spegnere i promemoria?", text: "Su questo telefono non arriveranno più avvisi. Puoi riaccenderli quando vuoi.", ok: "Sì, spegni", no: "No, tieni", danger: true });
+      if (!si) break;
+      await store.dropPush(); toast("Fatto! Ho spento i promemoria."); await semPushLeggi(); break;
+    }
+    case "sem-logout": {
+      if (!(ONLINE_MODE && store.user)) break;
+      const si = await ask({ title: "Vuoi uscire dall'account?", text: "Su questo telefono dovrai rientrare con email e password. Le tue cose restano al sicuro.", ok: "Sì, esci", no: "No, resto", danger: true });
+      if (si) { try { await Promise.race([inviaGiorni([]), new Promise((r) => setTimeout(r, 4000))]); } catch {} await store.logout(); clearLocal(); location.reload(); }
+      break;
+    }
+    case "sem-nuova": semForm(v === "evento" ? "evento" : "todo", null, el.dataset.g); break;
+    case "sem-cal-sel": if (validYmd(v)) { semCalSel = v; render(); semFocus(`[data-act="sem-cal-sel"][data-v="${CSS.escape(v)}"]`); } break;
+    case "sem-cal-mese": {
+      const [y, m] = (semCalMese || todayStr().slice(0, 7)).split("-").map(Number), n = new Date(y, m - 1 + (+v === 1 ? 1 : -1), 1);
+      if (n.getFullYear() < 2000 || n.getFullYear() > 2100) break;
+      semCalMese = ymd(n).slice(0, 7); semCalSel = semCalMese === todayStr().slice(0, 7) ? todayStr() : semCalMese + "-01"; render(); semFocus(`[data-act="sem-cal-mese"][data-v="${+v === 1 ? 1 : -1}"]`); break;
+    }
+    case "sem-cal-oggi": semCalMese = todayStr().slice(0, 7); semCalSel = todayStr(); render(); semFocus(`[data-act="sem-cal-oggi"]`); break;
     case "sem-modifica": semForm(state.items.find((x) => x.id === id)?.kind === "event" ? "evento" : "todo", id); break;
     case "sem-giorno": if ((v === "" || validYmd(v)) && $("#semData")) $("#semData").value = v; break;
     case "sem-cancella": semCancella(id); break;
@@ -5968,18 +6163,18 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "sem-spesa-togli": {
-      let l = semListaSpesa(); const x = l?.sottotask.find((s) => s.id === v); if (!x || l.lista_id) break;
+      let l = semListaSpesa(); const x = l?.sottotask.find((s) => s.id === v); if (!x || semCondivisa(l)) break;
       const si = await ask({ title: `Vuoi cancellare "${x.t}"?`, text: "Lo tolgo dalla lista della spesa.", ok: "Sì, cancella", no: "No, tieni", danger: true });
       if (!si) { toast("Va bene, l'ho lasciato nella lista."); break; }
-      l = semListaSpesa(); if (!l || l.lista_id) break; // dopo la conferma l'elenco può essere stato aggiornato: riparto dalla versione attuale
+      l = semListaSpesa(); if (!l || semCondivisa(l)) break; // dopo la conferma l'elenco può essere stato aggiornato: riparto dalla versione attuale
       l.sottotask = cleanSottotask(l.sottotask.filter((s) => s.id !== v)); l.updated_at = new Date().toISOString();
       render(); toastEsito(await store.save(l), "Fatto! L'ho tolto dalla lista."); break;
     }
     case "sem-spesa-pulisci": {
-      let l = semListaSpesa(); if (!l || l.lista_id) break;
+      let l = semListaSpesa(); if (!l || semCondivisa(l)) break;
       const si = await ask({ title: "Vuoi togliere le cose già comprate?", text: "Restano nella lista solo le cose che devi ancora comprare.", ok: "Sì, toglile", no: "No, tienile", danger: true });
       if (!si) { toast("Va bene, ho lasciato tutto com'era."); break; }
-      l = semListaSpesa(); if (!l || l.lista_id) break;
+      l = semListaSpesa(); if (!l || semCondivisa(l)) break;
       l.sottotask = cleanSottotask(l.sottotask.filter((s) => !s.f)); l.updated_at = new Date().toISOString();
       render(); toastEsito(await store.save(l), "Fatto! Ho tolto le cose già comprate."); break;
     }
@@ -6167,9 +6362,9 @@ function clearLocal() {
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || k.startsWith("mochi.petCache.") || k.startsWith("mochi.petFesta.") || (k.startsWith("mochi.petDaInviare.") && !(LS.get(k, []) || []).length) || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
-  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; c.pet = cleanPet(null); c.barra = [...BARRA_DEF]; c.semplice = false; LS.set("mochi.custom", c); }
+  const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; c.pet = cleanPet(null); c.barra = [...BARRA_DEF]; c.semplice = false; c.calColori = {}; LS.set("mochi.custom", c); }
   state.pet.righe = [];
-  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null, barra: null, semplice: false });
+  CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null, barra: null, semplice: false, calColori: null });
 }
 function setLoginMode(m) {
   loginMode = m;
