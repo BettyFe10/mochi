@@ -6052,7 +6052,11 @@ function semViewAiuto() {
 }
 // Modulo per aggiungere o cambiare una cosa da fare o un appuntamento: pochi campi e un solo grande "Salva"
 let semChiudiOk = false;
-function semForm(tipo, id, giorno) {
+let semBozza = null; // cosa da fare lasciata a meta' mentre si crea una lista: si torna al modulo con quello che c'era
+const SEM_EMOJI_LISTE = ["🏠", "🛒", "💼", "🌸", "🎁", "🐶"];
+let semListaDraft = { nome: "", emoji: "🏠", colore: "rosa" };
+const semListeOn = () => ONLINE_MODE && mod("liste");
+function semForm(tipo, id, giorno, bozza) {
   const ev = tipo === "evento", it = id ? state.items.find((x) => x.id === id) : null;
   if (id && (!it || semCondivisa(it))) return;
   semChiudiOk = false;
@@ -6065,7 +6069,7 @@ function semForm(tipo, id, giorno) {
     <div class="field"><label for="semData">${ev ? "Che giorno?" : "Per quando? (se non serve, lascia vuoto)"}</label>
         <div class="sm-quick"><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${oggi}">Oggi</button><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${domani}">Domani</button>${ev ? "" : `<button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="">Senza data</button>`}</div>
         <input class="input" type="date" id="semData" value="${esc(it?.due_date || dd || (ev ? oggi : ""))}"></div>
-    ${!ev && !it && listeUsate().length ? `<div class="field"><label id="semDoveL">Dove la metto?</label><div class="sm-quick" id="semDove" role="group" aria-labelledby="semDoveL"><button type="button" class="sm-btn sm-ghost" data-act="sem-lista" data-v="" aria-pressed="true">Solo mia</button>${listeUsate().map((l) => `<button type="button" class="sm-btn sm-ghost" data-act="sem-lista" data-v="${esc(l.id)}" aria-pressed="false">${esc(l.emoji)} ${esc(l.nome)}</button>`).join("")}</div><input type="hidden" id="semLista" value=""></div>` : ""}
+    ${!ev && !it && semListeOn() ? `<div class="field"><label id="semDoveL">Dove la metto?</label><div class="sm-quick" id="semDove" role="group" aria-labelledby="semDoveL"><button type="button" class="sm-btn sm-ghost" data-act="sem-lista" data-v="" aria-pressed="true">Solo mia</button>${listeUsate().map((l) => `<button type="button" class="sm-btn sm-ghost" data-act="sem-lista" data-v="${esc(l.id)}" aria-pressed="false">${esc(l.emoji)} ${esc(l.nome)}</button>`).join("")}<button type="button" class="sm-btn sm-ghost sm-nuova-l" data-act="sem-lista-nuova">+ Nuova lista</button></div><input type="hidden" id="semLista" value=""></div>` : ""}
     ${ev ? `<div class="field"><label for="semOra">A che ora? (se non lo sai, lascia vuoto)</label>
         <input class="input" type="time" id="semOra" value="${esc(it?.due_time || "")}"></div>` : ""}
     <p class="sm-err" id="semErr" role="alert"></p>
@@ -6074,10 +6078,67 @@ function semForm(tipo, id, giorno) {
     <button class="sm-btn" type="submit">Salva</button>
     ${it ? `<button type="button" class="sm-btn sm-danger" data-act="sem-cancella" data-id="${esc(it.id)}">Cancella</button>` : ""}
   </form>`);
+  if (bozza) {
+    if ($("#semTitolo")) $("#semTitolo").value = taglia(String(bozza.titolo || ""), 300);
+    if ($("#semData") && validYmd(bozza.data)) $("#semData").value = bozza.data;
+    if (bozza.lista) semScegliLista(bozza.lista);
+  }
   setTimeout(() => $("#semTitolo")?.focus(), 250);
+}
+// Sceglie dove mettere la cosa nuova (solo se la lista e' tra le tue)
+function semScegliLista(v) {
+  const h = $("#semLista");
+  if (!h || !(v === "" || listeUsate().some((l) => l.id === v))) return;
+  h.value = v;
+  document.querySelectorAll("#semDove [data-act=sem-lista]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+}
+// Modulo per creare una lista (nome, disegno, colore): niente inviti, quelli si fanno dall'app completa
+function semListaForm() {
+  const colori = CAL_COLORI.map((c) => c[0]);
+  semListaDraft = { nome: "", emoji: "🏠", colore: colori[(state.liste.length + 2) % colori.length] };
+  openSheet(`<form id="semListaForm" class="sm-form" autocomplete="off" novalidate>
+    <h2 class="sm-h">Nuova lista</h2>
+    <div class="field"><label for="semListaNome">Come si chiama la lista?</label>
+      <input class="input" id="semListaNome" maxlength="40" enterkeyhint="done"><p class="sm-aiuto-l">Per esempio: Casa, Salute, Famiglia</p></div>
+    <div class="field"><label id="semListaEL">Scegli un disegno</label><div class="sm-grid-e" id="semListaE" role="group" aria-labelledby="semListaEL">${SEM_EMOJI_LISTE.map((e) => `<button type="button" class="sm-btn sm-ghost sm-e" data-act="sem-lista-emoji" data-v="${e}" aria-pressed="${e === semListaDraft.emoji}">${e}</button>`).join("")}</div></div>
+    <div class="field"><label id="semListaCL">Scegli un colore</label><div class="sm-grid-c" id="semListaC" role="group" aria-labelledby="semListaCL">${CAL_COLORI.map(([id, nome, hex]) => `<button type="button" class="sm-btn sm-ghost sm-c" style="--cc:${hex}" data-act="sem-lista-colore" data-v="${id}" aria-pressed="${id === semListaDraft.colore}"><i aria-hidden="true"></i>${nome}</button>`).join("")}</div></div>
+    <p class="sm-err" id="semErr" role="alert"></p>
+    <button class="sm-btn" type="submit">Salva la lista</button>
+    <button type="button" class="sm-btn sm-ghost" data-act="sem-lista-indietro">Torna indietro</button>
+  </form>`);
+  setTimeout(() => $("#semListaNome")?.focus(), 250);
+}
+// Torna a "Nuova cosa da fare" con quello che c'era scritto
+function semListaIndietro(listaId) {
+  const b = semBozza || { titolo: "", data: "", lista: "" };
+  semBozza = null;
+  if (listaId) b.lista = listaId;
+  semChiudiOk = false;
+  semForm("todo", null, "", b);
+}
+let semListaOcc = false;
+async function semListaSalva(f) {
+  if (semListaOcc) return; // un secondo invio mentre si salva non crea un'altra lista
+  const nome = taglia(($("#semListaNome")?.value || "").replace(/\s+/g, " ").trim(), 40);
+  if (!nome) { const e = $("#semErr"); if (e) e.textContent = "Scrivi il nome della lista."; $("#semListaNome")?.focus(); return; }
+  const emoji = SEM_EMOJI_LISTE.includes(semListaDraft.emoji) ? semListaDraft.emoji : "🏠";
+  const colore = CAL_COLORI.some((c) => c[0] === semListaDraft.colore) ? semListaDraft.colore : null;
+  const btn = f.querySelector("button[type=submit]"); if (btn) btn.disabled = true;
+  semListaOcc = true;
+  try {
+    const id = await store.creaLista(nome, emoji);
+    if (colore && RE_ID.test(String(id))) { try { await saveCustom({ calColori: calColoriNuovi("l:" + id, colore) }); } catch (e) { /* il colore e' un di piu': la lista c'e' comunque */ } }
+    await loadListe();
+    toast("Fatto! Ho creato la lista: " + nome);
+    semListaIndietro(RE_ID.test(String(id)) ? String(id) : "");
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    const er = $("#semErr"); if (er) er.textContent = /massimo/.test(e?.message || "") ? e.message : "Non sono riuscita a salvarla. Riprova.";
+  } finally { semListaOcc = false; }
 }
 // Chiudere il modulo (Chiudi, Esc, tocco fuori) con qualcosa di scritto: prima una domanda, il testo non si butta
 function semBozzaDaConfermare() {
+  if ($("#semListaForm") && !semChiudiOk && $("#sheet").classList.contains("on") && semBozza) { semListaIndietro(); return true; }
   const f = $("#semForm");
   if (!f || semChiudiOk || !$("#sheet").classList.contains("on") || !$("#semTitolo")) return false;
   const titolo = $("#semTitolo").value.replace(/\s+/g, " ").trim();
@@ -6149,6 +6210,7 @@ async function semSpesaAggiungi(testo) {
 }
 document.addEventListener("submit", (e) => {
   if (e.target.id === "semForm") { e.preventDefault(); semSalva(e.target); }
+  if (e.target.id === "semListaForm") { e.preventDefault(); semListaSalva(e.target); }
   else if (e.target.id === "semSpesaForm") { e.preventDefault(); const i = $("#semSpesaNuova"); const t = i.value; i.value = ""; semSpesaAggiungi(t); }
 });
 document.addEventListener("click", async (e) => {
@@ -6194,13 +6256,11 @@ document.addEventListener("click", async (e) => {
     }
     case "sem-cal-oggi": semCalMese = todayStr().slice(0, 7); semCalSel = todayStr(); render(); semFocus(`[data-act="sem-cal-oggi"]`); break;
     case "sem-modifica": semForm(state.items.find((x) => x.id === id)?.kind === "event" ? "evento" : "todo", id); break;
-    case "sem-lista": {
-      const h = $("#semLista");
-      if (!h || !(v === "" || listeUsate().some((l) => l.id === v))) break;
-      h.value = v;
-      document.querySelectorAll("#semDove [data-act=sem-lista]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
-      break;
-    }
+    case "sem-lista": semScegliLista(v); break;
+    case "sem-lista-nuova": if (!semListeOn()) break; semBozza = { titolo: $("#semTitolo")?.value || "", data: $("#semData")?.value || "", lista: $("#semLista")?.value || "" }; semListaForm(); break;
+    case "sem-lista-emoji": if (SEM_EMOJI_LISTE.includes(v)) { semListaDraft.emoji = v; document.querySelectorAll("#semListaE [data-act=sem-lista-emoji]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v))); } break;
+    case "sem-lista-colore": if (CAL_COLORI.some((c) => c[0] === v)) { semListaDraft.colore = v; document.querySelectorAll("#semListaC [data-act=sem-lista-colore]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v))); } break;
+    case "sem-lista-indietro": semListaIndietro(); break;
     case "sem-giorno": if ((v === "" || validYmd(v)) && $("#semData")) $("#semData").value = v; break;
     case "sem-cancella": semCancella(id); break;
     case "sem-chiudi-si": semChiudiOk = true; closeSheet(); semChiudiOk = false; break;
