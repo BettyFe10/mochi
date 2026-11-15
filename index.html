@@ -286,6 +286,21 @@ button.stat::after{content:"";position:absolute;top:9px;right:9px;width:6px;heig
 .regali button b{font-size:13px}
 .regali button small{font-size:13px;color:var(--ink2);text-align:center}
 .regali button.lock{opacity:.45;filter:grayscale(1);cursor:default}
+/* Festa a sorpresa alla spunta: mascotte sull'arcobaleno o col bocconcino (spenta in Sobrio, modo semplice e "riduci animazioni") */
+.passa{position:fixed;z-index:95;pointer-events:none}
+.passa .mm{position:absolute;left:0;top:0;width:76px}
+.passa .mm svg{width:100%;height:auto;display:block}
+.passa-arc{inset:0}
+.passa-arc>svg{position:absolute;left:0;top:0;transition:opacity .35s ease}
+.passa-arc .mm{will-change:transform}
+.passa-arc.fine>svg,.passa-arc.fine .mm{opacity:0;transition:opacity .3s ease}
+.passa-nom{left:50%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px}
+.passa-nom .mm{width:120px;left:0;top:0;animation:nomPop 2.4s ease-in-out forwards}
+.passa-nom .pn-cibo{position:absolute;left:50%;top:-10px;margin-left:-19px;font-size:38px;animation:nomCibo 2.4s ease-in forwards}
+@keyframes nomPop{0%{transform:scale(0) rotate(-12deg)}14%{transform:scale(1.12) rotate(4deg)}20%{transform:scale(1) rotate(0)}42%{transform:scale(1.03,.95)}50%{transform:scale(.97,1.05)}58%{transform:scale(1.03,.95)}66%{transform:scale(.97,1.05)}74%{transform:scale(1)}86%{transform:scale(1)}100%{transform:scale(0) rotate(10deg)}}
+@keyframes nomCibo{0%,20%{transform:translateY(-70px) scale(1);opacity:0}28%{opacity:1}40%{transform:translateY(40px) scale(1);opacity:1}46%{transform:translateY(58px) scale(.4);opacity:0}100%{transform:translateY(58px) scale(.4);opacity:0}}
+@media (prefers-reduced-motion:reduce){.passa{display:none}}
+:root[data-stile="sobrio"] .passa,:root[data-semplice] .passa{display:none}
 .boccone{position:fixed;z-index:90;font-size:26px;pointer-events:none;transform:translate(0,0);transition:transform .62s cubic-bezier(.3,.1,.3,1),opacity .62s ease;margin:-14px 0 0 -14px}
 #topMascot.nom .mascotte{animation:nom .6s ease}
 @keyframes nom{0%,100%{transform:scale(1)}30%{transform:scale(1.15,.9)}60%{transform:scale(.95,1.08)}}
@@ -886,7 +901,7 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="cartone"] .st-in:focus{border-color:var(--pink-d)}
 
 /* ---------- Serie di giorni ---------- */
-.serie-card{display:flex;flex-direction:column;gap:var(--s3);width:100%;margin:0 0 var(--s4);padding:var(--s3) var(--s4) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);text-align:left;color:var(--ink)}
+.serie-card{display:flex;flex-direction:column;gap:var(--s3);width:100%;margin:var(--s4) 0 var(--s4);padding:var(--s3) var(--s4) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);text-align:left;color:var(--ink)}
 .serie-top{display:flex;align-items:center;gap:var(--s3)}
 .serie-n{flex:none;min-width:48px;height:48px;padding:0 8px;border-radius:24px;display:grid;place-items:center;background:var(--sole);font-family:var(--ft);font-weight:600;font-size:26px;line-height:1;color:var(--ink)}
 .serie-txt{flex:1;min-width:0}

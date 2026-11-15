@@ -856,6 +856,37 @@ function feed(fromEl, it) {
   }));
   setTimeout(() => { f.remove(); m.classList.add("nom"); heartAt(m); setTimeout(() => m.classList.remove("nom"), 700); }, 650);
 }
+// Festa a sorpresa quando spunti una cosa da fare: la mascotte corre sull'arcobaleno o si fa un bocconcino. Non in Sobrio, non nel modo semplice, non con "riduci animazioni"
+let passaUltima = 0;
+// Arcobaleno ad arco: la mascotte lo percorre da sinistra a destra e la scia si disegna dietro di lei
+function passaArcobaleno(d) {
+  const W = innerWidth, H = innerHeight, r = Math.min(W * 0.42, H * 0.42), cx = W / 2, y0 = H * 0.5 + r / 2, N = 6, sp = Math.max(5, Math.round(r / 28));
+  const col = ["#ff6b8b", "#ffb36b", "#ffe36b", "#8fe39a", "#7ec4ff", "#b69cff"];
+  const arch = col.map((c, k) => { const rr = r - k * sp; return `<path pathLength="1" d="M ${cx - rr} ${y0} A ${rr} ${rr} 0 0 1 ${cx + rr} ${y0}" fill="none" stroke="${c}" stroke-width="${sp + 0.6}" stroke-linecap="round" stroke-dasharray="1" stroke-dashoffset="1"/>`; }).join("");
+  d.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${arch}</svg><span class="mm">${mascot()}</span>`;
+  const mm = d.querySelector(".mm"), tr = [...d.querySelectorAll("path")], t0 = performance.now(), T = 1900;
+  const passo = (t) => {
+    if (!d.isConnected) return;
+    const q = Math.min(1, (t - t0) / T), e = 0.5 - 0.5 * Math.cos(Math.PI * q), th = Math.PI * (1 - e);
+    const rm = r - (N - 1) * sp / 2; // la mascotte cammina a meta' dello spessore dell'arcobaleno
+    mm.style.transform = `translate(${cx + rm * Math.cos(th) - 38}px, ${y0 - rm * Math.sin(th) - 58}px) rotate(${((Math.PI / 2 - th) * 0.4 * 180 / Math.PI).toFixed(1)}deg)`;
+    tr.forEach((x) => x.setAttribute("stroke-dashoffset", String(1 - e)));
+    if (q < 1) requestAnimationFrame(passo); else d.classList.add("fine");
+  };
+  requestAnimationFrame(passo);
+}
+function passaggioMascotte(it) {
+  if (semOn() || CUSTOM.stile === "sobrio" || menoMoto() || it.kind === "note") return;
+  const ora = Date.now();
+  if (ora - passaUltima < 9000 || (passaUltima && Math.random() > 0.5) || document.querySelector(".passa")) return; // la prima spunta dopo l'apertura la fa sempre, poi una su due, mai a raffica
+  passaUltima = ora;
+  const d = document.createElement("div"), nom = Math.random() < 0.4;
+  d.className = "passa " + (nom ? "passa-nom" : "passa-arc"); d.setAttribute("aria-hidden", "true");
+  if (nom) d.innerHTML = `<span class="mm">${mascot()}</span><span class="pn-cibo">${esc(cibo(it.id))}</span>`;
+  else { passaArcobaleno(d); }
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), nom ? 2300 : 2200);
+}
 // Nuovo regalo sbloccato: festa una volta sola
 function checkRegalo(prima) {
   if (!mod("pancino")) return;
@@ -5488,7 +5519,7 @@ function confetti(x, y, n = 18) {
 async function spuntaVoce(it, el) {
   const prima = bocconcini().length;
   it.done = !it.done; it.done_at = it.done ? new Date().toISOString() : null; it.updated_at = new Date().toISOString();
-  if (it.done) { const r = el.getBoundingClientRect(); confetti(r.left + 13, r.top + 13); suona("spunta"); if (navigator.vibrate) navigator.vibrate(15); feed(el, it); setTimeout(() => cheer(), 650); checkRegalo(prima); giornoFatto(); aggiornaSblocchi(); }
+  if (it.done) { const r = el.getBoundingClientRect(); confetti(r.left + 13, r.top + 13); suona("spunta"); if (navigator.vibrate) navigator.vibrate(15); feed(el, it); passaggioMascotte(it); setTimeout(() => cheer(), 650); checkRegalo(prima); giornoFatto(); aggiornaSblocchi(); }
   else applyCustom();
   setTimeout(render, it.done ? 280 : 0);
   await store.save(it);
