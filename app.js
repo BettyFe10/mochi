@@ -5928,13 +5928,31 @@ function semRigaTodo(it, colora) {
       <span class="sm-box" aria-hidden="true"></span><span class="sm-t">${esc(it.title)}${q ? `<small>${esc(q)}</small>` : ""}</span>${it.done ? `<span class="sm-stato">Fatta</span>` : ""}</button>
     ${semModifica(it)}</div>`;
 }
+// Cose da fare divise per lista (solo se hai delle liste): prima le tue, poi una sezione per ogni lista, con chi la usa
+function semGruppiLista(aperte) {
+  const liste = listeUsate();
+  if (!liste.length) return `<div class="sm-list">${aperte.map(semRigaTodo).join("")}</div>`;
+  const note = new Set(liste.map((l) => l.id));
+  const mie = aperte.filter((i) => !i.lista_id);
+  const altre = aperte.filter((i) => i.lista_id && !note.has(i.lista_id));
+  const me = myId();
+  let h = mie.length ? `<h3 class="sm-h3">Le mie cose</h3><div class="sm-list">${mie.map(semRigaTodo).join("")}</div>` : "";
+  for (const l of liste) {
+    const r = aperte.filter((i) => i.lista_id === l.id);
+    if (!r.length) continue;
+    const altri = (l.membri || []).filter((m) => m.user_id !== me).map((m) => esc(m.nome)).join(", ");
+    h += `<h3 class="sm-h3"><span aria-hidden="true">${esc(l.emoji)} </span>${esc(l.nome)}</h3>${altri ? `<p class="sm-lista-con">Con ${altri}</p>` : ""}<div class="sm-list">${r.map(semRigaTodo).join("")}</div>`;
+  }
+  if (altre.length) h += `<h3 class="sm-h3">Altre liste</h3><div class="sm-list">${altre.map(semRigaTodo).join("")}</div>`;
+  return h;
+}
 function semViewTodo() {
   const l = state.items.filter((i) => i.kind === "todo" && !isSpesa(i));
   const aperte = l.filter((i) => !i.done).sort(byDue);
   const fatte = l.filter((i) => i.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || "")).slice(0, 5);
   return `<div class="sm-wrap"><h2 class="sm-h">Cose da fare</h2>
     <button class="sm-btn" data-act="sem-nuova" data-v="todo">Aggiungi</button>
-    ${aperte.length ? `<div class="sm-list">${aperte.map(semRigaTodo).join("")}</div>` : semVuoto("Non c'è niente da fare. Se vuoi aggiungere una cosa, tocca il pulsante Aggiungi.")}
+    ${aperte.length ? semGruppiLista(aperte) : semVuoto("Non c'è niente da fare. Se vuoi aggiungere una cosa, tocca il pulsante Aggiungi.")}
     ${fatte.length ? `<h3 class="sm-h3">Già fatte</h3><div class="sm-list">${fatte.map(semRigaTodo).join("")}</div>` : ""}</div>`;
 }
 function semRigaEv(it, colora) {
@@ -6047,6 +6065,7 @@ function semForm(tipo, id, giorno) {
     <div class="field"><label for="semData">${ev ? "Che giorno?" : "Per quando? (se non serve, lascia vuoto)"}</label>
         <div class="sm-quick"><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${oggi}">Oggi</button><button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="${domani}">Domani</button>${ev ? "" : `<button type="button" class="sm-btn sm-ghost" data-act="sem-giorno" data-v="">Senza data</button>`}</div>
         <input class="input" type="date" id="semData" value="${esc(it?.due_date || dd || (ev ? oggi : ""))}"></div>
+    ${!ev && !it && listeUsate().length ? `<div class="field"><label id="semDoveL">Dove la metto?</label><div class="sm-quick" id="semDove" role="group" aria-labelledby="semDoveL"><button type="button" class="sm-btn sm-ghost" data-act="sem-lista" data-v="" aria-pressed="true">Solo mia</button>${listeUsate().map((l) => `<button type="button" class="sm-btn sm-ghost" data-act="sem-lista" data-v="${esc(l.id)}" aria-pressed="false">${esc(l.emoji)} ${esc(l.nome)}</button>`).join("")}</div><input type="hidden" id="semLista" value=""></div>` : ""}
     ${ev ? `<div class="field"><label for="semOra">A che ora? (se non lo sai, lascia vuoto)</label>
         <input class="input" type="time" id="semOra" value="${esc(it?.due_time || "")}"></div>` : ""}
     <p class="sm-err" id="semErr" role="alert"></p>
@@ -6086,6 +6105,10 @@ async function semSalva(f) {
   }
   const d = old ? { ...old } : newItem({ kind: ev ? "event" : "todo", area: "personale", lista_id: null });
   d.title = titolo;
+  if (!old && !ev) {
+    const lid = $("#semLista")?.value;
+    if (lid && listeUsate().some((l) => l.id === lid)) d.lista_id = lid;
+  }
   if (ev) { d.kind = "event"; d.due_date = data; d.due_time = ora; } else if ($("#semData")) d.due_date = data;
   if (!d.due_date) d.due_time = null;
   if (!old || !d.remind || d.remind === "auto" || (d.remind === "none" && !old.due_date)) d.remind = d.due_date ? defaultRemind(d) : "none";
@@ -6171,6 +6194,13 @@ document.addEventListener("click", async (e) => {
     }
     case "sem-cal-oggi": semCalMese = todayStr().slice(0, 7); semCalSel = todayStr(); render(); semFocus(`[data-act="sem-cal-oggi"]`); break;
     case "sem-modifica": semForm(state.items.find((x) => x.id === id)?.kind === "event" ? "evento" : "todo", id); break;
+    case "sem-lista": {
+      const h = $("#semLista");
+      if (!h || !(v === "" || listeUsate().some((l) => l.id === v))) break;
+      h.value = v;
+      document.querySelectorAll("#semDove [data-act=sem-lista]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+      break;
+    }
     case "sem-giorno": if ((v === "" || validYmd(v)) && $("#semData")) $("#semData").value = v; break;
     case "sem-cancella": semCancella(id); break;
     case "sem-chiudi-si": semChiudiOk = true; closeSheet(); semChiudiOk = false; break;
