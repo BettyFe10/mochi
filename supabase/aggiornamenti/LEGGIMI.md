@@ -26,3 +26,6 @@ Da lanciare con la versione "Più animali" (v35, prima di pubblicarla. Va lancia
 
 Da lanciare con la versione "Il ciclo dei turni può finire" (v45, prima di pubblicarla):
 - `17-turni-fine.sql`: colonna `ciclo_fine` su `turni_impostazioni` (l'ultimo giorno del ciclo, vuoto = per sempre) e funzione `riepilogo_numeri()` che la rispetta. Chi ha la app vecchia aperta continua a vedere il ciclo senza fine finché non la riapre.
+
+Da lanciare quando vuoi (limiti di sicurezza, non serve una versione nuova della app):
+- `18-limiti.sql`: tetto di 20 MB per account tra testi e liste da spuntare delle voci (`items`; scatta solo quando una voce cresce, eliminare e accorciare passa sempre), routine dell'animale al massimo 4000 byte, e `elimina_il_mio_account()` non si blocca più se una voce condivisa ha un animale. Non cambia nessun dato. Si può rilanciare.

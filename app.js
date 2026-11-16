@@ -334,7 +334,7 @@ const SupaStore = {
     // errore di rete: riprova più tardi. Errore del server (limite, dato non valido): non insistere
     if (error.network || /fetch|network|Failed/i.test(error.message || "")) { this.queue({ t: "save", it: row }); setSync(false); return "coda"; }
     else {
-      toast(/limite/i.test(error.message) ? "Hai raggiunto il limite di voci 🍱" : /row-level|policy/i.test(error.message) ? "Non hai più accesso a quella lista" : "Non sono riuscita a salvare");
+      toast(/limite/i.test(error.message) ? "Hai raggiunto il limite di voci 🍱" : /spazio massimo/i.test(error.message) ? "Questo account ha finito lo spazio: elimina qualcosa e riprova 🍱" : /row-level|policy/i.test(error.message) ? "Non hai più accesso a quella lista" : "Non sono riuscita a salvare");
       // riallineo con quello che c'è davvero sul server
       setTimeout(() => loadAndRender(true), 400);
       return "rifiutato";
@@ -481,8 +481,8 @@ const MODULI = [
   ["turni", "💼", "Turni di lavoro", "Calendario dei turni e ore del mese", true],
   ["spese", "👛", "Spese", "Quanto spendi ogni mese, con il budget", true],
   ["serie", "🔥", "Serie di giorni", "Quanti giorni di fila spunti qualcosa", true],
-  ["focus", "🪴", "Concentrazione", "Un timer con una piantina che cresce", true],
-  ["riepilogo", "🌙", "Riepilogo della domenica", "I numeri della settimana, la domenica sera", true],
+  ["focus", "🪴", "Timer", "Un timer con una piantina che cresce", true],
+  ["riepilogo", "🌙", "Riepilogo della settimana", "I numeri della settimana, la domenica sera", true],
   ["casa", "🏡", "La casetta", "La casa della mascotte, con i mobili in regalo", true],
   ["umore", "🌷", "Com'è andata la giornata", "Faccine nel calendario e giardino del mese", true],
   ["ricorrenti", "🔁", "Promemoria ricorrenti", "Bevi acqua, fai una pausa...", true, true],
@@ -806,7 +806,7 @@ function pancinoCard() {
   const prevN = [...TRAGUARDI].reverse().find((t) => tot >= t.n)?.n || 0;
   const pct = next ? Math.round(((tot - prevN) / (next.n - prevN)) * 100) : 100;
   return `<button class="pancino" data-act="open-pancino">
-    <span class="mbox">${mascot(oggi ? "happy" : "")}</span>
+    <span class="mbox">${mascot(oggi ? "happy" : "").replace('<span class="pc-pet"', '<span class="pc-pet" data-act="pet-giro"')}</span>
     <span class="pc-txt"><b>${esc(MN())} è ${mood.toLowerCase()}</b>
       <small>${oggi ? `Oggi ha mangiato ${oggi} ${oggi === 1 ? "bocconcino" : "bocconcini"} ${"🍣".repeat(Math.min(oggi, 5))}` : "Spunta una cosa fatta e gli dai un bocconcino"}</small>
       <span class="pc-bar"><i style="width:${pct}%"></i></span>
@@ -978,7 +978,7 @@ function itemRow(it, colora) {
   if (pmk ? pmk.resto : it.body) chips.push(`<span class="chip">📝</span>`);
   // lista da spuntare: "3/7" si apre e si spunta senza aprire l'editor
   const st = it.sottotask || [], aperto = st.length && state.stAperti.has(it.id);
-  if (st.length) chips.push(`<button class="chip st-chip ${aperto ? "on" : ""} ${st.every((x) => x.f) ? "tutte" : ""}" data-act="st-apri" data-id="${esc(it.id)}" aria-expanded="${aperto ? "true" : "false"}" aria-label="Lista da spuntare: ${st.filter((x) => x.f).length} su ${st.length}">☑ ${st.filter((x) => x.f).length}/${st.length}<span class="st-fr">${aperto ? "▴" : "▾"}</span></button>`);
+  if (st.length) chips.push(`<button class="chip st-chip ${aperto ? "on" : ""} ${st.every((x) => x.f) ? "tutte" : ""}" data-act="st-apri" data-id="${esc(it.id)}" aria-expanded="${aperto ? "true" : "false"}" aria-label="Voci da spuntare: ${st.filter((x) => x.f).length} su ${st.length}">☑ ${st.filter((x) => x.f).length}/${st.length}<span class="st-fr">${aperto ? "▴" : "▾"}</span></button>`);
   const ck = colora === true ? calChiave(it) : "", cc = ck && calScelto(ck);
   return `<div class="item ${area} ${it.done ? "done" : ""}${cc ? " cc" : ""}"${cc ? ` style="--cc:${calHex(ck)}"` : ""} data-act="edit" data-id="${esc(it.id)}">
     ${left}
@@ -1168,13 +1168,13 @@ const VOCI_MENU = [
   { g: "q", m: "ricorrenti", at: 'data-act="open-ricorrenti"', atD: 'data-act="open-ricorrenti" data-tab="ricorrenti"', e: "🔁", ic: "i-ricorrenti", t: "Ricorrenti", s: () => "Bevi acqua, fai una pausa..." },
   { g: "q", m: "turni", at: 'data-tab="turni"', e: "💼", ic: "i-turni", t: "Turni di lavoro", s: () => (turniAttivi() ? `${fmtOre(oreMese(new Date()).min)} questo mese` : "Il calendario del lavoro") },
   { g: "q", m: "spese", at: 'data-tab="spese"', e: "👛", ic: "i-spese", t: "Spese", s: () => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; } },
-  { g: "t", m: "focus", at: 'data-tab="focus"', e: "🪴", ic: "i-focus", t: "Concentrazione", s: () => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; } },
+  { g: "t", m: "focus", at: 'data-tab="focus"', e: "🪴", ic: "i-focus", t: "Timer", s: () => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; } },
   { g: "t", m: "umore", at: 'data-act="giardino-apri"', e: "🌷", ic: "i-fiore", t: "Il giardino del mese", s: () => "Le tue giornate in fiori" },
   { g: "t", m: "biscotto", at: 'data-act="open-biscotto"', e: "🥠", ic: "i-biscotto", t: "Biscotto del giorno", s: () => "La frase di oggi" },
   { g: "t", m: "pancino", at: 'data-act="open-pancino"', e: "🍣", ic: "i-pancino", t: "Il pancino", tm: () => `Il pancino di ${esc(MN())}`, s: () => "Bocconcini e regali" },
   { g: "t", m: "casa", at: 'data-tab="casa"', e: "🏡", ic: "i-casa", t: "La casetta", s: () => { const n = mobiliAvuti().length; return n ? `${n} ${n === 1 ? "mobile" : "mobili"} in regalo` : "La casa di " + esc(MN()); } },
   { g: "t", m: "pet", at: 'data-tab="pet"', e: "🐾", ic: "i-pet-altro", t: "Il mio pet", pet: 1, em: () => petSp(CUSTOM.pet.specie)[2], tm: () => esc(petTitolo()), s: () => { if (!petPresente(CUSTOM.pet)) return "Scheda, routine e pesi"; const v = petVoci(); return v.length ? `Fatto oggi ${v.filter((x) => petFatte(todayStr()).has(x.id)).length}/${v.length}` : "Scheda, routine e pesi"; } },
-  { g: "t", at: 'data-act="open-recap"', e: "🎀", ic: "i-recap", t: "Recap del mese", s: () => "Com'è andato il mese" },
+  { g: "t", at: 'data-act="open-recap"', e: "🎀", ic: "i-recap", t: "Riepilogo del mese", s: () => "Com'è andato il mese" },
   { g: "a", on: 1, at: 'data-act="open-consiglio"', e: "💌", ic: "i-consiglia", t: "Consiglia", s: () => "Scrivi alla sviluppatrice" },
   { g: "a", admin: 1, at: 'data-act="open-inbox"', e: "📬", ic: "i-messaggi", t: "Messaggi ricevuti", s: () => (adminUnread ? `${adminUnread} da leggere` : "Tutti letti") },
   { g: "a", at: 'data-act="open-settings"', e: "⚙️", ic: "i-impostazioni", t: "Impostazioni", s: () => "Colori, cosa usare, suoni" }
@@ -1185,7 +1185,7 @@ const voceVisibile = (v) => (!v.m || mod(v.m)) && (!v.on || ONLINE_MODE) && (!v.
 const BARRA_NOME = { todo: "Da fare", agenda: "Agenda", appunti: "Appunti", turni: "Turni", spese: "Spese", focus: "Timer", casa: "Casetta", liste: "Liste" };
 const barraVoce = (id) => VOCI_MENU.find((v) => (v.atD || v.at).includes(`data-tab="${id}"`));
 // Nel menu a tendina delle Impostazioni: lo stesso nome che si legge sulla barra (il timer dice anche a cosa serve)
-const barraNomeScelta = (id) => (id === "focus" ? "Timer (Concentrazione)" : barraVoce(id).pet ? petTitolo() : BARRA_NOME[id] || barraVoce(id).t);
+const barraNomeScelta = (id) => (id === "focus" ? "Timer" : barraVoce(id).pet ? petTitolo() : BARRA_NOME[id] || barraVoce(id).t);
 const barraDisp = (id) => { const v = barraVoce(id); return !!v && voceVisibile(v); };
 function slotBarra() { const o = []; for (const id of [...CUSTOM.barra, ...BARRA_DEF, "appunti"]) if (!o.includes(id) && barraDisp(id)) o.push(id); return o.slice(0, 2); }
 function aggiornaSlotBarra() {
@@ -1357,7 +1357,7 @@ window.addEventListener("popstate", async (e) => {
   if (t === state.tab) return;
   // si esce dalla Concentrazione mentre il timer corre: prima si chiede, come col tocco sulla barra
   if (state.tab === "focus" && t !== "focus" && focusInCorso()) {
-    const esci = await ask({ title: "Interrompere la concentrazione?", text: "Se esci adesso la sessione si ferma e la piantina non va nella serra.", ok: "Esci e interrompi" });
+    const esci = await ask({ title: "Interrompere il timer?", text: "Se esci adesso la sessione si ferma e la piantina non va nella serra.", ok: "Esci e interrompi" });
     if (!esci) { try { history.pushState({ tab: "focus" }, ""); } catch {} return; }
     focusChiudi();
   }
@@ -1538,10 +1538,10 @@ function drawEditor() {
       <input class="input big" id="fTitle" maxlength="300" placeholder="${isNote ? "Titolo dell'appunto" : "Es. dentista giovedì alle 17"}" value="${esc(d.title)}" autocomplete="off" enterkeyhint="done">
       ${d._new && !isNote ? `<div class="hint" id="fHint">Scrivi come parli: oggi, domani, venerdì, 12/11, alle 15, #lavoro</div>` : ""}
     </div>
-    <div class="field cat-field"><label id="catLbl">Categoria</label><div class="areas cat-row" role="group" aria-labelledby="catLbl">${catChips(d)}</div>
+    <div class="field cat-field"><label id="catLbl">Lista</label><div class="areas cat-row" role="group" aria-labelledby="catLbl">${catChips(d)}</div>
       <div class="hint cat-frase" id="catFrase" aria-live="polite">${catFrase(d)}</div>
       ${listeUsate().length && !d._pet ? `<select id="fLista" hidden tabindex="-1" aria-hidden="true"><option value="" ${d.lista_id && d.user_id && d.user_id !== myId() ? "disabled" : ""}>Solo mia</option>${state.liste.map((l) => `<option value="${esc(l.id)}" ${d.lista_id === l.id ? "selected" : ""}>${esc(l.emoji)} ${esc(l.nome)}</option>`).join("")}</select>` : ""}</div>
-    ${!advanced ? `<div class="more-row"><button class="more" data-act="d-more">+ Data, promemoria e note</button><button class="more" data-act="d-lista">+ Lista da spuntare</button></div>` : `
+    ${!advanced ? `<div class="more-row"><button class="more" data-act="d-more">+ Data, note e altro</button>${!isNote && d.due_date ? `<button class="more" id="fOggi" data-act="d-more" aria-label="Data: ${niceDate(d.due_date)}. Tocca per cambiarla">📅 ${niceDate(d.due_date)}</button>` : ""}</div>` : `
       ${!isNote ? `<div class="row">
         <div class="field"><label>Giorno</label><input class="input" type="date" id="fDate" value="${d.due_date || ""}"></div>
         <div class="field"><label>Ora</label><input class="input" type="time" id="fTime" value="${d.due_time || ""}"></div>
@@ -1549,8 +1549,9 @@ function drawEditor() {
       <div class="field"><label>Promemoria 🔔</label><select class="input" id="fRemind">${REMIND_OPTS.map(([v, l]) => `<option value="${v}" ${String(d.remind) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : `
       <div class="field"><label>Colore</label><div class="colors">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((c) => `<button class="note c${c} ${+d.color === c ? "on" : ""}" data-act="d-color" data-v="${c}" aria-label="Colore ${c}"></button>`).join("")}</div></div>
       <div class="field"><button class="pin-toggle ${d.pinned ? "on" : ""}" data-act="d-pin"><span class="e">📌</span><span><b>${d.pinned ? "Fissato in alto" : "Fissa in alto"}</b><small>Resta sempre in cima agli appunti</small></span><span class="sw2"></span></button></div>`}
-      <div class="field"><label>Lista da spuntare</label><div class="st-ed" id="stBox">${stEditorHtml()}</div></div>
+      <div class="field"><label>Voci da spuntare</label><div class="st-ed" id="stBox">${stEditorHtml()}</div></div>
       <div class="field"><label>${isNote ? "Testo" : "Note"}</label><textarea class="input" id="fBody" maxlength="20000" placeholder="${isNote ? "Scrivi qui..." : "Dettagli, indirizzo, cosa portare..."}">${esc(d.body || "")}</textarea></div>
+      <div id="spOpz">${spOpzHtml()}</div>
     `}
     <div class="actions">
       ${!d._new ? `<button class="btn danger" data-act="d-delete" aria-label="Elimina">🗑</button>` : ""}
@@ -1591,6 +1592,13 @@ function drawEditor() {
   previewParse();
 }
 /* Lista da spuntare nell'editor: si ridisegna solo lei (la finestra non salta e il cursore resta dov'è) */
+// Interruttori "lista della spesa" e "reparti": in fondo all'editor, non attaccati alle voci
+function spOpzHtml() {
+  const spesa = !!draft?._spesa;
+  const perReparto = spesa && CUSTOM.spesa_reparti !== false, daTitolo = spesa && !draft._spesaScelta && titoloSpesa(draft.title);
+  return `<div class="field"><div class="sp-opz"><button class="pin-toggle mini-t ${spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${spesa}"><span><b>È una lista della spesa</b><small>${daTitolo ? "L'ho capito dal titolo" : "Suggerimenti e reparti del supermercato"}</small></span><span class="sw2"></span></button>
+    ${spesa ? `<button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="st-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b><small>Nell'ordine del giro del supermercato</small></span><span class="sw2"></span></button>` : ""}</div></div>`;
+}
 function stEditorHtml() {
   const st = draft?.sottotask || [], fatti = st.filter((x) => x.f).length;
   const spesa = !!draft?._spesa, perReparto = spesa && CUSTOM.spesa_reparti !== false, daTitolo = spesa && !draft._spesaScelta && titoloSpesa(draft.title);
@@ -1601,9 +1609,7 @@ function stEditorHtml() {
       <button class="st-btn" data-act="st-del" data-v="${esc(x.id)}" aria-label="Togli">✕</button></div>`;
   const righe = perReparto ? gruppiSpesa(st).map((g) => `<div class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</div>${g.voci.map((x) => riga(x, st.indexOf(x), false)).join("")}`).join("") : st.map((x, i) => riga(x, i, true)).join("");
   const rc = spesa && st.length < MAX_ST ? ricompri(st) : [];
-  return `<div class="sp-opz"><button class="pin-toggle mini-t ${spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${spesa}"><span><b>È una lista della spesa</b><small>${daTitolo ? "L'ho capito dal titolo" : "Suggerimenti e reparti del supermercato"}</small></span><span class="sw2"></span></button>
-    ${spesa ? `<button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="st-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b><small>Nell'ordine del giro del supermercato</small></span><span class="sw2"></span></button>` : ""}</div>
-    ${righe}
+  return `${righe}
     ${st.length < MAX_ST ? `<div class="st-row nuovo"><button type="button" class="st-plus" data-act="st-plus" aria-label="Aggiungi alla lista">+</button><input class="st-in" id="stNew" maxlength="120" placeholder="${st.length ? "Aggiungi un'altra e premi Invio" : "Es. latte, uova... e premi Invio"}" autocomplete="off" enterkeyhint="enter" aria-label="Nuova voce"></div>` : `<p class="hint">Massimo ${MAX_ST} voci.</p>`}
     ${spesa ? `<div class="sp-sugg-box" id="stSugg" aria-live="polite"></div>` : ""}
     ${rc.length ? `<div class="sp-ricompri"><span class="sp-sugg-l">Ricompri spesso:</span>${rc.map(chipSugg).join("")}</div>` : ""}
@@ -1612,6 +1618,7 @@ function stEditorHtml() {
 function drawSt(focusNew = false) {
   const box = $("#stBox"); if (!box || !draft) return;
   box.innerHTML = stEditorHtml();
+  const so = $("#spOpz"); if (so) so.innerHTML = spOpzHtml();
   if (focusNew) { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "nearest" }); } }
 }
 // ---- Lista della spesa (v36): schermata a tutta altezza. Le spunte e le modifiche si salvano subito;
@@ -1726,12 +1733,13 @@ function aggiungiSt(v) {
 function previewParse() {
   const h = $("#fHint"); if (!h || !draft._new || draft.kind === "note") return;
   const p = parseQuick(draft.title || "");
-  if (!draft.title) { h.innerHTML = "Scrivi come parli: oggi, domani, venerdì, 12/11, alle 15, #lavoro"; return; }
+  if (!draft.title) { h.innerHTML = "Scrivi come parli: oggi, domani, venerdì, 12/11, alle 15, #lavoro"; const og0 = $("#fOggi"); if (og0) og0.textContent = "📅 " + niceDate(draft.due_date); return; }
   const bits = [];
   if (p.date) bits.push(`📅 <b>${niceDate(p.date)}</b>`);
   if (p.time) bits.push(`🕐 <b>${p.time}</b>`);
   if (p.area) bits.push(p.area === "lavoro" ? "💼 <b>Lavoro</b>" : "🌷 <b>Personale</b>");
   h.innerHTML = bits.length ? `Ho capito: ${bits.join(" · ")}` : "&nbsp;";
+  const og = $("#fOggi"); if (og) { const dd = p.date && draft._dateDefault ? p.date : (draft.due_date || p.date); og.textContent = "📅 " + niceDate(dd); }
 }
 
 // Dopo un salvataggio: il messaggio di successo solo se è arrivato davvero; senza rete lo dico chiaro; se il server ha rifiutato resta l'errore già mostrato
@@ -1833,7 +1841,7 @@ function openRecap(month) {
   openSheet(`
     <div class="calhead" style="margin-bottom:12px">
       <button class="iconbtn" data-act="recap-move" data-v="-1">‹</button>
-      <span class="fred" style="font-size:15px;color:var(--ink2)">Recap mensile</span>
+      <span class="fred" style="font-size:15px;color:var(--ink2)">Riepilogo del mese</span>
       <button class="iconbtn" data-act="recap-move" data-v="1" ${isCur ? "disabled style='opacity:.3'" : ""}>›</button>
     </div>
     <div class="recap">
@@ -1886,7 +1894,7 @@ const SG_FINE = `</div></section>`;
 function riassuntoProfilo() { const p = PRONOMI.find((x) => x[0] === CUSTOM.pronomi); return esc(CUSTOM.nome_app) + ", " + esc(MN()) + (CUSTOM.pronomi && p ? ", " + esc(p[1].toLowerCase()) : ""); }
 function riassuntoUsare() { const l = MODULI.filter((m) => !m[5] || ONLINE_MODE); const n = l.filter((m) => mod(m[0])).length; return n === l.length ? `Tutto acceso (${n})` : `${n} su ${l.length} accesi`; }
 function riassuntoAspetto() { const st = STILI.find((x) => x[0] === CUSTOM.stile), co = PALETTE.find((x) => x[0] === CUSTOM.colore), fo = FONTI.find((x) => x[0] === CUSTOM.font); return `Stile ${esc(st ? st[1] : "")}, colori ${esc(co ? co[1] : "")}, carattere ${esc(fo ? fo[1].replace(/^Dello/, "dello") : "")}`; }
-function riassuntoDati() { return ONLINE_MODE ? "Recap, backup, privacy, account" : OSPITE ? "Recap, backup, privacy, esci" : "Recap e backup"; }
+function riassuntoDati() { return ONLINE_MODE ? "Riepilogo del mese, backup, privacy, account" : OSPITE ? "Riepilogo del mese, backup, privacy, esci" : "Riepilogo del mese e backup"; }
 function sgToggle(id) {
   sgAperto = sgAperto === id ? null : id;
   document.querySelectorAll("#sheet .sgrp").forEach((g) => { const o = g.dataset.g === sgAperto; g.classList.toggle("open", o); g.querySelector(".sgrp-h").setAttribute("aria-expanded", String(o)); g.querySelector(".sgrp-b").hidden = !o; });
@@ -1918,7 +1926,7 @@ function openSettings(gruppo) {
     ${rName}
     ${SG_FINE}
     ${sgApri("usare", "🧩", "Cosa vuoi usare", riassuntoUsare())}
-    <div class="setrow" id="setSemplice"><div><b>Modo semplice</b><small>Mostra solo Cose da fare, Appuntamenti e Spesa, con scritte e pulsanti molto più grandi. Non cancella niente: le altre funzioni restano dove sono e le ritrovi quando torni all'app completa.</small></div><button class="fbtn ${semOn() ? "on" : ""}" data-act="semplice-apri" aria-pressed="${semOn()}">${semOn() ? "Acceso" : "Spento"}</button></div>
+    <div class="setrow" id="setSemplice"><div><b>Modo semplice</b><small>Mostra solo Cose da fare, Agenda e Spesa, con scritte e pulsanti molto più grandi. Non cancella niente: le altre funzioni restano dove sono e le ritrovi quando torni all'app completa.</small></div><button class="fbtn ${semOn() ? "on" : ""}" data-act="semplice-apri" aria-pressed="${semOn()}">${semOn() ? "Acceso" : "Spento"}</button></div>
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="moduli">${[["Funzioni", ["turni", "spese", "pet", "focus", "ricorrenti", "liste", "riepilogo", "tempo"]], ["Atmosfera e gioco", ["serie", "umore", "casa", "pancino", "biscotto", "feste", "stagioni"]]].map(([tit, ids]) => `<h3 class="msec">${tit}</h3>` + ids.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")).join("")}</div>
       ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
@@ -1941,7 +1949,7 @@ function openSettings(gruppo) {
       <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     ${SG_FINE}
     ${sgApri("dati", "🗂️", "I tuoi dati", riassuntoDati())}
-    <div class="setrow"><div><b>Recap mensile</b><small>Il riassunto del mese con ${MN()}</small></div><button class="fbtn" data-act="open-recap">Apri</button></div>
+    <div class="setrow"><div><b>Riepilogo del mese</b><small>Il riassunto del mese con ${MN()}</small></div><button class="fbtn" data-act="open-recap">Apri</button></div>
     <div class="setrow"><div><b>Backup</b><small>Scarica tutte le tue cose in un file</small></div><button class="fbtn" data-act="export">Scarica</button></div>
     ${rDati}
     ${SG_FINE}
@@ -1978,7 +1986,7 @@ function pushRowHtml(s) {
   }[s];
   const btn = s === "on" ? `<button class="fbtn" data-act="disable-push">Disattiva</button>`
     : s === "off" ? `<button class="fbtn on" data-act="enable-push">Attiva</button>` : "";
-  return `<div><b>Promemoria</b><small>${txt}</small></div>${btn}`;
+  return `<div><b>Notifiche</b><small>${txt}</small></div>${btn}`;
 }
 async function pushActive() {
   try {
@@ -2002,10 +2010,10 @@ async function resyncPush() {
   } catch (e) { console.warn("Promemoria: riconferma non riuscita", e); }
 }
 async function disablePush() {
-  const ok = await ask({ title: "Disattivare i promemoria?", text: "Su questo dispositivo non arriveranno più notifiche. Gli altri dispositivi non cambiano e puoi riattivarli quando vuoi.", ok: "Disattiva" });
+  const ok = await ask({ title: "Disattivare le notifiche?", text: "Su questo dispositivo non arriveranno più notifiche. Gli altri dispositivi non cambiano e puoi riattivarli quando vuoi.", ok: "Disattiva" });
   if (!ok) { openSettings(); return; }
   await store.dropPush();
-  toast("Promemoria disattivati su questo dispositivo 🔕");
+  toast("Notifiche disattivate su questo dispositivo 🔕");
   openSettings();
 }
 function setTheme(v) {
@@ -2044,7 +2052,7 @@ async function enablePush() {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(CFG.VAPID_PUBLIC_KEY) });
     await store.savePush(sub);
-    toast("Promemoria attivi 🔔");
+    toast("Notifiche attive 🔔");
     closeSheet();
   } catch (e) { console.error(e); toast("Non sono riuscita ad attivarli: " + (e.message || e)); }
 }
@@ -2082,14 +2090,14 @@ const NOVITA = {
     ["pet2", "🐾", "<b>Il tuo pet</b>: la scheda del tuo animale, la routine di ogni giorno, i pesi e le scadenze di vaccini e visite con il promemoria. Hai più animali? Scrivi i loro nomi nella scheda e dividi scadenze e spese per ognuno. Si accende da Impostazioni → Cosa vuoi usare."],
     ["sobrio", "🎨", "Nuovo stile <b>Sobrio</b> e tre palette nuove (Notte, Bosco, Grafite): colori sobri e forme più decise, per chi preferisce un aspetto più serio. Lo trovi in Impostazioni → Stile e Colori."],
     ["feste", "🎉", "<b>Feste</b>: a Natale, Capodanno, San Valentino, Pasqua, Halloween e in estate la mascotte si veste a festa e la casetta si decora, da sola. Se aggiungi il tuo compleanno in Impostazioni, ti fa gli auguri. In giro ci sono anche sorprese nascoste... Si spegne da Impostazioni → Cosa vuoi usare.", "feste"],
-    ["spesa-smart", "🛒", "<b>Lista della spesa intelligente</b>: nelle liste da spuntare della spesa ti suggerisco le cose che compri di solito e le metto in ordine per reparto, come il giro del supermercato."],
-    ["riepilogo", "🌙", "<b>Riepilogo della domenica</b>: la domenica sera i numeri della tua settimana (cose fatte, giorni attivi, turni e spese), con il confronto con quella prima.", "riepilogo"],
+    ["spesa-smart", "🛒", "<b>Lista della spesa intelligente</b>: nella lista della spesa ti suggerisco le cose che compri di solito e le metto in ordine per reparto, come il giro del supermercato."],
+    ["riepilogo", "🌙", "<b>Riepilogo della settimana</b>: la domenica sera i numeri della tua settimana (cose fatte, giorni attivi, turni e spese), con il confronto con quella prima.", "riepilogo"],
     ["casette", "🏡", "<b>La casetta</b>: la tua mascotte ha una casa tutta sua. I mobili arrivano in regalo spuntando le cose fatte, le casette nuove si aprono con i giorni attivi. La trovi nel menu (o tieni premuta la mascotte in alto).", "casa"],
     ["cartone", "🖍️", "Nuovo stile <b>Cartone</b>: linee scure, colori pieni e tutto tondo, come nei cartoni animati. Lo trovi in Impostazioni → Stile, accanto a Morbido e Quaderno."],
     ["serie", "🔥", "<b>Serie di giorni</b>: in Oggi vedi quanti giorni di fila hai spuntato qualcosa. Ogni settimana c'è un giorno di riposo che non spezza la serie, e il record resta tuo.", "serie"],
-    ["focus", "🪴", "<b>Concentrazione</b>: un timer da 15, 25 o 45 minuti con una piantina che cresce mentre lavori. Lo trovi nel menu.", "focus"],
+    ["focus", "🪴", "<b>Timer</b>: 15, 25 o 45 minuti con una piantina che cresce mentre lavori. Lo trovi nel menu.", "focus"],
     ["spese", "👛", "<b>Spese</b>: segna quanto spendi in pochi tocchi, guarda il totale del mese per categoria e, se vuoi, un budget mensile. Le trovi nel menu.", "spese"],
-    ["sottotask", "☑️", "<b>Liste da spuntare</b> dentro le cose da fare e gli appunti, perfette per la spesa: le spunti anche senza aprire la voce, e nelle liste condivise le vedete tutte."],
+    ["sottotask", "☑️", "<b>Voci da spuntare</b> dentro le cose da fare e gli appunti, perfette per la spesa: le spunti anche senza aprire la voce, e nelle liste con altre persone le vedete tutte."],
     ["moduli", "🧩", "<b>Cosa vuoi usare</b>: in Impostazioni puoi spegnere quello che non ti serve (turni, spese, umore...). Sparisce dall'app, ma i dati restano."],
     ["suoni", "🔔", "<b>Suoni</b>: un piccolo suono quando spunti una cosa fatta, apri il biscotto o arriva un promemoria ad app aperta. Scegli quale (o spegnili) in Impostazioni."],
     ["stagioni", "❄️", "<b>Stagioni</b>: neve, pioggia, sole, foglie o petali sullo sfondo. Da accendere in Impostazioni → Cosa vuoi usare."],
@@ -2104,10 +2112,10 @@ const NOVITA = {
     ["q2", "🥠", "<b>Il biscotto della fortuna</b>: ogni mattina, alla prima apertura, c'è un biscotto da aprire con la frase del giorno.", "biscotto"],
     ["q3", "📓", "<b>Nuovo stile Quaderno</b> da provare: carta puntinata, titoli scritti a mano ed etichette di carta. In Impostazioni → Stile."],
     ["q4", "🐾", "<b>12 nuove mascotte</b>: gattino, panda, coniglietta, pulcino, tartaruga, canguro, riccio, capibara, marimo, axolotl, lontra e cavallino. In Impostazioni → Nome e mascotte."],
-    ["q5", "☰", "<b>Menu completo</b>: liste condivise, ricorrenti, recap e tutto il resto sono a portata di tocco dal Menu."],
+    ["q5", "☰", "<b>Menu completo</b>: le liste, i promemoria ricorrenti, il riepilogo del mese e tutto il resto sono a portata di tocco dal Menu."],
     ["q6", "🔁", "<b>Promemoria ricorrenti</b>: bevi acqua ogni 2 ore, una pausa ogni ora... Li trovi in Impostazioni.", "ricorrenti"],
     ["q7", "🔤", "<b>Caratteri</b> e <b>12 colori</b> per gli appunti; da computer gli appunti stanno su una bacheca di sughero 📌"],
-    ["q8", "👭", "<b>Liste condivise</b>: crea una lista come \"Casa\" o \"Spesa\", invita chi vuoi con un codice e la usate insieme. In Impostazioni.", "liste"],
+    ["q8", "👭", "<b>Le mie liste</b>: crea una lista come \"Casa\" o \"Spesa\", invita chi vuoi con un codice e la usate insieme. Lo trovi nel Menu.", "liste"],
     ["q9", "💌", "<b>Consiglia alla sviluppatrice</b>: idee, problemi o complimenti arrivano direttamente a chi ha creato l'app. Lo trovi in Impostazioni."],
     ["q10", "🎨", "<b>Colori</b>: Fragola, Matcha, Lavanda, Pesca e Cielo. Li trovi in Impostazioni."],
     ["q11", "🍣", "<b>Il pancino</b>: ogni cosa che spunti è un bocconcino per la mascotte, che si guadagna dei regali.", "pancino"],
@@ -2170,7 +2178,7 @@ function checkListeSconosciute() {
 // Pagina "Liste condivise" (nel menu, non nelle impostazioni)
 function openListe() { if ($("#sheet").classList.contains("on")) closeSheet(); state.tab = "liste"; render(); window.scrollTo({ top: 0 }); }
 function viewListe() {
-  if (!ONLINE_MODE) return OSPITE ? invitoAccount("Le liste condivise si usano insieme ad altre persone: crea un account per usare questa funzione.") : emptyBox("Le liste condivise funzionano quando l'app è collegata a un account 🌸");
+  if (!ONLINE_MODE) return OSPITE ? invitoAccount("Le liste da condividere con altre persone richiedono un account: crealo per usare questa funzione.") : emptyBox("Le mie liste funzionano quando l'app è collegata a un account 🌸");
   const me = myId();
   return `<div class="sec" style="margin-top:0"><h2><span class="emo">👭 </span>Le mie liste</h2></div>
     <p style="margin:0 0 12px;color:var(--ink2)">Crea le liste che ti servono (Salute, Lavoro, Casa...). Le tieni solo per te, oppure invita altre persone: allora vedono e spuntano tutto quello che c'è dentro.</p>
@@ -2300,7 +2308,7 @@ function invitoInSospeso() {
 async function esciLista(id) {
   const l = listaById(id); if (!l) return;
   const solo = l.membri.length <= 1;
-  const ok = await ask({ title: `Uscire da ${l.emoji} ${l.nome}?`, text: solo ? "Sei l'unica persona nella lista: uscendo la lista e tutte le sue voci verranno cancellate." : "Non vedrai più le voci della lista. Le altre persone continueranno a vederle.", ok: "Esci", danger: true });
+  const ok = await ask({ title: `Uscire da ${l.emoji} ${l.nome}?`, text: solo ? "Sei l'unica persona nella lista: uscendo la lista e tutte le sue voci verranno eliminate." : "Non vedrai più le voci della lista. Le altre persone continueranno a vederle.", ok: "Esci", danger: true });
   if (!ok) return;
   try { await store.esciLista(id); await loadListe(); state.items = await store.list(); if (state.todoFilter === "l:" + id) state.todoFilter = "tutte"; if (state.noteFilter === "l:" + id) state.noteFilter = "tutte"; render(); openListe(); toast(gen("Hai lasciato la lista", "Sei uscita dalla lista", "Sei uscito dalla lista")); }
   catch { toast("Non sono riuscita a uscire"); }
@@ -2594,7 +2602,7 @@ function chiudiBiscotto() {
 
 /* =========================================================
    PROMEMORIA RICORRENTI ("bevi acqua ogni 2 ore")
-   Li manda il server alle ore giuste anche ad app chiusa, solo sui dispositivi con i promemoria attivi.
+   Li manda il server alle ore giuste anche ad app chiusa, solo sui dispositivi con le notifiche attive.
    ========================================================= */
 const RE_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const OGNI_OPZ = [[30, "Ogni 30 minuti"], [60, "Ogni ora"], [90, "Ogni ora e mezza"], [120, "Ogni 2 ore"], [180, "Ogni 3 ore"], [240, "Ogni 4 ore"], [360, "Ogni 6 ore"], [1440, "Una volta al giorno"]];
@@ -2641,7 +2649,7 @@ function viewRicorrenti() {
   const quando = (r) => r.attiva && r.prossimo_invio ? `Prossimo: ${new Date(r.prossimo_invio).toLocaleString("it-IT", { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : "In pausa";
   return `<div class="sec" style="margin-top:0"><h2><span class="emo">🔁 </span>Promemoria ricorrenti</h2></div>
     <p style="margin:0 0 12px;color:var(--ink2)">Piccole abitudini che ${esc(MN())} ti ricorda a intervalli, anche ad app chiusa.</p>
-    ${!pushOn ? `<div class="bubble" style="margin:0 0 12px">🔔 Su questo dispositivo i promemoria non sono attivi: ${PUSH_READY ? `<button class="fbtn on" data-act="enable-push" style="margin-left:6px">Attiva</button>` : "non arriverebbero."}</div>` : ""}
+    ${!pushOn ? `<div class="bubble" style="margin:0 0 12px">🔔 Su questo dispositivo le notifiche non sono attive: ${PUSH_READY ? `<button class="fbtn on" data-act="enable-push" style="margin-left:6px">Attiva</button>` : "non arriverebbero."}</div>` : ""}
     <div class="list">${ricorrenti.map((r) => `
       <div class="lcard ric ${r.attiva ? "" : "off"}">
         <div class="lcard-h"><span class="e">${esc(r.emoji)}</span><div style="flex:1;min-width:0"><b>${esc(r.titolo)}</b>
@@ -2714,9 +2722,7 @@ async function moduloRicorrenti(acceso) {
 }
 async function eliminaRicorrente(id) {
   const r = ricorrenti.find((x) => x.id === id); if (!r) return;
-  const ok = await ask({ title: `Eliminare "${r.titolo}"?`, text: "Non ti arriveranno più questi promemoria.", ok: "Elimina", danger: true });
-  if (!ok) return;
-  try { await store.eliminaRicorrente(id); toast("Eliminato"); openRicorrenti(); } catch { toast("Non sono riuscita a eliminarlo"); }
+  try { await store.eliminaRicorrente(id); toastAnnulla("Promemoria eliminato", async () => { try { await store.salvaRicorrente({ ...r, id: undefined, fuso: Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Rome" }); openRicorrenti(); } catch { toast("Non sono riuscita a rimetterlo"); } }); openRicorrenti(); } catch { toast("Non sono riuscita a eliminarlo"); }
 }
 
 /* =========================================================
@@ -2938,11 +2944,8 @@ async function salvaTipoTurno() {
 }
 async function eliminaTipoTurno() {
   const d = tipoDraft; if (!d?.k) return;
-  const nelCiclo = state.turniImp.ciclo.includes(d.k);
-  const ok = await ask({ title: `Eliminare "${d.nome}"?`, text: nelCiclo ? "Nel ciclo i suoi giorni diventano riposo." : "I giorni segnati con questo turno torneranno vuoti.", ok: "Elimina", danger: true });
-  if (!ok) return;
   const imp = state.turniImp;
-  if (await salvaImpTurni({ ...imp, tipi: imp.tipi.filter((t) => t.k !== d.k), ciclo: imp.ciclo.map((k) => (k === d.k ? "" : k)) }, "Eliminato")) closeSheet();
+  if (await salvaImpTurni({ ...imp, tipi: imp.tipi.filter((t) => t.k !== d.k), ciclo: imp.ciclo.map((k) => (k === d.k ? "" : k)) })) { closeSheet(); toastAnnulla(`Turno "${d.nome}" eliminato`, () => { salvaImpTurni(imp, "Turno rimesso"); }); }
 }
 // Il ciclo che si ripete
 let cicloDraft = null;
@@ -3176,12 +3179,11 @@ async function salvaSpesa(btn) {
 }
 async function eliminaSpesa() {
   const d = spesaDraft; if (!d?.id) return;
-  const keep = { ...d };
-  const ok = await ask({ title: "Eliminare questa spesa?", text: `${euro(d.importo_cent)} · ${catSpesa(d.categoria)[2]}${d.nota ? ` · ${d.nota}` : ""}`, ok: "Elimina", danger: true });
-  if (!ok) { apriSpesa(keep); return; }
-  const prima = state.spese.voci;
+  const prima = state.spese.voci, orig = prima.find((v) => v.id === d.id); if (!orig) return;
+  closeSheet();
   state.spese.voci = prima.filter((v) => v.id !== d.id); render();
-  try { await SpeseStore.elimina(d.id); if (!ONLINE_MODE) SpeseStore._local(); LS.set("mochi.speseCache", state.spese); toast("Spesa eliminata"); }
+  try { await SpeseStore.elimina(d.id); if (!ONLINE_MODE) SpeseStore._local(); LS.set("mochi.speseCache", state.spese);
+    toastAnnulla("Spesa eliminata", async () => { try { const r = await SpeseStore.salva(orig, true); state.spese.voci = [r, ...state.spese.voci.filter((v) => v.id !== r.id)]; if (!ONLINE_MODE) SpeseStore._local(); LS.set("mochi.speseCache", state.spese); render(); } catch { toast("Non sono riuscita a rimetterla"); } }); }
   catch { state.spese.voci = prima; render(); toast("Non sono riuscita a eliminarla"); }
 }
 async function chiediBudget() {
@@ -3432,11 +3434,11 @@ function esciOspite() {
   const n = quanteCose(datiOspite());
   openSheet(`<h2><span class="mbox">${mascot()}</span>Uscire da ospite?</h2>
     <p class="ospite-testo">${n ? `Le ${n} cose che hai scritto restano su questo dispositivo: le ritrovi se rientri come ospite, oppure le porti in un account quando entri.` : "Tornerai alla schermata di accesso."}</p>
-    ${n ? `<button class="more ospite-cancella" data-act="ospite-cancella">Cancella le mie cose da questo dispositivo ed esci</button>` : ""}
+    ${n ? `<button class="more ospite-cancella" data-act="ospite-cancella">Elimina le mie cose da questo dispositivo ed esci</button>` : ""}
     <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="ospite-esci-ok">Esci</button></div>`);
 }
 async function cancellaOspite() {
-  const ok = await ask({ title: "Cancellare tutto?", text: "Le cose che hai scritto come ospite spariranno per sempre da questo dispositivo.", ok: "Cancella ed esci", danger: true });
+  const ok = await ask({ title: "Eliminare tutto?", text: "Le cose che hai scritto come ospite spariranno per sempre da questo dispositivo.", ok: "Elimina ed esci", danger: true });
   if (!ok) { esciOspite(); return; }
   CHIAVI_OSPITE.forEach((k) => localStorage.removeItem(k)); localStorage.removeItem("mochi.ospite");
   location.reload();
@@ -3484,7 +3486,7 @@ function nonSonoMie() {
   const n = quanteCose(datiOspite());
   openSheet(`<h2><span class="mbox">${mascot()}</span>Non sono tue?</h2>
     <p class="ospite-testo">Nessun problema: non le porto nel tuo account. Cosa faccio con ${n === 1 ? "la cosa scritta" : `le ${n} cose scritte`} come ospite su questo dispositivo?</p>
-    <button class="more ospite-cancella" data-act="passaggio-cancella">Cancellale da questo dispositivo</button>
+    <button class="more ospite-cancella" data-act="passaggio-cancella">Eliminale da questo dispositivo</button>
     <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="passaggio-lascia">Lasciale qui</button></div>`);
 }
 function lasciaSulDispositivo() {
@@ -3493,9 +3495,9 @@ function lasciaSulDispositivo() {
   closeSheet(); toast("Restano su questo dispositivo: non te lo chiedo più");
 }
 async function cancellaCoseOspite() {
-  const ok = await ask({ title: "Cancellarle dal dispositivo?", text: "Le cose scritte come ospite spariranno per sempre da questo dispositivo. Il tuo account non cambia.", ok: "Cancella", danger: true });
+  const ok = await ask({ title: "Eliminarle dal dispositivo?", text: "Le cose scritte come ospite spariranno per sempre da questo dispositivo. Il tuo account non cambia.", ok: "Elimina", danger: true });
   if (!ok) { nonSonoMie(); return; }
-  finePassaggio(); toast("Cancellate dal dispositivo");
+  finePassaggio(); toast("Eliminate dal dispositivo");
 }
 // Dopo l'accesso: proposta di portare le cose dell'ospite
 async function proponiPassaggio(subito = false) {
@@ -3891,9 +3893,8 @@ async function salvaPetScad() {
 }
 async function eliminaPetScad() {
   const id = petScDraft?.id, it = state.items.find((x) => x.id === id); if (!it) return;
-  const ok = await ask({ title: "Eliminare la scadenza?", text: `"${it.title}" sparirà per sempre.`, ok: "Elimina", danger: true });
-  if (!ok) { apriPetScad(id); return; }
-  state.items = state.items.filter((x) => x.id !== id); petScDraft = null; render(); await store.remove(id); toast("Eliminata");
+  closeSheet(); state.items = state.items.filter((x) => x.id !== id); petScDraft = null; render(); await store.remove(id);
+  toastAnnulla("Scadenza eliminata", () => { if (state.items.some((x) => x.id === it.id)) return; state.items.push(it); render(); Promise.resolve(store.save(it)).catch(() => toast("Non sono riuscita a rimetterla")); });
 }
 // Alla scadenza fatta (da qui, da Da fare o da Oggi) con una ripetizione: propongo la prossima
 async function petProponiProssima(it) {
@@ -4043,7 +4044,7 @@ function apriPet() {
     <div class="field"><label for="ptTel">Telefono del veterinario</label><input class="input" id="ptTel" type="tel" inputmode="tel" maxlength="20" autocomplete="off" placeholder="Es. +39 02 1234567" value="${esc(p.tel)}"></div>
     <div class="field"><label for="ptNote">Note</label><textarea class="input" id="ptNote" rows="3" maxlength="300" placeholder="Allergie, cibo preferito, cose da ricordare">${esc(p.note)}</textarea></div>
     </div>
-    ${petPresente(p) ? `<button class="more ospite-cancella" data-act="pet-rimuovi">Rimuovi questo animale e i suoi dati</button>` : ""}
+    ${petPresente(p) ? `<button class="more ospite-cancella" data-act="pet-rimuovi">Elimina questo animale e i suoi dati</button>` : ""}
     <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-salva">Salva</button></div>`);
   if (!petPresente(p)) setTimeout(() => $("#ptNome")?.focus(), 250);
 }
@@ -4061,15 +4062,15 @@ async function salvaPet() {
   await saveCustom({ pet }); await animaleSincronizza(pet); closeSheet(); toast("Scheda salvata 🐾");
 }
 async function rimuoviPet() {
-  const ok = await ask({ title: "Rimuovere il pet?", text: `Cancello la scheda${CUSTOM.pet.nome ? " di " + esc(CUSTOM.pet.nome) : ""}, le sue spunte e i suoi pesi. Non si può annullare.`, ok: "Rimuovi", danger: true });
+  const ok = await ask({ title: "Eliminare il pet?", text: `Elimino la scheda${CUSTOM.pet.nome ? " di " + esc(CUSTOM.pet.nome) : ""}, le sue spunte e i suoi pesi. Non si può annullare.`, ok: "Elimina", danger: true });
   if (!ok) { apriPet(); return; }
   // prima l'animale (il server rifiuta se ce ne sono altri: così il registro degli altri non si perde); poi le righe del pet
   try {
     const pr = ANIMALI.find((x) => x.id === petSelId());
     if (ONLINE_MODE && store.user && pr) { const { error } = await store.sb.rpc("pet_elimina_animale", { p_id: pr.id }); if (error) throw error; ANIMALI = ANIMALI.filter((x) => x.id !== pr.id); PET_SEL = ""; }
     await petCancellaRegistro(pr?.id);
-  } catch (e) { toast(erroreDiRete(e) ? "Sei offline: riprova tra poco" : "Non sono riuscita a rimuoverlo"); return; }
-  specchioPrincipale(); await saveCustom({ pet: ANIMALI.length ? CUSTOM.pet : cleanPet(null) }); toast("Pet rimosso");
+  } catch (e) { toast(erroreDiRete(e) ? "Sei offline: riprova tra poco" : "Non sono riuscita a eliminarlo"); return; }
+  specchioPrincipale(); await saveCustom({ pet: ANIMALI.length ? CUSTOM.pet : cleanPet(null) }); toast("Pet eliminato");
 }
 // ---- Routine: fino a 8 voci
 let petBozza = null;
@@ -4079,7 +4080,7 @@ function apriPetRoutine(bozza) {
   const b = petBozza;
   openSheet(`<h2><span class="mbox">${mascot()}</span>La routine${CUSTOM.pet.nome ? " di " + esc(CUSTOM.pet.nome) : ""}</h2>
     <p class="ospite-testo">Le cose da fare ogni giorno, fino a 8. Ogni giorno ricominciano da capo.</p>
-    <div class="pet-rlista">${b.map((v) => `<div class="pet-rriga"><input class="input pet-rin" data-id="${esc(v.id)}" maxlength="24" autocomplete="off" aria-label="Nome della voce" value="${esc(v.t)}"><button type="button" class="iconbtn pet-rdel" data-act="pet-r-del" data-v="${esc(v.id)}" aria-label="Togli ${esc(v.t || "la voce")}">✕</button></div>`).join("")}</div>
+    <div class="pet-rlista">${b.map((v) => `<div class="pet-rriga"><input class="input pet-rin" data-id="${esc(v.id)}" maxlength="24" autocomplete="off" aria-label="Nome della voce" value="${esc(v.t)}"><button type="button" class="iconbtn pet-rdel" data-act="pet-r-del" data-v="${esc(v.id)}" aria-label="Elimina ${esc(v.t || "la voce")}">✕</button></div>`).join("")}</div>
     <div class="more-row">${b.length < 8 ? `<button class="more" data-act="pet-r-add">Aggiungi una voce</button>` : `<small class="small">Hai raggiunto le 8 voci.</small>`}<button class="more" data-act="pet-r-ripristina">Ripristina quelle di base</button></div>
     <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-r-salva">Salva</button></div>`);
 }
@@ -4094,7 +4095,7 @@ function apriPetPeso(giorno) {
   openSheet(`<h2><span class="mbox">${mascot()}</span>${ex ? "Modifica il peso" : "Aggiungi il peso"}</h2>
     <div class="field"><label for="ptKg">Peso in kg</label><input class="input big" id="ptKg" inputmode="decimal" enterkeyhint="done" maxlength="9" autocomplete="off" placeholder="Es. 4,5" value="${ex ? fmtKg(ex.valore) : ""}"></div>
     <div class="field"><label for="ptGiorno">Giorno</label><input class="input" type="date" id="ptGiorno" value="${g}" min="${petMinGiorno()}" max="${todayStr()}"></div>
-    <div class="actions">${ex ? `<button class="btn danger" data-act="pet-peso-togli" data-v="${g}" aria-label="Togli questo peso">🗑</button>` : ""}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-peso-salva">Salva</button></div>`);
+    <div class="actions">${ex ? `<button class="btn danger" data-act="pet-peso-togli" data-v="${g}" aria-label="Elimina questo peso">🗑</button>` : ""}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="pet-peso-salva">Salva</button></div>`);
   $("#ptKg").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); petAzione("pet-peso-salva"); } });
   setTimeout(() => $("#ptKg")?.focus(), 250);
 }
@@ -4160,7 +4161,7 @@ async function petAzione(act, v, el) {
       petImposta({ a: "set", tipo: "peso", giorno, chiave: "kg", valore: kg });
       closeSheet(); render(); toast(`Peso segnato: ${fmtKg(kg)} kg`); break;
     }
-    case "pet-peso-togli": if (petGiornoOk(v)) { petImposta({ a: "del", tipo: "peso", giorno: v, chiave: "kg" }); closeSheet(); render(); toast("Peso tolto"); } break;
+    case "pet-peso-togli": if (petGiornoOk(v)) { petImposta({ a: "del", tipo: "peso", giorno: v, chiave: "kg" }); closeSheet(); render(); toast("Peso eliminato"); } break;
   }
 }
 
@@ -4784,7 +4785,7 @@ function viewFocus() {
       ${fine && !pausa && v ? (v.done ? `<p class="focus-voce fatta">✓ <b>${esc(v.title)}</b> è spuntata</p>` : `<div class="focus-voce"><span>Hai finito <b>${esc(v.title)}</b>?</span><button class="fbtn" data-act="focus-spunta">Sì, spuntala</button></div>`) : ""}
       <div class="actions focus-azioni">${azioni}</div>${fine ? "" : avviso}`;
   }
-  return `<div class="split focus"><div class="col-main"><div class="sec" style="margin-top:0"><h2><span class="emo">🪴 </span>Concentrazione</h2></div>${main}</div><div class="col-side">${serra}</div></div>`;
+  return `<div class="split focus"><div class="col-main"><div class="sec" style="margin-top:0"><h2><span class="emo">🪴 </span>Timer</h2></div>${main}</div><div class="col-side">${serra}</div></div>`;
 }
 document.addEventListener("change", (e) => { if (e.target.id === "focusVoce") focusPrep.voce = RE_ID.test(e.target.value) ? e.target.value : ""; });
 // Ogni secondo: aggiorna solo il tempo, la barra e (se serve) la piantina. La pagina non si ridisegna.
@@ -5144,8 +5145,43 @@ async function sbloccaRicordo(id) {
 }
 // Cinque tocchi veloci sulla mascotte in un giorno di festa: festa speciale e il cappellino diventa un ricordo
 let toccoFesta = { n: 0, t: 0 };
-function festaTocco() {
-  const f = festaOggi(); if (!f) return;
+// Easter egg 3D invisibili: un solo helper, due keyframes in index.html. Mai con modo semplice, stile sobrio o movimento ridotto
+const e3dOk = () => !(semOn() || CUSTOM.stile === "sobrio" || menoMoto());
+function effetto3d(el, nome, ms) {
+  if (!el || !el.isConnected || !e3dOk()) return false;
+  el.classList.remove(nome); void el.offsetWidth; el.classList.add(nome);
+  setTimeout(() => { try { el.classList.remove(nome); } catch (_) {} }, ms);
+  return true;
+}
+// Fuori dai giorni di festa, cinque tocchi veloci sulla mascotte in alto lanciano una moneta: testa o croce
+function monetaTocco() {
+  const ora = Date.now();
+  toccoFesta = { n: ora - toccoFesta.t < 1600 ? toccoFesta.n + 1 : 1, t: ora };
+  if (toccoFesta.n < 5) return;
+  toccoFesta = { n: 0, t: 0 };
+  if (!e3dOk() || document.querySelector(".e3d-moneta")) return;
+  const testa = Math.random() < .5, g = testa ? [1260, 1400, 1440] : [1350, 1500, 1620];
+  const c = document.createElement("div");
+  c.className = "e3d-moneta"; c.setAttribute("aria-hidden", "true");
+  c.innerHTML = `<div class="e3d-f">${MASC.svg(CUSTOM.mascotte)}</div><div class="e3d-r">★</div>`;
+  c.style.setProperty("--r", g[0] + "deg"); c.style.setProperty("--r3", g[1] + "deg"); c.style.setProperty("--r2", g[2] + "deg");
+  document.body.appendChild(c);
+  effetto3d(c, "e3d-vola", 2400);
+  setTimeout(() => { if (c.isConnected) toast(testa ? "Testa!" : "Croce!"); }, 1150);
+  setTimeout(() => c.remove(), 2450);
+}
+let e3dT = 0, e3dLato = 1;
+document.addEventListener("click", (e) => {
+  const t = e.target; if (!(t instanceof Element)) return;
+  const sc = t.closest(".casa-scena:not(.mini)"); if (!sc) return;
+  const m = t.closest(".casa-masc");
+  if (m) { const ora = Date.now(); if (ora - e3dT < 350) { e3dT = 0; effetto3d(m, "e3d-gira", 800); } else e3dT = ora; return; }
+  if (t.closest("[data-act],button,a,.mob") || sc.classList.contains("e3d-tilt")) return;
+  e3dLato = -e3dLato; sc.classList.toggle("e3d-inv", e3dLato < 0);
+  effetto3d(sc, "e3d-tilt", 900);
+});
+function festaTocco(el) {
+  const f = festaOggi(); if (!f) { if (el && el.id === "topMascot") monetaTocco(); return; }
   const ora = Date.now();
   toccoFesta = { n: ora - toccoFesta.t < 1600 ? toccoFesta.n + 1 : 1, t: ora };
   if (toccoFesta.n < 5) return;
@@ -5569,7 +5605,7 @@ document.addEventListener("click", async (e) => {
     if (t === "menu" && state.tab === "menu") t = state.tabPrima && state.tabPrima !== "menu" ? state.tabPrima : "oggi"; // ☰ di nuovo: si richiude
     // si esce dalla Concentrazione mentre il timer corre: prima si chiede
     if (state.tab === "focus" && t !== "focus" && focusInCorso()) {
-      const esci = await ask({ title: "Interrompere la concentrazione?", text: "Se esci adesso la sessione si ferma e la piantina non va nella serra.", ok: "Esci e interrompi" });
+      const esci = await ask({ title: "Interrompere il timer?", text: "Se esci adesso la sessione si ferma e la piantina non va nella serra.", ok: "Esci e interrompi" });
       if (!esci) return;
       focusChiudi();
     }
@@ -5704,7 +5740,7 @@ document.addEventListener("click", async (e) => {
     case "barra-ripristina": salvaBarra([...BARRA_DEF], "Barra ripristinata", '#sheet [data-act="barra-ripristina"]'); break;
     case "toast-annulla": { const f = toastUndo; toastUndo = null; $("#toast").classList.remove("on", "con-azione"); toastSvuota(); if (f) f(); break; }
     case "pick-suono": if (SUONI.some((x) => x[0] === v)) { suona("notifica", v); await saveCustom({ suono: v }); riapriImpostazioni(); } break;
-    case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(); break; }
+    case "poke": { const sv = el.querySelector(".mascotte"); if (sv) { sv.classList.add("happy"); setTimeout(() => sv.classList.remove("happy"), 1400); } heartAt(el); if (navigator.vibrate) navigator.vibrate(10); festaTocco(el); break; }
     case "uovo": festaUovo(v, el); break;
     case "compleanno-togli": await saveCustom({ compleanno: "" }); riapriImpostazioni(); toast("Compleanno tolto"); break;
     case "open-custom": openMascotPicker(); break;
@@ -5713,6 +5749,7 @@ document.addEventListener("click", async (e) => {
     case "calcol-pick": { const k = el.dataset.k; if (RE_CALCHIAVE.test(k || "") && CAL_COLORI.some((x) => x[0] === v)) { const y = $("#sheet").scrollTop; await saveCustom({ calColori: calColoriNuovi(k, v) }); if ($("#sheet .calcol-riga")) { calColApri(); $("#sheet").scrollTop = y; } else if (state.tab === "liste" && !$("#sheet").classList.contains("on")) { const w = window.scrollY; render(); window.scrollTo({ top: w }); } toast("Colore salvato 🎨"); } break; }
     case "calcol-reset": { const ok = await ask({ title: "Ripristinare i colori?", text: "Tornano quelli di partenza.", ok: "Ripristina" }); if (ok) { await saveCustom({ calColori: {} }); calColApri(); toast("Colori ripristinati"); } else calColApri(); break; }
     case "open-pancino": openPancino(); break;
+    case "pet-giro": if (!effetto3d(el, "e3d-gira", 800)) openPancino(); break;
     case "open-consiglio": openConsiglio(); if (ONLINE_MODE) store.mieiConsigli().then((r) => { mieiMsg = r.filter((m) => m && typeof m.testo === "string"); if ($("#cTesto")) openConsiglio(); }).catch(() => {}); break;
     case "open-inbox": openInbox(); break;
     case "open-liste": openListe(); break;
@@ -5817,11 +5854,10 @@ document.addEventListener("click", async (e) => {
     case "d-pin": draft.pinned = !draft.pinned; drawEditor(); break;
     case "d-save": saveDraft(); break;
     case "d-delete": {
-      const keep = { ...draft }, keepAdv = advanced;
-      const yes = await ask({ title: "Eliminare questa voce?", text: `"${keep.title}" sparirà per sempre.`, ok: "Elimina", danger: true });
-      if (!yes) { draft = keep; advanced = keepAdv; drawEditor(); break; }
-      state.items = state.items.filter((x) => x.id !== keep.id);
-      render(); await store.remove(keep.id); toast("Eliminato");
+      const orig = state.items.find((x) => x.id === draft.id); if (!orig) break;
+      closeSheet(); state.items = state.items.filter((x) => x.id !== orig.id);
+      render(); await store.remove(orig.id);
+      toastAnnulla("Eliminato", () => { if (state.items.some((x) => x.id === orig.id)) return; state.items.push(orig); render(); Promise.resolve(store.save(orig)).catch(() => toast("Non sono riuscita a rimetterlo")); });
       break;
     }
     case "ask-ok": finishAsk(true); break;
@@ -5858,7 +5894,7 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "delete-account": {
-      const ok = await ask({ title: "Eliminare l'account?", text: "Verranno cancellati per sempre il tuo account e tutte le tue cose.\nPer confermare scrivi ELIMINA.", input: true, placeholder: "ELIMINA", maxlength: 10, ok: "Elimina per sempre", danger: true });
+      const ok = await ask({ title: "Eliminare l'account?", text: "Verranno eliminati per sempre il tuo account e tutte le tue cose.\nPer confermare scrivi ELIMINA.", input: true, placeholder: "ELIMINA", maxlength: 10, ok: "Elimina per sempre", danger: true });
       if (ok === null) break;
       if (String(ok).trim() !== "ELIMINA") { toast("Eliminazione annullata"); break; }
       try { toast("Preparo il backup…"); await exportData(); await store.deleteAccount(); clearLocal(); Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniDaInviare.") || k.startsWith("mochi.petDaInviare.")).forEach((k) => localStorage.removeItem(k)); toast(`Account eliminato. Ti ho scaricato un backup. Ciao da ${MN()} 🍣`); setTimeout(() => location.reload(), 3000); }
@@ -5911,7 +5947,7 @@ document.addEventListener("keydown", (e) => {
    Lo stile (Sobrio) e il carattere (leggibile) sono forzati solo a schermo, in applyCustom: la scelta salvata non cambia.
    Le cose delle liste condivise si vedono e si spuntano, ma non si cambiano né si cancellano da qui.
    ========================================================= */
-const SEM_VOCI = [["s-todo", "Da fare"], ["s-agenda", "Impegni"], ["s-spesa", "Spesa"]]; // etichette corte: la barra le scrive a 20 px
+const SEM_VOCI = [["s-todo", "Da fare"], ["s-agenda", "Agenda"], ["s-spesa", "Spesa"]]; // etichette corte: la barra le scrive a 20 px
 const SEM_TABS = [...SEM_VOCI.map((v) => v[0]), "s-aiuto"];
 // Barra con soli 3 pulsanti e tasto "Aiuto" in alto: si aggiungono accendendo il modo semplice e si tolgono spegnendolo
 // (gli altri pulsanti della barra restano dove sono: a modo semplice acceso li nasconde il CSS, spento è la barra di sempre)
@@ -6012,7 +6048,7 @@ function semViewAgenda() {
   const evG = delGiorno.filter((i) => i.kind === "event"), todoG = delGiorno.filter((i) => i.kind === "todo");
   const ev = state.items.filter((i) => i.kind === "event" && i.due_date && i.due_date >= oggi).sort(byDue);
   const gruppo = (titolo, l) => l.length ? `<h4 class="sm-h4">${titolo}</h4><div class="sm-list">${l.map((i) => semRigaEv(i)).join("")}</div>` : "";
-  return `<div class="sm-wrap"><h2 class="sm-h">Appuntamenti</h2>
+  return `<div class="sm-wrap"><h2 class="sm-h">Agenda</h2>
     <div class="sm-cal"><div class="sm-cal-top"><h3 class="sm-cal-t" id="semCalT" aria-live="polite">${MESI[mm - 1].replace(/^./, (c) => c.toUpperCase())} ${y}</h3>
       <div class="sm-cal-nav"><button type="button" class="sm-mod" data-act="sem-cal-mese" data-v="-1">Mese prima</button><button type="button" class="sm-mod" data-act="sem-cal-mese" data-v="1">Mese dopo</button></div>
       <button type="button" class="sm-mod sm-cal-oggi" data-act="sem-cal-oggi">Oggi</button></div>
@@ -6054,17 +6090,17 @@ function semViewAiuto() {
   if (conto) imp += semRigaImp("Come vuoi che ti chiami", NOME || "Non l'hai ancora scritto", `<button class="sm-mod" data-act="sem-nome">Cambia</button>`);
   if (semPushDisponibile()) {
     setTimeout(semPushLeggi, 0);
-    imp += semPush === "on" ? semRigaImp("Promemoria", "Attivi", `<button class="sm-mod" data-act="sem-push-off">Spegni</button>`)
-      : semPush === "off" ? semRigaImp("Promemoria", "Spenti", `<button class="sm-mod" data-act="sem-push-on">Accendi</button>`)
-      : semPush === "bloccati" ? semRigaImp("Promemoria", "Spenti: il telefono non me lo permette")
-      : semRigaImp("Promemoria", "Controllo...");
+    imp += semPush === "on" ? semRigaImp("Notifiche", "Attive", `<button class="sm-mod" data-act="sem-push-off">Spegni</button>`)
+      : semPush === "off" ? semRigaImp("Notifiche", "Spente", `<button class="sm-mod" data-act="sem-push-on">Accendi</button>`)
+      : semPush === "bloccati" ? semRigaImp("Notifiche", "Spente: il telefono non me lo permette")
+      : semRigaImp("Notifiche", "Controllo...");
   }
   if (conto) imp += semRigaImp("Esci dall'account", "Su questo telefono dovrai rientrare con email e password", `<button class="sm-mod" data-act="sem-logout">Esci</button>`);
   return `<div class="sm-wrap"><h2 class="sm-h">Aiuto e impostazioni</h2>
-    <div class="sm-aiutobox"><h3>Cose da fare</h3><p>Tocca il pulsante Aggiungi e scrivi che cosa devi fare. Quando l'hai fatta, toccala: si segna come fatta. Per cambiarla o cancellarla tocca Modifica.</p></div>
-    <div class="sm-aiutobox"><h3>Appuntamenti</h3><p>Tocca Aggiungi, scrivi che appuntamento è e scegli il giorno e l'ora. Gli appuntamenti di oggi stanno in cima.</p></div>
+    <div class="sm-aiutobox"><h3>Cose da fare</h3><p>Tocca il pulsante Aggiungi e scrivi che cosa devi fare. Quando l'hai fatta, toccala: si segna come fatta. Per cambiarla o eliminarla tocca Modifica.</p></div>
+    <div class="sm-aiutobox"><h3>Agenda</h3><p>Tocca Aggiungi, scrivi che appuntamento è e scegli il giorno e l'ora. Gli appuntamenti di oggi stanno in cima.</p></div>
     <div class="sm-aiutobox"><h3>Spesa</h3><p>Scrivi quello che ti serve e tocca Aggiungi. Al supermercato tocca ogni cosa quando la metti nel carrello.</p></div>
-    <div class="sm-aiutobox"><h3>Niente si cancella da solo</h3><p>Prima di cancellare qualcosa ti chiedo sempre conferma. Se rispondi "No, tieni" resta tutto com'è.</p></div>
+    <div class="sm-aiutobox"><h3>Niente si elimina da solo</h3><p>Prima di eliminare qualcosa ti chiedo sempre conferma. Se rispondi "No, tieni" resta tutto com'è.</p></div>
     <h2 class="sm-h sm-h-imp">Impostazioni</h2>
     ${imp ? `<div class="sm-list">${imp}</div>` : ""}
     <button class="sm-btn sm-ghost" data-act="sem-esci">Torna all'app completa</button></div>`;
@@ -6095,7 +6131,7 @@ function semForm(tipo, id, giorno, bozza) {
     <div class="sm-conf" id="semConf" hidden role="alertdialog" aria-labelledby="semConfT"><p id="semConfT"><b>Vuoi chiudere senza salvare?</b><br>Quello che hai scritto andrà perso.</p>
       <button type="button" class="sm-btn sm-danger" data-act="sem-chiudi-si">Sì, chiudi senza salvare</button><button type="button" class="sm-btn" data-act="sem-chiudi-no">No, continua a scrivere</button></div>
     <button class="sm-btn" type="submit">Salva</button>
-    ${it ? `<button type="button" class="sm-btn sm-danger" data-act="sem-cancella" data-id="${esc(it.id)}">Cancella</button>` : ""}
+    ${it ? `<button type="button" class="sm-btn sm-danger" data-act="sem-cancella" data-id="${esc(it.id)}">Elimina</button>` : ""}
   </form>`);
   if (bozza) {
     if ($("#semTitolo")) $("#semTitolo").value = taglia(String(bozza.titolo || ""), 300);
@@ -6205,10 +6241,10 @@ async function semSalva(f) {
 }
 async function semCancella(id) {
   const it = state.items.find((x) => x.id === id); if (!it || semCondivisa(it)) return;
-  const si = await ask({ title: `Vuoi cancellare "${it.title}"?`, text: "Dopo non si può più rimettere.", ok: "Sì, cancella", no: "No, tieni", danger: true });
+  const si = await ask({ title: `Vuoi eliminare "${it.title}"?`, text: "Dopo non si può più rimettere.", ok: "Sì, elimina", no: "No, tieni", danger: true });
   if (!si) { toast("Va bene, l'ho lasciata com'era."); return; }
   state.items = state.items.filter((x) => x.id !== id);
-  render(); toast("Fatto! L'ho cancellata.");
+  render(); toast("Fatto! L'ho eliminata.");
   await store.remove(id);
 }
 const semFocus = (sel) => setTimeout(() => $(sel)?.focus({ preventScroll: true }), 0);
@@ -6238,7 +6274,7 @@ document.addEventListener("click", async (e) => {
   switch (act) {
     case "semplice-apri": {
       if (semOn()) { await semSpegni(); break; }
-      const si = await ask({ title: "Vuoi passare al modo semplice?", text: "Vedrai solo Cose da fare, Appuntamenti e Spesa, con scritte e pulsanti più grandi.\nNon si cancella niente: le altre funzioni restano dove sono. Per tornare all'app completa c'è un pulsante nella pagina Aiuto.", ok: "Sì, passa al modo semplice", no: "No, resto qui" });
+      const si = await ask({ title: "Vuoi passare al modo semplice?", text: "Vedrai solo Cose da fare, Agenda e Spesa, con scritte e pulsanti più grandi.\nNon si cancella niente: le altre funzioni restano dove sono. Per tornare all'app completa c'è un pulsante nella pagina Aiuto.", ok: "Sì, passa al modo semplice", no: "No, resto qui" });
       if (!si) break;
       LS.set("mochi.novita.viste", NOVITA.punti.map((p) => p[0]));
       state.tab = "s-todo"; await saveCustom({ semplice: true }); window.scrollTo({ top: 0 });
@@ -6256,9 +6292,9 @@ document.addEventListener("click", async (e) => {
     case "sem-push-on": if (semPushDisponibile()) { await enablePush(); await semPushLeggi(); } break;
     case "sem-push-off": {
       if (!semPushDisponibile()) break;
-      const si = await ask({ title: "Vuoi spegnere i promemoria?", text: "Su questo telefono non arriveranno più avvisi. Puoi riaccenderli quando vuoi.", ok: "Sì, spegni", no: "No, tieni", danger: true });
+      const si = await ask({ title: "Vuoi spegnere le notifiche?", text: "Su questo telefono non arriveranno più avvisi. Puoi riaccenderli quando vuoi.", ok: "Sì, spegni", no: "No, tieni", danger: true });
       if (!si) break;
-      await store.dropPush(); toast("Fatto! Ho spento i promemoria."); await semPushLeggi(); break;
+      await store.dropPush(); toast("Fatto! Ho spento le notifiche."); await semPushLeggi(); break;
     }
     case "sem-logout": {
       if (!(ONLINE_MODE && store.user)) break;
@@ -6304,7 +6340,7 @@ document.addEventListener("click", async (e) => {
     }
     case "sem-spesa-togli": {
       let l = semListaSpesa(); const x = l?.sottotask.find((s) => s.id === v); if (!x || semCondivisa(l)) break;
-      const si = await ask({ title: `Vuoi cancellare "${x.t}"?`, text: "Lo tolgo dalla lista della spesa.", ok: "Sì, cancella", no: "No, tieni", danger: true });
+      const si = await ask({ title: `Vuoi togliere "${x.t}"?`, text: "Lo tolgo dalla lista della spesa.", ok: "Sì, togli", no: "No, tieni", danger: true });
       if (!si) { toast("Va bene, l'ho lasciato nella lista."); break; }
       l = semListaSpesa(); if (!l || semCondivisa(l)) break; // dopo la conferma l'elenco può essere stato aggiornato: riparto dalla versione attuale
       l.sottotask = cleanSottotask(l.sottotask.filter((s) => s.id !== v)); l.updated_at = new Date().toISOString();

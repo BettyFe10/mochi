@@ -301,6 +301,24 @@ button.stat::after{content:"";position:absolute;top:9px;right:9px;width:6px;heig
 @keyframes nomCibo{0%,20%{transform:translateY(-70px) scale(1);opacity:0}28%{opacity:1}40%{transform:translateY(40px) scale(1);opacity:1}46%{transform:translateY(58px) scale(.4);opacity:0}100%{transform:translateY(58px) scale(.4);opacity:0}}
 @media (prefers-reduced-motion:reduce){.passa{display:none}}
 :root[data-stile="sobrio"] .passa,:root[data-semplice] .passa{display:none}
+/* easter egg 3D: due soli keyframes, attivi solo per pochi istanti (le classi le mette e toglie effetto3d) */
+@keyframes e3dA{0%,100%{transform:translateY(0) scaleX(1)}25%{transform:translateY(-10px) scaleX(0)}50%{transform:translateY(-14px) scaleX(-1)}75%{transform:translateY(-8px) scaleX(0)}}
+@keyframes e3dB{0%{transform:perspective(1000px) translateY(0) rotateX(0) rotateY(0)}35%{transform:perspective(1000px) translateY(var(--y,0)) rotateX(var(--x,0)) rotateY(var(--r,0))}70%{transform:perspective(1000px) translateY(0) rotateX(var(--x3,0)) rotateY(var(--r3,0))}100%{transform:perspective(1000px) translateY(0) rotateX(0) rotateY(var(--r2,0))}}
+.e3d-gira{animation:e3dA .8s ease-in-out;transform-box:fill-box;transform-origin:50% 100%}
+.pancino .pc-pet[data-act]{pointer-events:auto}
+.pancino .pc-pet.e3d-gira{transform-origin:50% 50%}
+.e3d-tilt{--x:4deg;--r:16deg;--x3:-1.5deg;--r3:-5deg;--r2:0deg;animation:e3dB .9s cubic-bezier(.3,.7,.4,1)}
+.e3d-tilt.e3d-inv{--r:-16deg;--r3:5deg}
+.e3d-moneta{position:fixed;left:50%;top:42%;width:96px;height:96px;margin:-48px 0 0 -48px;z-index:45;pointer-events:none;transform-style:preserve-3d}
+.e3d-moneta.e3d-vola{--y:-150px;animation:e3dB 1.2s cubic-bezier(.3,.6,.4,1) forwards}
+.e3d-f,.e3d-r{position:absolute;inset:0;border-radius:50%;display:grid;place-items:center;background:#ffe08a;border:4px solid #d9a21b;box-shadow:0 6px 14px rgba(0,0,0,.25);backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.e3d-f svg{width:76%;height:auto;display:block}
+.e3d-r{transform:rotateY(180deg);font-size:46px;line-height:1;color:#d9a21b}
+:root[data-stile="cartone"] :is(.e3d-f,.e3d-r){border-color:var(--tratto);box-shadow:var(--ombra-adesivo)}
+:root[data-stile="quaderno"] :is(.e3d-f,.e3d-r){border:1.5px solid var(--ink-a);box-shadow:var(--edge)}
+@media (prefers-reduced-motion:reduce){.e3d-moneta{display:none}.e3d-gira,.e3d-tilt{animation:none}}
+:root[data-stile="sobrio"] .e3d-moneta,:root[data-semplice] .e3d-moneta{display:none}
+:root[data-stile="sobrio"] :is(.e3d-gira,.e3d-tilt),:root[data-semplice] :is(.e3d-gira,.e3d-tilt){animation:none}
 .boccone{position:fixed;z-index:90;font-size:26px;pointer-events:none;transform:translate(0,0);transition:transform .62s cubic-bezier(.3,.1,.3,1),opacity .62s ease;margin:-14px 0 0 -14px}
 #topMascot.nom .mascotte{animation:nom .6s ease}
 @keyframes nom{0%,100%{transform:scale(1)}30%{transform:scale(1.15,.9)}60%{transform:scale(.95,1.08)}}
@@ -1868,7 +1886,7 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
       <p id="today"></p>
       <button class="motto" id="motto" data-act="motto" title="Un'altra frase"></button>
     </div>
-    <button class="iconbtn" data-act="open-recap" title="Recap del mese" aria-label="Recap del mese"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recapbtn"/></svg></button>
+    <button class="iconbtn" data-act="open-recap" title="Riepilogo del mese" aria-label="Riepilogo del mese"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recapbtn"/></svg></button>
     <button class="iconbtn desk-only-i" data-act="open-settings" title="Impostazioni" aria-label="Impostazioni"><span class="emo">⚙️</span><svg class="ico q" aria-hidden="true"><use href="#i-impostazioni"/></svg></button>
   </header>
   <main id="view"></main>
