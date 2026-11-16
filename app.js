@@ -1432,6 +1432,7 @@ function openSheet(html) {
 }
 function closeSheet() {
   if (semBozzaDaConfermare()) return; // modo semplice: un testo scritto non si butta senza chiedere
+  { const ae = document.activeElement; if (listaId && ae && ae.matches?.("#sheet [data-lsid],#sheet #lsTit,#sheet #lsData")) ae.dispatchEvent(new Event("change", { bubbles: true })); } // una voce appena corretta si salva anche se si chiude senza togliere prima il cursore
   if (listaFlush) { const f = listaFlush; listaFlush = null; try { f(); } catch {} listaId = null; } // prima si salva, poi si scorda la lista
   const sh = $("#sheet");
   // Voce NUOVA chiusa senza salvare (X, Annulla, Esc, sfondo, trascinamento) con qualcosa di scritto: la bozza si può riprendere dal toast.
@@ -1645,11 +1646,17 @@ function listaData(v) {
   it.remind_at = computeRemind(it); if (it.remind_at !== prima) it.reminded = false;
   listaSalva(); listaRedraw();
 }
+let listaDisegna = false;
 function listaRedraw(focusId) {
-  const it = listaItem(); if (!it) return;
-  const sh = $("#sheet"), top = sh.scrollTop, bar = sh.querySelector(".sheet-bar");
-  sh.innerHTML = (bar ? bar.outerHTML : "") + listaHtml(it); sh.scrollTop = top; listaBind();
-  if (focusId) $("#" + focusId)?.focus({ preventScroll: true });
+  const it = listaItem(); if (!it || listaDisegna) return; // mentre si ridisegna un campo che perde il cursore non rilancia il ridisegno
+  listaDisegna = true;
+  try {
+    const sh = $("#sheet"), top = sh.scrollTop, bar = sh.querySelector(".sheet-bar");
+    if (bar) { [...sh.children].forEach((c) => { if (c !== bar && c.parentNode === sh) c.remove(); }); sh.insertAdjacentHTML("beforeend", listaHtml(it)); } // la barra con la X resta lo stesso elemento
+    else sh.innerHTML = listaHtml(it);
+    sh.scrollTop = top; listaBind();
+    if (focusId) $("#" + focusId)?.focus({ preventScroll: true });
+  } finally { listaDisegna = false; }
 }
 // "Annulla" dopo aver tolto una voce: torna allo stesso posto (anche se nel frattempo la lista è stata chiusa)
 function listaRimetti(lid, riga, k) {
@@ -3249,7 +3256,7 @@ function eseguiAzione() {
     // la lista della spesa più recente ancora aperta; se non c'è, una nuova
     const l = state.items.filter((i) => isSpesa(i) && !i.done).sort((x, y) => (y.updated_at || "").localeCompare(x.updated_at || ""))[0];
     if (l) apriListaSpesa(l); else { const n = newItem({ kind: "note", title: "Spesa", lista_id: null, pinned: true }); state.items.push(n); store.save(n).catch(() => {}); render(); apriListaSpesa(n); }
-    setTimeout(() => { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "center" }); } }, 300);
+    setTimeout(() => { const n = $("#lsNuovo"); if (n) { n.focus(); n.scrollIntoView({ block: "center" }); } }, 300);
   } else if (a === "nuova-spesa") {
     if (!mod("spese")) { toast("Le spese sono spente: le accendi in Impostazioni"); return; }
     state.tab = "spese"; render(); apriSpesa(null);
@@ -5489,6 +5496,18 @@ function puoScorrere(el, sh, dx, dy) {
   scrim.addEventListener("touchmove", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 })();
 /* iPhone con la tastiera aperta: la finestra resta appoggiata sopra la tastiera, dentro la parte visibile */
+let xTocco = null;
+document.addEventListener("touchstart", (e) => {
+  const b = e.target.closest?.(".sheet-x");
+  xTocco = b && e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+}, { passive: true });
+document.addEventListener("touchend", (e) => {
+  if (!xTocco) return;
+  const t = e.changedTouches[0], mosso = Math.hypot(t.clientX - xTocco.x, t.clientY - xTocco.y); xTocco = null;
+  if (mosso > 10 || !e.target.closest?.(".sheet-x")) return;
+  e.preventDefault(); // niente blur del campo, niente click doppio: si chiude subito
+  closeSheet();
+}, { passive: false });
 function sheetSuTastiera() {
   const vv = window.visualViewport, sh = $("#sheet"); if (!vv || !sh) return;
   if (!telefono()) { sh.style.removeProperty("--vv-b"); sh.style.removeProperty("--vv-h"); return; }
