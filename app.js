@@ -292,8 +292,7 @@ const SupaStore = {
     const cached = LS.get("mochi.cache", []);
     try {
       await this.flush();
-      const { data, error } = await this.sb.from("items").select("*").order("created_at");
-      if (error) throw error;
+      const data = await leggiPagine((da, a) => this.sb.from("items").select("*").order("created_at").order("id").range(da, a));
       const clean = normalizeAll(data);
       LS.set("mochi.cache", clean);
       setSync(true);
@@ -3061,15 +3060,26 @@ function cleanSpesa(r) {
   return { id, giorno: r.giorno, importo_cent: c, categoria: catSpesa(str(r.categoria))[0], nota: taglia(str(r.nota).trim(), 120), created_at: isIso(r.created_at) ? r.created_at : "", animale_id };
 }
 const cleanBudget = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= MAX_CENT ? n : null; };
+/* Supabase risponde al massimo con 1000 righe per volta: si legge a pagine fino all'ultima (tetto 6000, oltre il limite di 5000 per account) */
+async function leggiPagine(pagina) {
+  const tutte = [];
+  for (let da = 0; da < 6000; da += 1000) {
+    const { data, error } = await pagina(da, da + 999);
+    if (error) throw error;
+    tutte.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return tutte;
+}
 const SpeseStore = {
   async carica() {
     if (!ONLINE_MODE) { const o = LS.get("mochi.spese", {}) || {}; return { voci: (Array.isArray(o.voci) ? o.voci : []).map(cleanSpesa).filter(Boolean).slice(0, 5000), budget: cleanBudget(o.budget) }; }
-    const [a, b] = await Promise.all([
-      store.sb.from("spese").select("id,giorno,importo_cent,categoria,nota,created_at,animale_id").order("giorno", { ascending: false }).limit(5000),
+    const [righe, b] = await Promise.all([
+      leggiPagine((da, a) => store.sb.from("spese").select("id,giorno,importo_cent,categoria,nota,created_at,animale_id").order("giorno", { ascending: false }).order("id").range(da, a)),
       store.sb.from("spese_impostazioni").select("budget_cent").maybeSingle()
     ]);
-    if (a.error) throw a.error; if (b.error) throw b.error;
-    return { voci: (a.data || []).map((r) => cleanSpesa({ ...r, id: String(r.id) })).filter(Boolean), budget: cleanBudget(b.data?.budget_cent) };
+    if (b.error) throw b.error;
+    return { voci: righe.map((r) => cleanSpesa({ ...r, id: String(r.id) })).filter(Boolean), budget: cleanBudget(b.data?.budget_cent) };
   },
   _local() { LS.set("mochi.spese", { voci: state.spese.voci, budget: state.spese.budget }); },
   // Restituisce la spesa salvata (una nuova riceve l'id dal database)
@@ -5448,7 +5458,7 @@ function maybeAskPush() {
     <div class="actions"><button class="btn" data-act="close">Più tardi</button><button class="btn primary" data-act="enable-push">Sì, avvisami 🔔</button></div>`), 900);
 }
 
-async function exportData() {
+async function preparaBackup() {
   // chi usa il pet: nel file anche la scheda e le righe di routine e pesi (dal server, con un tempo massimo; senza rete quelle del dispositivo)
   await caricaModuliSpenti(); // nel backup ci va tutto, anche i dati dei moduli spenti
   const usaPet = petPresente(CUSTOM.pet) || mod("pet") || state.pet.righe.length > 0 || ANIMALI.length > 0;
@@ -5464,10 +5474,26 @@ async function exportData() {
     spese: { budget_mensile_cent: state.spese.budget, voci: [...state.spese.voci].sort(ordineSpese) },
     giorni_attivi: [...state.giorni].sort(), concentrazione: serraCarica(),
     ...(usaPet ? { pet: { scheda: CUSTOM.pet, animali: ANIMALI, registro: [...petRighe].sort((a, b) => (a.giorno + a.tipo + a.chiave < b.giorno + b.tipo + b.chiave ? -1 : 1)) } } : {}) }, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = `mochi-backup-${todayStr()}.json`; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return { blob, nome: `mochi-backup-${todayStr()}.json` };
 }
+// iPhone/iPad: un file scaricato si apre come pagina e l'app resta ferma lì. Lì si usa il foglio "Condividi" (Salva su File),
+// che vuole un tocco fresco: quindi prima si prepara il file, poi un pulsante lo consegna.
+const eIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+// Restituisce "ok" (consegnato) oppure "annullato" (l'utente ha chiuso il foglio senza salvare)
+async function consegnaBackup({ blob, nome }) {
+  const file = typeof File === "function" ? new File([blob], nome, { type: "application/json" }) : null;
+  if (eIOS() && file && navigator.canShare?.({ files: [file] })) {
+    const via = await ask({ title: "Il tuo backup è pronto", text: "Tocca il pulsante e scegli dove salvarlo (per esempio \"Salva su File\").", ok: "Salva il file", no: "Non salvarlo" });
+    if (!via) return "annullato";
+    try { await navigator.share({ files: [file], title: nome }); return "ok"; }
+    catch (e) { if (e && e.name !== "AbortError") toast("Non sono riuscita a condividere il file"); return "annullato"; }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = nome; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return "ok";
+}
+async function exportData() { return consegnaBackup(await preparaBackup()); }
 
 /* =========================================================
    EFFETTI
@@ -5922,7 +5948,13 @@ document.addEventListener("click", async (e) => {
       const ok = await ask({ title: "Eliminare l'account?", text: "Verranno eliminati per sempre il tuo account e tutte le tue cose.\nPer confermare scrivi ELIMINA.", input: true, placeholder: "ELIMINA", maxlength: 10, ok: "Elimina per sempre", danger: true });
       if (ok === null) break;
       if (String(ok).trim() !== "ELIMINA") { toast("Eliminazione annullata"); break; }
-      try { toast("Preparo il backup…"); await exportData(); await store.deleteAccount(); clearLocal(); Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniDaInviare.") || k.startsWith("mochi.petDaInviare.")).forEach((k) => localStorage.removeItem(k)); toast(`Account eliminato. Ti ho scaricato un backup. Ciao da ${MN()} 🍣`); setTimeout(() => location.reload(), 3000); }
+      try {
+        toast("Preparo il backup…");
+        const esito = await consegnaBackup(await preparaBackup());
+        if (esito !== "ok" && !(await ask({ title: "Eliminare senza backup?", text: "Non hai salvato il backup: dopo l'eliminazione le tue cose non si possono più recuperare.", ok: "Sì, elimina lo stesso", no: "No, aspetta", danger: true }))) { toast("Eliminazione annullata"); break; }
+        await store.deleteAccount(); clearLocal(); Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniDaInviare.") || k.startsWith("mochi.petDaInviare.")).forEach((k) => localStorage.removeItem(k));
+        toast(esito === "ok" ? `Account eliminato. Il backup è salvato. Ciao da ${MN()} 🍣` : `Account eliminato. Ciao da ${MN()} 🍣`); setTimeout(() => location.reload(), 3000);
+      }
       catch (err) { toast("Errore: " + (err.message || err)); }
       break;
     }
