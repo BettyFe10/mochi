@@ -642,6 +642,15 @@ const calId = (key) => { const c = CAL_COLORI.find((x) => x[0] === (CUSTOM.calCo
 const calHex = (key) => CAL_COLORI.find((x) => x[0] === calId(key))[2];
 const calChiave = (it) => (it.lista_id && listaById(it.lista_id) ? "l:" + it.lista_id : it.area === "lavoro" ? "lavoro" : "personale");
 const calColoreDi = (it) => calHex(calChiave(it));
+// v59, una regola sola per "dove sta" una cosa: lista (se la conosco) > Lavoro > Spesa > Personale. Personale e' il default e non si etichetta mai.
+// Chi non usa ne' Lavoro ne' liste non vede filtri ne' legenda: per lei esiste un posto solo.
+const usaCategorie = () => listeUsate().length > 0 || state.items.some((i) => i.lista_id || i.area === "lavoro");
+const ePersonale = (it) => !it.lista_id && it.area !== "lavoro" && !(it.kind === "todo" && isSpesa(it));
+const filtriCat = (f, act, tutte) => {
+  if (!usaCategorie()) return "";
+  const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="${act}" data-v="${k}">${l}</button>`;
+  return `<div class="filters">${fb("tutte", tutte)}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
+};
 // "colorato" = scelto dall'utente oppure di una lista condivisa; altrimenti Personale e Lavoro restano con i colori del tema di sempre
 const calScelto = (key) => key.startsWith("l:") || !!(CUSTOM.calColori || {})[key];
 function cleanBarra(b) {
@@ -967,9 +976,10 @@ function itemRow(it, colora) {
     : `<button class="check" data-act="toggle" data-id="${esc(it.id)}" aria-label="${it.done ? "Riapri" : "Completa"}: ${esc(it.title)}">${it.done ? "✓" : ""}</button>`;
   const chips = [];
   if (it.due_date) chips.push(`<span class="chip ${isLate(it) ? "late" : ""}">${isLate(it) ? "⏰ " : ""}${niceDate(it.due_date)}${it.due_time ? " · " + it.due_time : ""}</span>`);
-  chips.push(`<span class="chip ${area === "lavoro" ? "lav" : "per"}">${area === "lavoro" ? '<span class="emo">💼 </span>Lavoro' : '<span class="emo">🌷 </span>Personale'}</span>`);
+  // una sola etichetta di "dove sta": la lista (col suo colore), altrimenti Lavoro, altrimenti niente (Personale e' il default)
   const lst = it.lista_id ? listaById(it.lista_id) : null;
-  if (lst) chips.push(`<span class="chip lst">${esc(lst.emoji)} ${esc(lst.nome)}</span>`);
+  if (lst) chips.push(`<span class="chip lst"><i class="cat-dot" style="--cc:${calHex("l:" + lst.id)}"></i>${esc(lst.emoji)} ${esc(lst.nome)}</span>`);
+  else if (area === "lavoro") chips.push(`<span class="chip lav"><span class="emo">💼 </span>Lavoro</span>`);
   if (lst && it.user_id && it.user_id !== myId()) chips.push(`<span class="chip">da ${esc(nomeMembro(lst, it.user_id))}</span>`);
   if (lst && it.done && it.done_by && it.done_by !== myId()) chips.push(`<span class="chip">✓ ${esc(nomeMembro(lst, it.done_by))}</span>`);
   if (it.remind_at && !it.reminded) chips.push(`<span class="chip">🔔</span>`);
@@ -1068,7 +1078,8 @@ function viewTodo() {
 function todoCorpo() {
   const f = state.todoFilter, q = cercaParole();
   let list = state.items.filter((i) => i.kind === "todo");
-  if (f === "lavoro" || f === "personale") list = list.filter((i) => i.area === f);
+  if (f === "lavoro") list = list.filter((i) => i.area === f);
+  if (f === "personale") list = list.filter(ePersonale); // solo le cose personali: niente liste e niente lista della spesa
   if (f.startsWith("l:")) list = list.filter((i) => i.lista_id === f.slice(2));
   if (q) list = list.filter((i) => cercaTrova(i, q));
   cercaEsito = q ? (list.length ? plur(list.length, "risultato", "risultati") : "Nessun risultato") : "";
@@ -1076,8 +1087,7 @@ function todoCorpo() {
   // senza ricerca: le ultime 15 completate (le altre con "Mostra tutte"); con la ricerca: tutte quelle trovate
   const fatte = list.filter((i) => i.done).sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
   const done = q || state.fatteTutte ? fatte : fatte.slice(0, 15);
-  const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="todo-filter" data-v="${k}">${l}</button>`;
-  let h = `<div class="filters">${fb("tutte", "Tutte")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
+  let h = filtriCat(f, "todo-filter", "Tutte");
   if (q && !list.length) return h + cercaVuoto();
   // con la ricerca, se ha trovato solo cose già fatte: niente "Tutto fatto!", sotto c'è l'elenco delle completate
   if (!q || open.length) h += `<div class="sec"><h2>Da fare</h2><span class="count">${open.length}</span></div>` + (open.length ? `<div class="list">${open.map(itemRow).join("")}</div>`
@@ -1118,6 +1128,7 @@ function calLegenda(m, map) {
   for (const [d, l] of Object.entries(map)) if (d.startsWith(pre)) l.forEach((i) => usate.add(calChiave(i)));
   const voce = (k, e, n) => `<span class="cal-chip"><i class="${calScelto(k) ? "cc" : k === "lavoro" ? "l" : ""}"${calScelto(k) ? ` style="--cc:${calHex(k)}"` : ""}></i>${e ? `<span class="emo">${esc(e)} </span>` : ""}${esc(n)}</span>`;
   const liste = state.liste.filter((l) => usate.has("l:" + l.id)).map((l) => voce("l:" + l.id, l.emoji, l.nome)).join("");
+  if (!usaCategorie()) return ""; // un posto solo: niente legenda
   return `<div class="cal-leg" aria-label="Colori del calendario">${voce("personale", "🌷", "Personale")}${voce("lavoro", "💼", "Lavoro")}${liste}</div>`;
 }
 const ANELLI = `<span class="anelli" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>`; // la spirale del calendario da tavolo (solo disegno)
@@ -1299,19 +1310,19 @@ function appuntiCorpo() {
   const f = state.noteFilter, q = cercaParole();
   let list = state.items.filter((i) => i.kind === "note");
   if (f.startsWith("l:")) list = list.filter((i) => i.lista_id === f.slice(2));
+  else if (f === "personale") list = list.filter(ePersonale);
   else if (f !== "tutte") list = list.filter((i) => i.area === f);
   if (q) list = list.filter((i) => cercaTrova(i, q));
   cercaEsito = q ? (list.length ? plur(list.length, "risultato", "risultati") : "Nessun risultato") : "";
   list.sort(ordineNote);
-  const fb = (k, l) => `<button class="fbtn ${f === k ? "on" : ""}" data-act="note-filter" data-v="${k}">${l}</button>`;
-  let h = `<div class="filters">${fb("tutte", "Tutti")}${fb("personale", '<span class="emo">🌷 </span>Personale')}${fb("lavoro", '<span class="emo">💼 </span>Lavoro')}${listeUsate().map((l) => fb("l:" + l.id, `${esc(l.emoji)} ${esc(l.nome)}`)).join("")}</div>`;
+  let h = filtriCat(f, "note-filter", "Tutti");
   if (q && !list.length) return h + cercaVuoto();
   if (!list.length) return h + emptyBox("Nessun appunto. Idee, liste della spesa, password del wifi di casa della nonna... 📝");
   h += `<div class="notes">${list.map((n) => `<div class="note c${n.color || 1} ${n.pinned ? "fissa" : ""}" style="${bachecaStile(n.id)}" data-act="edit" data-id="${esc(n.id)}">
       ${n.pinned ? `<span class="pin">📌</span>` : ""}
       <h3><button type="button" class="t-btn" data-act="edit" data-id="${esc(n.id)}">${esc(n.title)}</button></h3>${n.body ? `<p>${esc(n.body)}</p>` : ""}
       ${n.sottotask?.length ? `<div class="st-note">${voceListaHtml(n, 10)}</div>` : ""}
-      <div class="when">${n.sottotask?.length ? `☑ ${n.sottotask.filter((x) => x.f).length}/${n.sottotask.length} · ` : ""}${n.lista_id && listaById(n.lista_id) ? esc(listaById(n.lista_id).emoji) : n.area === "lavoro" ? "💼" : "🌷"} ${niceDate(ymd(new Date(n.updated_at || n.created_at)))}</div></div>`).join("")}</div>`;
+      <div class="when">${n.sottotask?.length ? `☑ ${n.sottotask.filter((x) => x.f).length}/${n.sottotask.length} · ` : ""}${n.lista_id && listaById(n.lista_id) ? esc(listaById(n.lista_id).emoji) + " " : n.area === "lavoro" ? "💼 " : ""}${niceDate(ymd(new Date(n.updated_at || n.created_at)))}</div></div>`).join("")}</div>`;
   return h;
 }
 
@@ -1373,6 +1384,7 @@ function render() {
   // fuori dalla pagina Concentrazione non resta nessuna sessione a metà (timer, schermo acceso)
   if (state.tab !== "focus" && focusS) focusChiudi();
   if (!mod("liste")) { if (state.todoFilter.startsWith("l:")) state.todoFilter = "tutte"; if (state.noteFilter.startsWith("l:")) state.noteFilter = "tutte"; }
+  if (!usaCategorie()) { state.todoFilter = "tutte"; state.noteFilter = "tutte"; } // filtri nascosti: non resta un filtro acceso che non si vede
   const v = ({ oggi: viewOggi, todo: viewTodo, agenda: viewAgenda, appunti: viewAppunti, liste: viewListe, ricorrenti: viewRicorrenti, turni: viewTurni, spese: viewSpese, focus: viewFocus, casa: viewCasa, pet: viewPet, menu: viewMenu, "s-todo": semViewTodo, "s-agenda": semViewAgenda, "s-spesa": semViewSpesa, "s-aiuto": semViewAiuto }[state.tab] || viewOggi);
   // Cerca: vale per la pagina aperta, cambiando pagina si azzera. Se si sta scrivendo nel campo si ridisegna solo quello che c'è sotto
   const stessaPagina = cercaTab === state.tab; cercaTab = state.tab;
@@ -1489,7 +1501,7 @@ function openEditor(it, isNew) {
   // la lista da spuntare è copiata: "Annulla" non deve toccare la voce vera
   listaDopo = null;
   const pm = petMarca(it);
-  draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null };
+  draft = { ...it, body: pm ? pm.resto : it.body, _pet: pm ? { tipo: pm.tipo, rep: pm.rep, anchor: pm.anchor } : null, sottotask: cleanSottotask(it.sottotask), _new: isNew, _autoRemind: isNew || !it.due_date, _spesa: isSpesa(it), _spesaScelta: sceltaSpesa(it) !== null, _remindPrima: !isNew && !!it.remind && it.remind !== "none" && it.remind !== "auto" };
   // Finestra più leggera: data, promemoria, lista e note compaiono già aperti solo se la voce li usa; altrimenti stanno dietro "+ Data, promemoria e note"
   advanced = draft.kind === "note" || (!isNew && !!(draft.due_date || draft.due_time || String(draft.body || "").trim() || draft.sottotask.length));
   drawEditor();
@@ -1499,17 +1511,26 @@ function openEditor(it, isNew) {
 // Categoria (v52): Personale, Lavoro e le liste in una sola riga di chip; il pallino e' il colore del calendario
 const catListaSel = (d) => (!d._pet && d.lista_id && listeUsate().find((l) => l.id === d.lista_id)) || null;
 const catBloccata = (d) => !!(d.lista_id && d.user_id && d.user_id !== myId()); // voce altrui in una lista: non si puo' renderla privata
+// Lista della spesa (v58): chip nella riga Lista; non per appunti, appuntamenti e scadenze del pet. Reparti sempre attivi, niente promemoria
+const spesaChipOk = (d) => !!d && d.kind === "todo" && !d._pet;
+const spesaAttiva = (d) => spesaChipOk(d) && !!d._spesa;
+const remindNascosto = (d) => spesaAttiva(d) && !d._remindPrima;
 function catChips(d) {
   const sel = catListaSel(d), blocca = catBloccata(d);
   const chip = (v, emo, nome, key, on, dis) => `<button type="button" class="cat ${on ? "on" : ""}" data-act="d-cat" data-v="${esc(v)}" aria-pressed="${on}" ${dis ? "disabled" : ""}><i class="cat-dot" style="--cc:${calHex(key)}"></i><span class="cat-t">${emo}${esc(nome)}</span><span class="cat-ok" aria-hidden="true">✓</span></button>`;
   const lista = d._pet ? [] : listeUsate();
-  return chip("personale", '<span class="emo">🌷 </span>', "Personale", "personale", !d.lista_id && d.area !== "lavoro", blocca)
-    + chip("lavoro", '<span class="emo">💼 </span>', "Lavoro", "lavoro", !d.lista_id && d.area === "lavoro", blocca)
+  return chip("personale", '<span class="emo">🌷 </span>', "Personale", "personale", !d.lista_id && d.area !== "lavoro" && !spesaAttiva(d), blocca)
+    + chip("lavoro", '<span class="emo">💼 </span>', "Lavoro", "lavoro", !d.lista_id && d.area === "lavoro" && !spesaAttiva(d), blocca)
     + lista.map((l) => chip("l:" + l.id, esc(l.emoji) + " ", l.nome, "l:" + l.id, !!sel && sel.id === l.id, false)).join("")
+    + (spesaChipOk(d) ? `<button type="button" class="cat ${d._spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${!!d._spesa}"><span class="cat-t"><span class="emo">🛒 </span>Spesa</span><span class="cat-ok" aria-hidden="true">✓</span></button>` : "")
     + (ONLINE_MODE && mod("liste") && !d._pet ? `<button type="button" class="catnew" data-act="d-nuova-lista"><span class="cat-t">+ Nuova lista</span></button>` : "");
 }
 function catFrase(d) {
   const sel = catListaSel(d);
+  const sp = spesaAttiva(d) ? "Lista della spesa: le cose si raggruppano per reparto. " : "";
+  return sp + catFraseBase(d, sel);
+}
+function catFraseBase(d, sel) {
   if (!sel) return catBloccata(d) ? "Questa cosa è di una lista: non puoi renderla privata, ma puoi spostarla in un'altra lista" : d.lista_id && !d._pet ? "Questa cosa sta in una lista che ora non riesco a vedere: resta dov'è, anche se cambi Personale o Lavoro" : "Solo tu la vedi";
   const blocco = catBloccata(d) ? " Non puoi renderla privata: è di un'altra persona." : "";
   if (sel.membri.length <= 1) return "Lista solo tua: la vedi solo tu" + blocco;
@@ -1521,10 +1542,11 @@ function catScegli(v) {
   if (v.startsWith("l:")) { const l = listeUsate().find((x) => x.id === v.slice(2)); if (!l || draft._pet) return; draft.lista_id = l.id; }
   else if (v === "personale" || v === "lavoro") { if (catBloccata(draft)) return; draft.area = v; if (catListaSel(draft)) draft.lista_id = null; /* lista non nota: si cambia solo l'area, la cosa resta dov'è */ }
   else return;
+  // Spesa, Personale e Lavoro si escludono: scegliere Personale/Lavoro spegne la spesa (la lista condivisa invece non la spegne)
+  if ((v === "personale" || v === "lavoro") && spesaAttiva(draft)) { draft._spesa = false; draft._spesaScelta = true; segnaListaSpesa(false); const r = $("#fRemindF"); if (r) r.hidden = remindNascosto(draft); drawSt(); }
   const row = $("#sheet .cat-row"); if (row) row.innerHTML = catChips(draft); // solo la riga: titolo e cursore restano dove sono
   const f = $("#catFrase"); if (f) f.innerHTML = catFrase(draft);
-  const s = $("#fLista"); if (s) s.value = draft.lista_id || "";
-  const b = row && row.querySelector("button.on"); if (b) b.focus();
+  const b = row && row.querySelector('button.on[data-act="d-cat"]'); if (b) b.focus();
 }
 
 function drawEditor() {
@@ -1539,19 +1561,17 @@ function drawEditor() {
       ${d._new && !isNote ? `<div class="hint" id="fHint">Scrivi come parli: oggi, domani, venerdì, 12/11, alle 15, #lavoro</div>` : ""}
     </div>
     <div class="field cat-field"><label id="catLbl">Lista</label><div class="areas cat-row" role="group" aria-labelledby="catLbl">${catChips(d)}</div>
-      <div class="hint cat-frase" id="catFrase" aria-live="polite">${catFrase(d)}</div>
-      ${listeUsate().length && !d._pet ? `<select id="fLista" hidden tabindex="-1" aria-hidden="true"><option value="" ${d.lista_id && d.user_id && d.user_id !== myId() ? "disabled" : ""}>Solo mia</option>${state.liste.map((l) => `<option value="${esc(l.id)}" ${d.lista_id === l.id ? "selected" : ""}>${esc(l.emoji)} ${esc(l.nome)}</option>`).join("")}</select>` : ""}</div>
+      <div class="hint cat-frase" id="catFrase" aria-live="polite">${catFrase(d)}</div></div>
     ${!advanced ? `<div class="more-row"><button class="more" data-act="d-more">+ Data, note e altro</button>${!isNote && d.due_date ? `<button class="more" id="fOggi" data-act="d-more" aria-label="Data: ${niceDate(d.due_date)}. Tocca per cambiarla">📅 ${niceDate(d.due_date)}</button>` : ""}</div>` : `
       ${!isNote ? `<div class="row">
         <div class="field"><label>Giorno</label><input class="input" type="date" id="fDate" value="${d.due_date || ""}"></div>
         <div class="field"><label>Ora</label><input class="input" type="time" id="fTime" value="${d.due_time || ""}"></div>
       </div>
-      <div class="field"><label>Promemoria 🔔</label><select class="input" id="fRemind">${REMIND_OPTS.map(([v, l]) => `<option value="${v}" ${String(d.remind) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : `
+      <div class="field" id="fRemindF" ${remindNascosto(d) ? "hidden" : ""}><label>Promemoria 🔔</label><select class="input" id="fRemind">${REMIND_OPTS.map(([v, l]) => `<option value="${v}" ${String(d.remind) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : `
       <div class="field"><label>Colore</label><div class="colors">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((c) => `<button class="note c${c} ${+d.color === c ? "on" : ""}" data-act="d-color" data-v="${c}" aria-label="Colore ${c}"></button>`).join("")}</div></div>
       <div class="field"><button class="pin-toggle ${d.pinned ? "on" : ""}" data-act="d-pin"><span class="e">📌</span><span><b>${d.pinned ? "Fissato in alto" : "Fissa in alto"}</b><small>Resta sempre in cima agli appunti</small></span><span class="sw2"></span></button></div>`}
       <div class="field"><label>Voci da spuntare</label><div class="st-ed" id="stBox">${stEditorHtml()}</div></div>
       <div class="field"><label>${isNote ? "Testo" : "Note"}</label><textarea class="input" id="fBody" maxlength="20000" placeholder="${isNote ? "Scrivi qui..." : "Dettagli, indirizzo, cosa portare..."}">${esc(d.body || "")}</textarea></div>
-      <div id="spOpz">${spOpzHtml()}</div>
     `}
     <div class="actions">
       ${!d._new ? `<button class="btn danger" data-act="d-delete" aria-label="Elimina">🗑</button>` : ""}
@@ -1559,9 +1579,9 @@ function drawEditor() {
       <button class="btn primary" data-act="d-save">Salva</button>
     </div>`);
   const t = $("#fTitle");
-  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); if (!draft._spesa && !draft._spesaScelta && titoloSpesa(t.value)) { draft._spesa = true; segnaListaSpesa(true); drawSt(); } });
+  t.addEventListener("input", () => { if (!draft) return; draft.title = t.value; previewParse(); if (!draft._spesa && !draft._spesaScelta && titoloSpesa(t.value)) { draft._spesa = true; segnaListaSpesa(true); spesaAggiorna(); } });
   t.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveDraft(); } });
-  ["fDate", "fTime", "fRemind", "fBody", "fLista"].forEach((id) => {
+  ["fDate", "fTime", "fRemind", "fBody"].forEach((id) => {
     const el = $("#" + id); if (!el) return;
     el.addEventListener("input", () => {
       if (!draft) return;
@@ -1574,7 +1594,6 @@ function drawEditor() {
         const sel = $("#fRemind"); if (sel) sel.value = draft.remind;
       }
       if (id === "fBody") draft.body = el.value;
-      if (id === "fLista") draft.lista_id = el.value || null;
     });
   });
   const box = $("#stBox");
@@ -1592,16 +1611,16 @@ function drawEditor() {
   previewParse();
 }
 /* Lista da spuntare nell'editor: si ridisegna solo lei (la finestra non salta e il cursore resta dov'è) */
-// Interruttori "lista della spesa" e "reparti": in fondo all'editor, non attaccati alle voci
-function spOpzHtml() {
-  const spesa = !!draft?._spesa;
-  const perReparto = spesa && CUSTOM.spesa_reparti !== false, daTitolo = spesa && !draft._spesaScelta && titoloSpesa(draft.title);
-  return `<div class="field"><div class="sp-opz"><button class="pin-toggle mini-t ${spesa ? "on" : ""}" data-act="st-spesa" aria-pressed="${spesa}"><span><b>È una lista della spesa</b><small>${daTitolo ? "L'ho capito dal titolo" : "Suggerimenti e reparti del supermercato"}</small></span><span class="sw2"></span></button>
-    ${spesa ? `<button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="st-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b><small>Nell'ordine del giro del supermercato</small></span><span class="sw2"></span></button>` : ""}</div></div>`;
+// Dopo un cambio di "lista della spesa" (chip o titolo): si ridisegnano solo chip, frase, voci e promemoria
+function spesaAggiorna() {
+  const row = $("#sheet .cat-row"); if (row) row.innerHTML = catChips(draft);
+  const f = $("#catFrase"); if (f) f.innerHTML = catFrase(draft);
+  const r = $("#fRemindF"); if (r) r.hidden = remindNascosto(draft);
+  drawSt();
 }
 function stEditorHtml() {
   const st = draft?.sottotask || [], fatti = st.filter((x) => x.f).length;
-  const spesa = !!draft?._spesa, perReparto = spesa && CUSTOM.spesa_reparti !== false, daTitolo = spesa && !draft._spesaScelta && titoloSpesa(draft.title);
+  const spesa = !!draft?._spesa, perReparto = spesa;
   const riga = (x, i, su) => `<div class="st-row ${x.f ? "fatto" : ""}">
       <button class="st-check" data-act="st-toggle" data-v="${esc(x.id)}" aria-label="${x.f ? "Togli la spunta" : "Spunta"}">${x.f ? "✓" : ""}</button>
       <input class="st-in" data-sid="${esc(x.id)}" value="${esc(x.t)}" maxlength="120" autocomplete="off" enterkeyhint="next" aria-label="Voce ${i + 1}">
@@ -1618,7 +1637,6 @@ function stEditorHtml() {
 function drawSt(focusNew = false) {
   const box = $("#stBox"); if (!box || !draft) return;
   box.innerHTML = stEditorHtml();
-  const so = $("#spOpz"); if (so) so.innerHTML = spOpzHtml();
   if (focusNew) { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "nearest" }); } }
 }
 // ---- Lista della spesa (v36): schermata a tutta altezza. Le spunte e le modifiche si salvano subito;
@@ -1678,9 +1696,9 @@ function listaAggiungi(v) {
   listaRighe.push({ id: nuovoStId(new Set(listaRighe.map((x) => x.id))), t, f: false }); listaSalva(); return true;
 }
 function listaHtml(it) {
-  const perReparto = CUSTOM.spesa_reparti !== false, fatti = listaRighe.filter((x) => x.f).length;
+  const fatti = listaRighe.filter((x) => x.f).length;
   const riga = (x) => `<div class="st-row ${x.f ? "fatto" : ""}"><button class="st-check" data-act="ls-spunta" data-v="${esc(x.id)}" aria-label="${x.f ? "Togli la spunta" : "Spunta"}">${x.f ? "✓" : ""}</button><input class="st-in" data-lsid="${esc(x.id)}" value="${esc(x.t)}" maxlength="120" autocomplete="off" aria-label="Voce della lista"><button class="st-btn" data-act="ls-del" data-v="${esc(x.id)}" aria-label="Togli">✕</button></div>`;
-  const righe = perReparto ? gruppiSpesa(listaRighe).map((g) => `<div class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</div>${g.voci.map(riga).join("")}`).join("") : listaRighe.map(riga).join("");
+  const righe = gruppiSpesa(listaRighe).map((g) => `<div class="sp-rep">${REPARTI[g.i][2]} ${REPARTI[g.i][1]}</div>${g.voci.map(riga).join("")}`).join("");
   const rc = ricompri(listaRighe);
   return `<div class="ls-top">
     <div class="ls-barra">
@@ -1694,7 +1712,6 @@ function listaHtml(it) {
         <div class="pet-dt">${[["oggi", "Oggi"], ["domani", "Domani"], ["nessuna", "Senza data"]].map(([k, n]) => `<button type="button" class="fbtn ${(k === "oggi" && it.due_date === todayStr()) || (k === "domani" && it.due_date === ymd(addDays(new Date(), 1))) || (k === "nessuna" && !it.due_date) ? "on" : ""}" data-act="ls-data" data-v="${k}">${n}</button>`).join("")}</div>
         <input class="input" type="date" id="lsData" aria-label="Scegli un'altra data" value="${it.due_date || ""}" min="2000-01-01" max="2100-12-31"></div>`}
       <button class="pin-toggle mini-t ${it.pinned ? "on" : ""}" data-act="ls-pin" aria-pressed="${!!it.pinned}"><span><b>Fissa in alto</b></span><span class="sw2"></span></button>
-      <button class="pin-toggle mini-t ${perReparto ? "on" : ""}" data-act="ls-reparti" aria-pressed="${perReparto}"><span><b>Raggruppa per reparto</b></span><span class="sw2"></span></button>
     </div>` : ""}
   </div>
   <div class="ls-corpo">${righe || `<p class="hint">Ancora niente: scrivi qui sotto la prima cosa da comprare.</p>`}</div>
@@ -1773,6 +1790,7 @@ async function saveDraft() {
   if (d.due_date && (!validYmd(d.due_date) || d.due_date < "2000-01-01" || d.due_date > "2100-12-31")) { toast("Data non valida 📅"); return; }
   if (!d.due_date) d.due_time = null;
   if (d.kind === "note") { d.due_date = null; d.due_time = null; d.remind = "none"; }
+  if (d.kind === "todo" && !d._pet && modoSpesa === "on" && !d._remindPrima) d.remind = "none"; // lista della spesa: niente promemoria (salvo quello scelto prima)
   if (d.remind === "auto") d.remind = "none";
   const prevRemind = state.items.find((x) => x.id === d.id)?.remind_at;
   d.remind_at = computeRemind(d);
@@ -2028,14 +2046,6 @@ function calColoriNuovi(k, v) {
   for (const [kk, vv] of Object.entries(CUSTOM.calColori || {})) if (kk !== k && (!kk.startsWith("l:") || !state.liste.length || note.has(kk))) resto[kk] = vv;
   return { [k]: v, ...resto };
 }
-function calColApri() {
-  const righe = [["personale", "🌷", "Personale"], ["lavoro", "💼", "Lavoro"], ...state.liste.map((l) => ["l:" + l.id, l.emoji, l.nome])];
-  openSheet(`<h2><span class="mbox">${mascot()}</span>Colori del calendario</h2>
-    <p style="margin:0 0 10px;color:var(--ink2)">Ogni cosa nel calendario prende il colore della sua lista.</p>
-    ${righe.map(([k, e, n]) => { const cur = calId(k); return `<div class="setrow col calcol-riga"><div><b>${e ? `<span class="emo">${esc(e)} </span>` : ""}${esc(n)}</b></div>
-      <div class="calcol-pal" role="group" aria-label="Colore di ${esc(n)}">${CAL_COLORI.map(([id, nome, hex]) => `<button type="button" class="calcol-p${cur === id ? " on" : ""}" style="--cc:${hex}" data-act="calcol-pick" data-k="${esc(k)}" data-v="${id}" aria-label="${nome}" aria-pressed="${cur === id}"><span aria-hidden="true">${cur === id ? "✓" : ""}</span></button>`).join("")}</div></div>`; }).join("")}
-    <div class="actions"><button class="btn" data-act="calcol-reset">Ripristina i colori</button><button class="btn primary" data-act="calcol-chiudi">Fatto</button></div>`);
-}
 function riapriImpostazioni() { const y = $("#sheet").scrollTop; openSettings(); $("#sheet").scrollTop = y; }
 
 function b64ToU8(b64) {
@@ -2177,6 +2187,9 @@ function checkListeSconosciute() {
 
 // Pagina "Liste condivise" (nel menu, non nelle impostazioni)
 function openListe() { if ($("#sheet").classList.contains("on")) closeSheet(); state.tab = "liste"; render(); window.scrollTo({ top: 0 }); }
+// "Ripristina i colori" (v59): in fondo a Le mie liste, solo se almeno un colore del calendario e' stato scelto a mano
+const calColoriCambiati = () => Object.keys(CUSTOM.calColori || {}).length > 0;
+const calRipristinaHtml = () => (calColoriCambiati() ? `<div class="cal-ripr"><button type="button" class="fbtn" data-act="calcol-ripristina">Ripristina i colori</button></div>` : "");
 function viewListe() {
   if (!ONLINE_MODE) return OSPITE ? invitoAccount("Le liste da condividere con altre persone richiedono un account: crealo per usare questa funzione.") : emptyBox("Le mie liste funzionano quando l'app è collegata a un account 🌸");
   const me = myId();
@@ -2194,7 +2207,7 @@ function viewListe() {
           ${l.proprietaria === me ? `<button class="fbtn" style="color:var(--danger)" data-act="l-elimina" data-id="${esc(l.id)}">Elimina</button>` : ""}
         </div>
       </div>`).join("") || `<div class="empty" style="padding:8px">Ancora nessuna lista. Creane una, ad esempio "Casa" o "Spesa" 🛒</div>`}</div>
-    <div class="actions" style="margin-top:14px"><button class="btn" data-act="l-codice">Ho un codice</button><button class="btn primary" data-act="l-nuova">+ Nuova lista</button></div>`;
+    <div class="actions" style="margin-top:14px"><button class="btn" data-act="l-codice">Ho un codice</button><button class="btn primary" data-act="l-nuova">+ Nuova lista</button></div>${calRipristinaHtml()}`;
 }
 let listaDopo = null; // modulo di una cosa lasciato aperto per creare una lista: dopo il salvataggio ci si torna con la lista scelta
 let listaDraft = { id: null, nome: "", emoji: "🏠", colore: null };
@@ -3340,7 +3353,7 @@ function gruppiSpesa(st) {
   (st || []).forEach((x) => g[repartoDi(x.t)].push(x));
   return g.map((v, i) => ({ i, voci: [...v.filter((x) => !x.f), ...v.filter((x) => x.f)] })).filter((x) => x.voci.length);
 }
-const raggruppaSpesa = (it) => isSpesa(it) && CUSTOM.spesa_reparti !== false;
+const raggruppaSpesa = (it) => isSpesa(it);
 // Le cose scritte in passato nelle liste della spesa (tutte le voci caricate, anche condivise): frequenza + recenza
 let memoSugg = { items: null, n: -1, v: null };
 function storicoSpesa() {
@@ -5642,8 +5655,7 @@ document.addEventListener("click", async (e) => {
     // lista da spuntare: dentro l'editor
     case "st-toggle": { const x = draft?.sottotask.find((s) => s.id === v); if (x) { x.f = !x.f; drawSt(); } break; }
     case "st-plus": { const n = $("#stNew"); if (!n) break; if (n.value.trim()) aggiungiSt(n.value); else n.focus(); break; }
-    case "st-spesa": if (draft) { draft._spesa = !draft._spesa; draft._spesaScelta = true; segnaListaSpesa(draft._spesa); drawEditor(); } break;
-    case "st-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); if (draft) drawSt(); break;
+    case "st-spesa": if (draft) { draft._spesa = !draft._spesa; draft._spesaScelta = true; if (draft._spesa && !draft.lista_id) draft.area = "personale"; segnaListaSpesa(draft._spesa); spesaAggiorna(); const b = $('#sheet .cat-row [data-act="st-spesa"]'); if (b) b.focus(); } break;
     case "st-sugg": if (draft && v) aggiungiSt(v); break;
     case "ls-spunta": { const x = listaRighe.find((r) => r.id === v); if (x) { x.f = !x.f; listaSalva(); listaRedraw(); } break; }
     case "ls-del": {
@@ -5656,7 +5668,6 @@ document.addEventListener("click", async (e) => {
     case "ls-sugg": if (listaAggiungi(v)) listaRedraw("lsNuovo"); break;
     case "ls-data": if (["oggi", "domani", "nessuna"].includes(v)) listaData(v === "oggi" ? todayStr() : v === "domani" ? ymd(addDays(new Date(), 1)) : ""); break;
     case "ls-pin": { const it = listaItem(); if (it) { listaSalva({ pinned: !it.pinned }); listaRedraw(); } break; }
-    case "ls-reparti": await saveCustom({ spesa_reparti: CUSTOM.spesa_reparti === false }); listaRedraw(); break;
     case "ls-menu": listaMenu = !listaMenu; listaRedraw(); break;
     case "st-del": if (draft) { draft.sottotask = draft.sottotask.filter((s) => s.id !== v); drawSt(); } break;
     case "st-su": { const a = draft?.sottotask, i = a ? a.findIndex((s) => s.id === v) : -1; if (i > 0) { [a[i - 1], a[i]] = [a[i], a[i - 1]]; drawSt(); } break; }
@@ -5744,10 +5755,8 @@ document.addEventListener("click", async (e) => {
     case "uovo": festaUovo(v, el); break;
     case "compleanno-togli": await saveCustom({ compleanno: "" }); riapriImpostazioni(); toast("Compleanno tolto"); break;
     case "open-custom": openMascotPicker(); break;
-    case "calcol-apri": calColApri(); break;
-    case "calcol-chiudi": openSettings(); break;
-    case "calcol-pick": { const k = el.dataset.k; if (RE_CALCHIAVE.test(k || "") && CAL_COLORI.some((x) => x[0] === v)) { const y = $("#sheet").scrollTop; await saveCustom({ calColori: calColoriNuovi(k, v) }); if ($("#sheet .calcol-riga")) { calColApri(); $("#sheet").scrollTop = y; } else if (state.tab === "liste" && !$("#sheet").classList.contains("on")) { const w = window.scrollY; render(); window.scrollTo({ top: w }); } toast("Colore salvato 🎨"); } break; }
-    case "calcol-reset": { const ok = await ask({ title: "Ripristinare i colori?", text: "Tornano quelli di partenza.", ok: "Ripristina" }); if (ok) { await saveCustom({ calColori: {} }); calColApri(); toast("Colori ripristinati"); } else calColApri(); break; }
+    case "calcol-pick": { const k = el.dataset.k; if (RE_CALCHIAVE.test(k || "") && CAL_COLORI.some((x) => x[0] === v)) { await saveCustom({ calColori: calColoriNuovi(k, v) }); if (state.tab === "liste" && !$("#sheet").classList.contains("on")) { const w = window.scrollY; render(); window.scrollTo({ top: w }); } toast("Colore salvato 🎨"); } break; }
+    case "calcol-ripristina": { if (!calColoriCambiati()) break; const prima = { ...CUSTOM.calColori }; await saveCustom({ calColori: {} }); toastAnnulla("Colori ripristinati", () => { saveCustom({ calColori: prima }); }); break; }
     case "open-pancino": openPancino(); break;
     case "pet-giro": if (!effetto3d(el, "e3d-gira", 800)) openPancino(); break;
     case "open-consiglio": openConsiglio(); if (ONLINE_MODE) store.mieiConsigli().then((r) => { mieiMsg = r.filter((m) => m && typeof m.testo === "string"); if ($("#cTesto")) openConsiglio(); }).catch(() => {}); break;

@@ -140,6 +140,7 @@ Una lista lunga non deve mai sembrare una pila di adesivi.
 ## 8. Schede, liste, finestre
 
 - Una voce (`.item`): casellina tonda a sinistra, titolo 16px, sotto le etichette (`.chip`). Il colore dell'area sta nell'etichetta, non nel bordo.
+- Dove sta una cosa (v59), una regola sola: nome della lista con il pallino del suo colore (`.chip.lst`), altrimenti Lavoro (`.chip.lav`), altrimenti nessuna etichetta. Personale è il default e non si etichetta mai. Filtri e legenda del calendario compaiono solo a chi usa Lavoro o le liste.
 - Le cose fatte: tratteggiate, più chiare, senza ombra.
 - Finestre (`.sheet`): linea media in alto, maniglia, X tonda da 44px in alto a destra. Titolo con la mascotte. I pulsanti in fondo restano sempre visibili (`.sheet > .actions` sticky).
 - Le intestazioni con frecce dentro una finestra (`.sheet > .calhead`) lasciano spazio alla X.
@@ -200,8 +201,8 @@ Una lista lunga non deve mai sembrare una pila di adesivi.
 <!-- sezione con contatore -->
 <div class="sec"><h2>Da fare</h2><span class="count">4</span></div>
 <!-- voce -->
-<div class="item personale"><button class="check" data-act="toggle" aria-label="Completa"></button>
-  <div class="body"><div class="t">Chiamare la nonna</div><div class="meta"><span class="chip per">Personale</span></div></div></div>
+<div class="item lavoro"><button class="check" data-act="toggle" aria-label="Completa"></button>
+  <div class="body"><div class="t">Mandare il preventivo</div><div class="meta"><span class="chip lav">Lavoro</span></div></div></div>
 <!-- pulsanti di una finestra -->
 <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary">Salva</button></div>
 ```
