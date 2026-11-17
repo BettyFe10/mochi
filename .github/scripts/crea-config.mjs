@@ -20,6 +20,8 @@ const errors = [];
 if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(cfg.SUPABASE_URL)) errors.push("SUPABASE_URL mancante o non valido (atteso https://xxxx.supabase.co)");
 if (!/^[A-Za-z0-9._-]{20,}$/.test(cfg.SUPABASE_ANON_KEY)) errors.push("SUPABASE_ANON_KEY mancante o non valida");
 if (cfg.VAPID_PUBLIC_KEY && !/^[A-Za-z0-9_-]{40,}$/.test(cfg.VAPID_PUBLIC_KEY)) errors.push("VAPID_PUBLIC_KEY non valida");
+if (!cfg.TITOLARE_PRIVACY) errors.push("TITOLARE_PRIVACY mancante: l'informativa privacy deve indicare il titolare del trattamento");
+if (!/^\S+@\S+\.\S+$/.test(cfg.EMAIL_PRIVACY)) errors.push("EMAIL_PRIVACY mancante o non valida: l'informativa privacy deve avere un contatto");
 if (/^sb_secret_/i.test(cfg.SUPABASE_ANON_KEY) || /service_role/i.test(Buffer.from(cfg.SUPABASE_ANON_KEY.split(".")[1] || "", "base64").toString())) {
   errors.push("ATTENZIONE: hai inserito la chiave service_role. Va usata la publishable key (sb_publishable_...) o la vecchia anon public, mai la secret key o la service_role nel sito");
 }
