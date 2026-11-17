@@ -918,7 +918,7 @@ function openMascotPicker() {
   openSheet(`
     <h2><span class="mbox">${mascot()}</span>Personalizza</h2>
     <div class="field"><label>Nome dell'app</label>
-      <input class="input big" id="cName" maxlength="24" value="${esc(CUSTOM.nome_app)}" placeholder="Mochi" autocomplete="off"></div>
+      <input class="input big" id="cName" aria-label="Nome dell'app" maxlength="24" value="${esc(CUSTOM.nome_app)}" placeholder="Mochi" autocomplete="off"></div>
     <div class="field"><label for="cMascNome">Nome della mascotte</label>
       <input class="input" id="cMascNome" maxlength="16" value="${esc(CUSTOM.nome_mascotte)}" placeholder="${esc(MASC.list[CUSTOM.mascotte].nome)}" autocomplete="off">
       <small class="small">Lascialo vuoto per il nome di default.</small></div>
@@ -1475,7 +1475,7 @@ function ask({ title, text = "", ok = "Conferma", no = "Annulla", danger = false
     if (askResolve) { const r = askResolve; askResolve = null; r(null); }
     openSheet(`<h2><span class="mbox">${mascot()}</span>${esc(title)}</h2>
       ${text ? `<p style="margin:0 0 14px;color:var(--ink2);white-space:pre-line">${esc(text)}</p>` : ""}
-      ${input ? `<div class="field"><input class="input big" id="askInput" maxlength="${maxlength}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off"${inputmode === "decimal" ? ' inputmode="decimal"' : ""}></div>` : ""}
+      ${input ? `<div class="field"><input class="input big" id="askInput" aria-label="Risposta" maxlength="${maxlength}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off"${inputmode === "decimal" ? ' inputmode="decimal"' : ""}></div>` : ""}
       <div class="actions"><button class="btn" data-act="ask-cancel">${esc(no)}</button>
         <button class="btn ${danger ? "danger-full" : "primary"}" data-act="ask-ok">${esc(ok)}</button></div>`);
     askResolve = resolve;
@@ -1557,21 +1557,21 @@ function drawEditor() {
     <h2><span class="mbox">${mascot()}</span>${d._new ? (isNote ? "Cosa annoti?" : d.kind === "event" ? "Che appuntamento hai?" : "Cosa c'è da fare?") : "Modifica"}</h2>
     <div class="seg">${kindBtn("todo", `<span class=e><span class="emo">✅</span><svg class="ico q" aria-hidden="true"><use href="#i-todo"/></svg></span>Da fare`)}${kindBtn("event", `<span class=e><span class="emo">📅</span><svg class="ico q" aria-hidden="true"><use href="#i-agenda"/></svg></span>Appuntamento`)}${kindBtn("note", `<span class=e><span class="emo">📝</span><svg class="ico q" aria-hidden="true"><use href="#i-appunti"/></svg></span>Appunto`)}</div>
     <div class="field">
-      <input class="input big" id="fTitle" maxlength="300" placeholder="${isNote ? "Titolo dell'appunto" : "Es. dentista giovedì alle 17"}" value="${esc(d.title)}" autocomplete="off" enterkeyhint="done">
+      <input class="input big" id="fTitle" aria-label="${isNote ? "Titolo dell'appunto" : "Titolo"}" maxlength="300" placeholder="${isNote ? "Titolo dell'appunto" : "Es. dentista giovedì alle 17"}" value="${esc(d.title)}" autocomplete="off" enterkeyhint="done">
       ${d._new && !isNote ? `<div class="hint" id="fHint">Scrivi come parli: oggi, domani, venerdì, 12/11, alle 15, #lavoro</div>` : ""}
     </div>
     <div class="field cat-field"><label id="catLbl">Lista</label><div class="areas cat-row" role="group" aria-labelledby="catLbl">${catChips(d)}</div>
       <div class="hint cat-frase" id="catFrase" aria-live="polite">${catFrase(d)}</div></div>
     ${!advanced ? `<div class="more-row"><button class="more" data-act="d-more">+ Data, note e altro</button>${!isNote && d.due_date ? `<button class="more" id="fOggi" data-act="d-more" aria-label="Data: ${niceDate(d.due_date)}. Tocca per cambiarla">📅 ${niceDate(d.due_date)}</button>` : ""}</div>` : `
       ${!isNote ? `<div class="row">
-        <div class="field"><label>Giorno</label><input class="input" type="date" id="fDate" value="${d.due_date || ""}"></div>
-        <div class="field"><label>Ora</label><input class="input" type="time" id="fTime" value="${d.due_time || ""}"></div>
+        <div class="field"><label>Giorno</label><input class="input" type="date" id="fDate" aria-label="Data" value="${d.due_date || ""}"></div>
+        <div class="field"><label>Ora</label><input class="input" type="time" id="fTime" aria-label="Ora" value="${d.due_time || ""}"></div>
       </div>
-      <div class="field" id="fRemindF" ${remindNascosto(d) ? "hidden" : ""}><label>Promemoria 🔔</label><select class="input" id="fRemind">${REMIND_OPTS.map(([v, l]) => `<option value="${v}" ${String(d.remind) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : `
+      <div class="field" id="fRemindF" ${remindNascosto(d) ? "hidden" : ""}><label>Promemoria 🔔</label><select class="input" id="fRemind" aria-label="Promemoria">${REMIND_OPTS.map(([v, l]) => `<option value="${v}" ${String(d.remind) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : `
       <div class="field"><label>Colore</label><div class="colors">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((c) => `<button class="note c${c} ${+d.color === c ? "on" : ""}" data-act="d-color" data-v="${c}" aria-label="Colore ${c}"></button>`).join("")}</div></div>
       <div class="field"><button class="pin-toggle ${d.pinned ? "on" : ""}" data-act="d-pin"><span class="e">📌</span><span><b>${d.pinned ? "Fissato in alto" : "Fissa in alto"}</b><small>Resta sempre in cima agli appunti</small></span><span class="sw2"></span></button></div>`}
       <div class="field"><label>Voci da spuntare</label><div class="st-ed" id="stBox">${stEditorHtml()}</div></div>
-      <div class="field"><label>${isNote ? "Testo" : "Note"}</label><textarea class="input" id="fBody" maxlength="20000" placeholder="${isNote ? "Scrivi qui..." : "Dettagli, indirizzo, cosa portare..."}">${esc(d.body || "")}</textarea></div>
+      <div class="field"><label>${isNote ? "Testo" : "Note"}</label><textarea class="input" id="fBody" aria-label="Note" maxlength="20000" placeholder="${isNote ? "Scrivi qui..." : "Dettagli, indirizzo, cosa portare..."}">${esc(d.body || "")}</textarea></div>
     `}
     <div class="actions">
       ${!d._new ? `<button class="btn danger" data-act="d-delete" aria-label="Elimina">🗑</button>` : ""}
@@ -1859,9 +1859,9 @@ function openRecap(month) {
   const isCur = key === monthKey(new Date());
   openSheet(`
     <div class="calhead" style="margin-bottom:12px">
-      <button class="iconbtn" data-act="recap-move" data-v="-1">‹</button>
+      <button class="iconbtn" data-act="recap-move" data-v="-1" aria-label="Mese prima">‹</button>
       <span class="fred" style="font-size:15px;color:var(--ink2)">Riepilogo del mese</span>
-      <button class="iconbtn" data-act="recap-move" data-v="1" ${isCur ? "disabled style='opacity:.3'" : ""}>›</button>
+      <button class="iconbtn" data-act="recap-move" data-v="1" aria-label="Mese dopo" ${isCur ? "disabled style='opacity:.3'" : ""}>›</button>
     </div>
     <div class="recap">
       <div class="mbox">${mascot("happy")}</div>
@@ -1953,7 +1953,7 @@ function openSettings(gruppo) {
     ${SG_FINE}
     ${sgApri("aspetto", "🎨", "Aspetto e suoni", riassuntoAspetto())}
     <div class="setrow"><div><b>Chiaro o scuro</b><small>Automatico segue il telefono</small></div>
-      <select class="input" style="width:auto;padding:8px 12px" id="themeSel">
+      <select class="input" style="width:auto;padding:8px 12px" id="themeSel" aria-label="Tema">
         <option value="auto" ${theme === "auto" ? "selected" : ""}>Auto</option><option value="light" ${theme === "light" ? "selected" : ""}>Chiaro</option><option value="dark" ${theme === "dark" ? "selected" : ""}>Scuro</option></select></div>
     <div class="setrow col"><div><b>Stile</b><small>Cambia l'aspetto di tutta l'app${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="stili">${STILI.map(([id, nome, d]) => `<button class="stile-${id} ${CUSTOM.stile === id ? "on" : ""}" data-act="pick-stile" data-v="${id}"><span class="anteprima"><i></i><i></i><i></i></span><b>${nome}</b><small>${d}</small></button>`).join("")}</div></div>
@@ -2218,7 +2218,7 @@ function openListaEditor(l) {
 }
 function drawListaEditor() {
   openSheet(`<h2><span class="mbox">${mascot()}</span>${listaDraft.id ? "Modifica lista" : "Nuova lista"}</h2>
-    <div class="field"><label>Nome</label><input class="input big" id="lsNome" maxlength="40" placeholder="Casa, Spesa, Vacanze..." value="${esc(listaDraft.nome)}" autocomplete="off"></div>
+    <div class="field"><label>Nome</label><input class="input big" id="lsNome" aria-label="Nome della lista" maxlength="40" placeholder="Casa, Spesa, Vacanze..." value="${esc(listaDraft.nome)}" autocomplete="off"></div>
     <div class="field"><label>Simbolo</label><div class="emojis">${EMOJI_LISTE.map((e) => `<button class="${listaDraft.emoji === e ? "on" : ""}" data-act="l-emoji" data-v="${e}">${e}</button>`).join("")}</div>
       <label for="lsEmoji" style="margin-top:10px">Aggiungi la tua emoji</label>
       <input class="input" id="lsEmoji" maxlength="8" placeholder="Scrivi una emoji" value="${EMOJI_LISTE.includes(listaDraft.emoji) ? "" : esc(listaDraft.emoji)}" autocomplete="off" aria-describedby="lsEmojiAiuto">
@@ -2415,7 +2415,7 @@ function apriUmore(giorno, dalGiardino = false) {
   const d = parseYmd(giorno);
   openSheet(`<h2><span class="mbox">${mascot()}</span>${giorno === todayStr() ? "Com'è andata oggi?" : `Com'è andato ${GIORNI[d.getDay()]} ${d.getDate()}?`}</h2>
     <div class="facce grandi">${[1, 2, 3, 4, 5].map((l) => `<button class="${u.livello === l ? "on" : ""}" data-act="umore-scegli" data-v="${l}">${faccina(l, 46)}<small>${UMORI[l].nome}</small></button>`).join("")}</div>
-    <div class="field"><label>Due parole, se vuoi</label><textarea class="input" id="uNota" maxlength="200" placeholder="Cosa ti ha fatto sorridere? O cosa ti ha pesato?">${esc(u.nota || "")}</textarea></div>
+    <div class="field"><label>Due parole, se vuoi</label><textarea class="input" id="uNota" aria-label="Nota sull'umore" maxlength="200" placeholder="Cosa ti ha fatto sorridere? O cosa ti ha pesato?">${esc(u.nota || "")}</textarea></div>
     <div class="actions">${state.umori[giorno] ? `<button class="btn danger" data-act="umore-togli" data-id="${giorno}">Elimina</button>` : ""}<button class="btn" data-act="umore-annulla">Annulla</button><button class="btn primary" data-act="umore-salva" data-id="${giorno}">Salva</button></div>`);
   umoreScelto = u.livello;
 }
@@ -2532,9 +2532,9 @@ function apriGiardino(m) {
   giardinoMese = m || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const cur = monthKey(giardinoMese) === monthKey(new Date());
   openSheet(`<div class="calhead" style="margin-bottom:10px">
-      <button class="iconbtn" data-act="giardino-move" data-v="-1">‹</button>
+      <button class="iconbtn" data-act="giardino-move" data-v="-1" aria-label="Mese prima">‹</button>
       <span class="fred" style="font-size:16px;color:var(--ink2)">Il giardino del mese</span>
-      <button class="iconbtn" data-act="giardino-move" data-v="1" ${cur ? "disabled style='opacity:.3'" : ""}>›</button></div>
+      <button class="iconbtn" data-act="giardino-move" data-v="1" aria-label="Mese dopo" ${cur ? "disabled style='opacity:.3'" : ""}>›</button></div>
     ${giardinoSvg(giardinoMese)}${legendaUmori()}
     ${pannelloFiori()}
     <p class="small" style="text-align:center;margin:6px 0 0">Tocca un fiore per cambiare quella giornata</p>
@@ -2683,12 +2683,12 @@ function editRicorrente(r) {
 function drawRicorrente() {
   const d = ricDraft, giorno = d.ogni_minuti >= 1440;
   openSheet(`<h2><span class="mbox">${mascot()}</span>${d.id ? "Modifica promemoria" : "Nuovo promemoria"}</h2>
-    <div class="field"><label>Cosa ti ricordo</label><input class="input big" id="rTitolo" maxlength="80" placeholder="Bevi un bicchiere d'acqua" value="${esc(d.titolo)}" autocomplete="off"></div>
+    <div class="field"><label>Cosa ti ricordo</label><input class="input big" id="rTitolo" aria-label="Titolo" maxlength="80" placeholder="Bevi un bicchiere d'acqua" value="${esc(d.titolo)}" autocomplete="off"></div>
     <div class="field"><label>Simbolo</label><div class="emojis">${EMOJI_RIC.map((e) => `<button class="${d.emoji === e ? "on" : ""}" data-act="ric-emoji" data-v="${e}">${e}</button>`).join("")}</div></div>
-    <div class="field"><label>Quanto spesso</label><select class="input" id="rOgni">${OGNI_OPZ.map(([v, l]) => `<option value="${v}" ${d.ogni_minuti === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div class="field"><label>Quanto spesso</label><select class="input" id="rOgni" aria-label="Ogni quanto">${OGNI_OPZ.map(([v, l]) => `<option value="${v}" ${d.ogni_minuti === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="row">
-      <div class="field"><label>${giorno ? "Alle" : "Dalle"}</label><input class="input" type="time" id="rDalle" value="${d.dalle}"></div>
-      ${giorno ? "" : `<div class="field"><label>Alle</label><input class="input" type="time" id="rAlle" value="${d.alle}"></div>`}
+      <div class="field"><label>${giorno ? "Alle" : "Dalle"}</label><input class="input" type="time" id="rDalle" aria-label="Dalle" value="${d.dalle}"></div>
+      ${giorno ? "" : `<div class="field"><label>Alle</label><input class="input" type="time" id="rAlle" aria-label="Alle" value="${d.alle}"></div>`}
     </div>
     <div class="field"><label>Giorni</label><div class="giorni">${GG.map((g, i) => `<button class="${d.giorni.includes(i + 1) ? "on" : ""}" data-act="ric-giorno" data-v="${i + 1}">${g}</button>`).join("")}</div></div>
     <div class="actions"><button class="btn" data-act="ric-indietro">Indietro</button><button class="btn primary" data-act="ric-salva">Salva</button></div>`);
@@ -2931,14 +2931,14 @@ function apriTipoTurno(k) {
 function disegnaTipoTurno() {
   const d = tipoDraft, conOrario = !!d.inizio;
   openSheet(`<h2><span class="mbox">${mascot()}</span>${d.k ? "Modifica turno" : "Nuovo tipo di turno"}</h2>
-    <div class="row"><div class="field" style="flex:3"><label>Nome</label><input class="input big" id="tNome" maxlength="20" placeholder="Mattina" value="${esc(d.nome)}" autocomplete="off"></div>
-      <div class="field" style="flex:1"><label>Sigla</label><input class="input big" id="tSigla" maxlength="3" placeholder="M" value="${esc(d.sigla)}" autocomplete="off"></div></div>
+    <div class="row"><div class="field" style="flex:3"><label>Nome</label><input class="input big" id="tNome" aria-label="Nome del turno" maxlength="20" placeholder="Mattina" value="${esc(d.nome)}" autocomplete="off"></div>
+      <div class="field" style="flex:1"><label>Sigla</label><input class="input big" id="tSigla" aria-label="Sigla" maxlength="3" placeholder="M" value="${esc(d.sigla)}" autocomplete="off"></div></div>
     <div class="field"><label>Colore</label><div class="tcolori">${TURNO_COLORI.map((c, i) => `<button class="${d.colore === i + 1 ? "on" : ""}" style="background:${c}" data-act="tipo-colore" data-v="${i + 1}" aria-label="Colore ${i + 1}"></button>`).join("")}</div></div>
     <button class="pin-toggle ${conOrario ? "on" : ""}" data-act="tipo-orario"><span class="e">🕘</span><span style="flex:1"><b>Con orario</b><small style="display:block;color:var(--ink2)">Spegnilo per ferie, permessi, malattia: non contano nelle ore</small></span><span class="sw2"></span></button>
     ${conOrario ? `<div class="row" style="margin-top:10px">
-      <div class="field"><label>Inizio</label><input class="input" type="time" id="tIni" value="${d.inizio}"></div>
-      <div class="field"><label>Fine</label><input class="input" type="time" id="tFine" value="${d.fine}"></div>
-      <div class="field"><label>Pausa</label><select class="input" id="tPausa">${PAUSE.map((p) => `<option value="${p}" ${d.pausa === p ? "selected" : ""}>${p ? `${p} min` : "Nessuna"}</option>`).join("")}</select></div></div>
+      <div class="field"><label>Inizio</label><input class="input" type="time" id="tIni" aria-label="Inizio" value="${d.inizio}"></div>
+      <div class="field"><label>Fine</label><input class="input" type="time" id="tFine" aria-label="Fine" value="${d.fine}"></div>
+      <div class="field"><label>Pausa</label><select class="input" id="tPausa" aria-label="Pausa">${PAUSE.map((p) => `<option value="${p}" ${d.pausa === p ? "selected" : ""}>${p ? `${p} min` : "Nessuna"}</option>`).join("")}</select></div></div>
       <p class="hint" id="tOre"></p>` : ""}
     <div class="actions">${d.k ? `<button class="btn danger" data-act="tipo-elimina">Elimina</button>` : ""}<button class="btn" data-act="tipo-indietro">Annulla</button><button class="btn primary" data-act="tipo-salva">Salva</button></div>`);
   const leggi = () => { d.nome = $("#tNome").value; d.sigla = $("#tSigla").value; if ($("#tIni")) { d.inizio = $("#tIni").value; d.fine = $("#tFine").value; d.pausa = +$("#tPausa").value; } };
@@ -2997,7 +2997,7 @@ function disegnaCiclo() {
     <p style="margin:0 0 10px;color:var(--ink2)">Componi la sequenza giorno per giorno (es. M M P P N N R R): quando finisce ricomincia da capo, da sola.</p>
     <div class="ciclo-seq grande">${d.ciclo.map((k, i) => { const t = tipoDa(k); return t ? `<button data-act="ciclo-togli" data-v="${i}" title="Togli">${chipTurno(t)}<small>${i + 1}</small></button>` : ""; }).join("") || `<span class="hint">Ancora vuoto: aggiungi i giorni qui sotto</span>`}</div>
     <div class="field"><label>Aggiungi un giorno</label><div class="tpicks mini">${[...state.turniImp.tipi, RIPOSO].map((t) => `<button class="tpick" data-act="ciclo-aggiungi" data-id="${t.k}" ${d.ciclo.length >= 62 ? "disabled" : ""}>${chipTurno(t)}<span><b>${esc(t.nome)}</b></span></button>`).join("")}</div></div>
-    <div class="field"><label>Il giorno 1 del ciclo è</label><input class="input" type="date" id="cIni" value="${d.inizio}"></div>
+    <div class="field"><label>Il giorno 1 del ciclo è</label><input class="input" type="date" id="cIni" aria-label="Data di inizio" value="${d.inizio}"></div>
     <div class="field" id="cFineBox"><label id="cFineL">Fino a quando si ripete?</label>
       <div class="pet-dt" role="group" aria-labelledby="cFineL">${[["mese", "Un mese"], ["3mesi", "3 mesi"], ["sempre", "Sempre"], ["data", "Scegli la data"]].map(([k, n]) => `<button type="button" class="fbtn ${d.fine === k ? "on" : ""}" data-act="ciclo-fine" data-v="${k}" aria-pressed="${d.fine === k}">${n}</button>`).join("")}</div>
       ${d.fine === "data" ? `<input class="input" type="date" id="cFine" aria-label="Ultimo giorno del ciclo" value="${d.fineData || ""}" min="2000-01-01" max="2100-12-31" style="margin-top:8px">` : ""}
@@ -3150,7 +3150,7 @@ function apriSpesa(sp, cat) {
       <button class="fbtn ${d.giorno === oggi ? "on" : ""}" data-act="spesa-giorno" data-v="${oggi}">Oggi</button><button class="fbtn ${d.giorno === ieri ? "on" : ""}" data-act="spesa-giorno" data-v="${ieri}">Ieri</button>
       <input class="input" type="date" id="sGiorno" value="${d.giorno}" min="2000-01-01" max="2100-12-31" aria-label="Giorno"></div></div>
     ${d._animali !== null ? `<div class="field" id="sPetTag" ${d.categoria === PET_CAT_SPESA ? "" : "hidden"}><label id="sPtL">Per chi?</label><div class="pet-dt" role="group" aria-labelledby="sPtL">${petSpesaChips(d._animali)}</div><small class="small" id="sPtH">${d._nuova && d._animali.filter(Boolean).length > 1 ? petDivisioneTesto(d._animali.filter(Boolean).length) : ""}</small></div>` : ""}
-    <div class="field"><label>Nota, se vuoi</label><input class="input" id="sNota" maxlength="120" placeholder="Es. pizza con le amiche" autocomplete="off" value="${esc(d.nota)}"></div>
+    <div class="field"><label>Nota, se vuoi</label><input class="input" id="sNota" aria-label="Nota" maxlength="120" placeholder="Es. pizza con le amiche" autocomplete="off" value="${esc(d.nota)}"></div>
     <div class="actions">${d._nuova ? "" : `<button class="btn danger" data-act="spesa-elimina" aria-label="Elimina">🗑</button>`}<button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="spesa-salva">Salva</button></div>`);
   const imp = $("#sImporto");
   imp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); salvaSpesa($("[data-act=spesa-salva]")); } });
@@ -5355,7 +5355,7 @@ function openConsiglio() {
   openSheet(`<h2><span class="mbox">${mascot("happy")}</span>Consiglia alla sviluppatrice</h2>
     <p style="margin:0 0 12px;color:var(--ink2)">Il messaggio arriva solo a chi ha creato ${esc(CUSTOM.nome_app)}, insieme al tuo nome e alla tua email per poterti rispondere.</p>
     <div class="seg" style="margin-bottom:12px">${TIPI_CONSIGLIO.map(([v, e, l]) => `<button class="${consiglio.tipo === v ? "on" : ""}" data-act="c-tipo" data-v="${v}"><span class=e>${e}</span>${l}</button>`).join("")}</div>
-    <div class="field"><textarea class="input" id="cTesto" maxlength="2000" placeholder="${ph}">${esc(consiglio.testo)}</textarea>
+    <div class="field"><textarea class="input" id="cTesto" aria-label="Il tuo messaggio" maxlength="2000" placeholder="${ph}">${esc(consiglio.testo)}</textarea>
       <div class="hint" id="cCount" style="text-align:right">${consiglio.testo.length}/2000</div></div>
     <div class="actions"><button class="btn" data-act="close">Annulla</button><button class="btn primary" data-act="c-send">Invia 💌</button></div>
     ${mieiMsg.length ? `<div class="sec"><h2>I tuoi messaggi</h2></div><div class="list">${mieiMsg.slice(0, 20).map(rigaMioMsg).join("")}</div>` : ""}`);
@@ -5419,7 +5419,7 @@ function apriRisposta(id) {
   openSheet(`<h2><span class="mbox">${mascot()}</span>Rispondi a ${esc(m.nome || "chi ha scritto")}</h2>
     <div class="msg" style="margin-bottom:12px"><div class="msg-t" style="margin:0">${esc(m.testo)}</div></div>
     <div class="field"><label>Stato</label><div class="tpicks">${Object.entries(STATI_MSG).map(([k, [e, l]]) => `<button class="tpick ${rispDraft.stato === k ? "on" : ""}" data-act="risp-stato" data-v="${k}"><span style="font-size:20px">${e}</span><span><b>${l}</b></span></button>`).join("")}</div></div>
-    <div class="field"><label>Un commento, se vuoi</label><textarea class="input" id="rTesto" maxlength="500" placeholder="Fatto! Lo trovi nel menu 🌸">${esc(rispDraft.risposta)}</textarea></div>
+    <div class="field"><label>Un commento, se vuoi</label><textarea class="input" id="rTesto" aria-label="Il tuo messaggio" maxlength="500" placeholder="Fatto! Lo trovi nel menu 🌸">${esc(rispDraft.risposta)}</textarea></div>
     <p class="hint">Lo vede solo chi ha scritto, nell'app, insieme a una notifica.</p>
     <div class="actions"><button class="btn" data-act="risp-indietro">Indietro</button><button class="btn primary" data-act="risp-salva">Invia risposta</button></div>`);
   $("#rTesto").addEventListener("input", (e) => { rispDraft.risposta = e.target.value; });

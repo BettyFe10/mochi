@@ -2,7 +2,7 @@
 <html lang="it" data-stile="morbido">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mochi</title>
 <meta name="theme-color" content="#ffd6e4">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1853,10 +1853,10 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
     <h1 class="fred" id="lTitle">Ciao!</h1>
     <p id="lSub">Custodisco le tue cose.<br>Entra per vederle.</p>
     <form id="loginForm" autocomplete="on">
-      <input class="input hidden" id="lName" type="text" placeholder="Come ti chiami?" autocomplete="given-name" maxlength="40">
-      <input class="input" id="lEmail" type="email" placeholder="Email" autocomplete="username">
+      <input class="input hidden" id="lName" type="text" placeholder="Come ti chiami?" aria-label="Come ti chiami?" autocomplete="given-name" maxlength="40">
+      <input class="input" id="lEmail" type="email" placeholder="Email" aria-label="Email" autocomplete="username">
       <div class="pw" id="lPassWrap">
-        <input class="input" id="lPass" type="password" placeholder="Password" autocomplete="current-password" minlength="8">
+        <input class="input" id="lPass" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password" minlength="8">
         <button type="button" class="pw-eye" id="lEye" aria-label="Mostra password" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="eye-off" d="M4 4l16 16"/></svg></button>
       </div>
       <label id="lPrivacyRow" class="hidden">
@@ -1864,7 +1864,7 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
         <span>Ho letto e accetto <span class="np">l'<a href="privacy.html" target="_blank" rel="noopener">informativa privacy</a></span></span>
       </label>
       <div class="err priv-err" id="lPrivacyErr" role="alert"></div>
-      <div class="err" id="lErr"></div>
+      <div class="err" id="lErr" role="alert"></div>
       <button class="btn primary" style="width:100%" type="submit" id="lBtn">Entra</button>
     </form>
     <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;font-weight:800;font-size:14.5px">
@@ -1885,7 +1885,7 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
     <div class="hello">
       <h1 id="hello">Ciao!</h1>
       <p id="today"></p>
-      <button class="motto" id="motto" data-act="motto" title="Un'altra frase"></button>
+      <button class="motto" id="motto" data-act="motto" title="Un'altra frase" aria-label="Un'altra frase"></button>
     </div>
     <button class="iconbtn" data-act="open-recap" title="Riepilogo del mese" aria-label="Riepilogo del mese"><span class="emo">🎀</span><svg class="ico q" aria-hidden="true"><use href="#i-recapbtn"/></svg></button>
     <button class="iconbtn desk-only-i" data-act="open-settings" title="Impostazioni" aria-label="Impostazioni"><span class="emo">⚙️</span><svg class="ico q" aria-hidden="true"><use href="#i-impostazioni"/></svg></button>
