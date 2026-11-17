@@ -247,20 +247,20 @@ const SupaStore = {
   },
   async saveCustom(c) { const { data, error } = await this.sb.auth.updateUser({ data: { nome_app: c.nome_app, nome_mascotte: c.nome_mascotte, mascotte: c.mascotte, accessorio: c.accessorio, colore: c.colore, font: c.font, stile: c.stile, moduli: c.moduli, stagione: c.stagione, suono: c.suono, casa: c.casa, spesa_reparti: c.spesa_reparti, compleanno: c.compleanno, ricordi: c.ricordi, fiori: c.fiori, pronomi: c.pronomi, pet: c.pet, barra: c.barra, semplice: c.semplice, calColori: c.calColori } }); if (error) throw error; this.user = data.user; },
   get redirect() { return location.origin + location.pathname; },
-  async login(email, password) {
-    const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
+  async login(email, password, captchaToken) {
+    const { data, error } = await this.sb.auth.signInWithPassword({ email, password, options: { captchaToken } });
     if (error) throw error;
     this.user = data.user; this.applyName();
   },
-  async signup(nome, email, password) {
+  async signup(nome, email, password, captchaToken) {
     // il consenso all'informativa: versione e data, nei metadati dell'account (non tocca le preferenze)
-    const { data, error } = await this.sb.auth.signUp({ email, password, options: { data: { nome, privacy_ok: PRIVACY_VERSIONE, privacy_ok_il: new Date().toISOString() }, emailRedirectTo: this.redirect } });
+    const { data, error } = await this.sb.auth.signUp({ email, password, options: { data: { nome, privacy_ok: PRIVACY_VERSIONE, privacy_ok_il: new Date().toISOString() }, emailRedirectTo: this.redirect, captchaToken } });
     if (error) throw error;
     if (data.session) { this.user = data.user; this.applyName(); return "logged"; }
     return "confirm";
   },
-  async forgot(email) {
-    const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: this.redirect });
+  async forgot(email, captchaToken) {
+    const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: this.redirect, captchaToken });
     if (error) throw error;
   },
   async newPassword(password) {
@@ -6560,6 +6560,36 @@ function clearLocal() {
   state.pet.righe = [];
   CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null, barra: null, semplice: false, calColori: null });
 }
+/* Verifica anti-bot (Cloudflare Turnstile) in entrata: la chiave del sito è pubblica per natura. La parte che conta è lato
+   server (Supabase > Authentication > Attack Protection). Il widget è "interaction-only": si vede solo se serve. */
+const TURNSTILE_KEY = CONFIG_ONLINE ? (CFG.TURNSTILE_SITE_KEY || "0x4AAAAAAGExzVm9faQgDShY") : "";
+let captchaId = null, captchaToken = "", captchaCarica = null, captchaErr = false;
+function captchaScript() {
+  return captchaCarica || (captchaCarica = new Promise((ok, ko) => {
+    if (window.turnstile) return ok();
+    const sc = document.createElement("script");
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; sc.async = true;
+    sc.onload = ok; sc.onerror = () => { captchaCarica = null; ko(new Error("captcha")); };
+    document.head.appendChild(sc);
+  }));
+}
+async function captchaMostra(on) {
+  const box = $("#lCaptcha"); if (!TURNSTILE_KEY || !box) return;
+  box.hidden = !on; if (!on || captchaId !== null) return;
+  try { await captchaScript(); } catch { return; }
+  if (captchaId !== null || !window.turnstile) return;
+  captchaId = window.turnstile.render(box, { sitekey: TURNSTILE_KEY, appearance: "interaction-only", theme: "auto", language: "it",
+    callback: (t) => { captchaToken = t; captchaErr = false; }, "expired-callback": () => { captchaToken = ""; }, "error-callback": () => { captchaToken = ""; captchaErr = true; } });
+}
+// Il gettone vale una volta sola: lo prendo (aspetto fino a 10 s se sta ancora arrivando) e poi ne chiedo uno nuovo
+async function captchaPrendi() {
+  if (!TURNSTILE_KEY || loginMode === "newpass") return undefined;
+  if (captchaCarica) await Promise.race([captchaCarica.catch(() => {}), new Promise((r) => setTimeout(r, 3000))]); // script lento: non blocco l'accesso
+  if (captchaId === null) return undefined;
+  for (let i = 0; i < 80 && !captchaToken && !captchaErr; i++) await new Promise((r) => setTimeout(r, 100));
+  const t = captchaToken; captchaToken = ""; return t || undefined;
+}
+function captchaRinnova() { captchaToken = ""; try { if (captchaId !== null) window.turnstile.reset(captchaId); } catch {} }
 function setLoginMode(m) {
   loginMode = m;
   $("#login").classList.remove("hidden"); $("#app").classList.add("hidden"); $("#nav").classList.add("hidden");
@@ -6585,6 +6615,7 @@ function setLoginMode(m) {
   $("#lOspite").textContent = passaggio ? "Continua come ospite" : "Prova senza account";
   $("#lOspiteNota").classList.toggle("hidden", !passaggio || m === "newpass" || m === "forgot");
   $("#lPrivacyRow").classList.remove("errore"); $("#lPrivacyErr").textContent = "";
+  captchaMostra(m !== "newpass");
 }
 // Occhiolino: mostra o nasconde la password mentre la scrivi
 function showPass(on) {
@@ -6604,24 +6635,25 @@ $("#loginForm").addEventListener("submit", async (e) => {
   const err = $("#lErr"); err.textContent = "";
   const email = $("#lEmail").value.trim(), pass = $("#lPass").value, nome = $("#lName").value.trim();
   const btn = $("#lBtn"); btn.disabled = true; btn.style.opacity = .6;
+  const NO_CAPTCHA = "Verifica di sicurezza non riuscita: ricarica la pagina e riprova 🙈";
   try {
     if (loginMode !== "newpass" && !/^\S+@\S+\.\S+$/.test(email)) throw new Error("Controlla l'email 🙈");
     if (loginMode !== "forgot" && pass.length < 8) throw new Error("La password deve avere almeno 8 caratteri");
     if (loginMode === "login") {
-      try { await store.login(email, pass); } catch (x) {
-        throw new Error(/confirm/i.test(x.message) ? "Prima conferma l'email: ti ho mandato un link 📬 Se non lo vedi, guarda anche in Spam." : "Email o password non corrette 🙈");
+      try { await store.login(email, pass, await captchaPrendi()); } catch (x) {
+        throw new Error(/captcha/i.test(x.message) ? NO_CAPTCHA : /confirm/i.test(x.message) ? "Prima conferma l'email: ti ho mandato un link 📬 Se non lo vedi, guarda anche in Spam." : "Email o password non corrette 🙈");
       }
       startOnline();
     } else if (loginMode === "signup") {
       if (!nome) throw new Error("Dimmi come ti chiami 🌸");
       if (!$("#lPrivacy").checked) { $("#lPrivacyRow").classList.add("errore"); $("#lPrivacyErr").textContent = "Per creare l'account spunta la casella dell'informativa privacy"; $("#lPrivacy").focus(); throw new Error(""); }
-      const r = await store.signup(nome, email, pass).catch((x) => {
-        throw new Error(/registered|exists/i.test(x.message) ? "Questa email ha già un account" : /signup.*disabled|not allowed/i.test(x.message) ? "Le registrazioni sono chiuse" : x.message);
+      const r = await store.signup(nome, email, pass, await captchaPrendi()).catch((x) => {
+        throw new Error(/captcha/i.test(x.message) ? NO_CAPTCHA : /registered|exists/i.test(x.message) ? "Questa email ha già un account" : /signup.*disabled|not allowed/i.test(x.message) ? "Le registrazioni sono chiuse" : x.message);
       });
       if (r === "logged") startOnline();
       else { setLoginMode("login"); $("#lEmail").value = email; $("#lErr").style.color = "var(--mint-d)"; $("#lErr").textContent = "Ti ho mandato un'email: apri il link e poi entra 📬 Se non la vedi, guarda anche in Spam."; }
     } else if (loginMode === "forgot") {
-      await store.forgot(email);
+      await store.forgot(email, await captchaPrendi()).catch((x) => { throw new Error(/captcha/i.test(x.message) ? NO_CAPTCHA : x.message); });
       setLoginMode("login"); $("#lEmail").value = email; $("#lErr").style.color = "var(--mint-d)"; $("#lErr").textContent = "Fatto! Controlla la posta 📬 Se non la vedi, guarda anche in Spam.";
     } else if (loginMode === "newpass") {
       await store.newPassword(pass);
@@ -6629,7 +6661,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
       toast("Password aggiornata 🔐"); startOnline();
     }
   } catch (x) { err.style.color = ""; err.textContent = x.message === "" ? "" : x.message || "Qualcosa è andato storto"; }
-  finally { btn.disabled = false; btn.style.opacity = ""; }
+  finally { btn.disabled = false; btn.style.opacity = ""; captchaRinnova(); }
 });
 
 // aggiorna saluto e "rimaste indietro" ogni minuto
