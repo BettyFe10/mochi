@@ -5451,12 +5451,19 @@ function maybeAskPush() {
 async function exportData() {
   // chi usa il pet: nel file anche la scheda e le righe di routine e pesi (dal server, con un tempo massimo; senza rete quelle del dispositivo)
   await caricaModuliSpenti(); // nel backup ci va tutto, anche i dati dei moduli spenti
-  const usaPet = petPresente(CUSTOM.pet) || mod("pet") || state.pet.righe.length > 0;
+  const usaPet = petPresente(CUSTOM.pet) || mod("pet") || state.pet.righe.length > 0 || ANIMALI.length > 0;
   const petRighe = usaPet ? await Promise.race([petTutteLeRighe(), new Promise((ok) => setTimeout(() => ok(petUnici(state.pet.righe)), 5000))]) : [];
-  const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), voci: state.items, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni },
+  // il resto delle cose dell'account (solo online: da ospite non esistono): dal server con un tempo massimo, altrimenti quelle già caricate
+  const entro = (p, ripiego) => Promise.race([Promise.resolve(p).catch(() => ripiego), new Promise((ok) => setTimeout(() => ok(ripiego), 5000))]);
+  const online = ONLINE_MODE && !!store.user;
+  const ric = online ? await entro(store.ricorrenti().then((r) => r.map(cleanRic)), ricorrenti) : [];
+  const msg = online ? await entro(store.mieiConsigli().then((r) => r.filter((m) => m && typeof m.testo === "string")), []) : [];
+  // delle liste condivise esporto le mie informazioni, non i nomi né gli id delle altre persone
+  const listeMie = state.liste.map((l) => ({ id: l.id, nome: l.nome, emoji: l.emoji, creata_da_me: !!store.user && l.proprietaria === store.user.id, numero_persone: Array.isArray(l.membri) ? l.membri.length : 1 }));
+  const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), account: online ? { email: store.user.email || null, nome: NOME || null } : { ospite: true }, preferenze: CUSTOM, voci: state.items, liste: listeMie, ricorrenti: ric, messaggi_inviati: msg, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni },
     spese: { budget_mensile_cent: state.spese.budget, voci: [...state.spese.voci].sort(ordineSpese) },
     giorni_attivi: [...state.giorni].sort(), concentrazione: serraCarica(),
-    ...(usaPet ? { pet: { scheda: CUSTOM.pet, registro: [...petRighe].sort((a, b) => (a.giorno + a.tipo + a.chiave < b.giorno + b.tipo + b.chiave ? -1 : 1)) } } : {}) }, null, 2)], { type: "application/json" });
+    ...(usaPet ? { pet: { scheda: CUSTOM.pet, animali: ANIMALI, registro: [...petRighe].sort((a, b) => (a.giorno + a.tipo + a.chiave < b.giorno + b.tipo + b.chiave ? -1 : 1)) } } : {}) }, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `mochi-backup-${todayStr()}.json`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
