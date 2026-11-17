@@ -29,3 +29,9 @@ Da lanciare con la versione "Il ciclo dei turni può finire" (v45, prima di pubb
 
 Da lanciare quando vuoi (limiti di sicurezza, non serve una versione nuova della app):
 - `18-limiti.sql`: tetto di 20 MB per account tra testi e liste da spuntare delle voci (`items`; scatta solo quando una voce cresce, eliminare e accorciare passa sempre), routine dell'animale al massimo 4000 byte, e `elimina_il_mio_account()` non si blocca più se una voce condivisa ha un animale. Non cambia nessun dato. Si può rilanciare.
+
+Da lanciare con la versione "Salvadanaio" (v67, prima di pubblicarla; le versioni vecchie aperte sui telefoni non lo vedono e non si rompono):
+- `19-salvadanaio.sql`: tabelle `salvadanai` (mete: emoji, nome, nota, obiettivo facoltativo; al massimo 10 a persona) e `salvadanaio_mov` (registro dei versamenti e prelievi, ognuno con la sua data e ora, scelta da te e correggibile; al massimo 1000 per meta; il saldo non va sotto zero; dell'importo non si cambia niente, si toglie e si rifà). Separate dalle spese. Solo tue, nemmeno nelle liste condivise. L'eliminazione dell'account le porta via. In fondo c'è la query di controllo (ogni colonna deve valere true).
+
+Da lanciare con la versione "Mi manchi" (v68, prima di pubblicarla; vale anche per la funzione `send-reminders` da ripubblicare):
+- `20-mi-manchi.sql`: tabella `attivita_utente` (ultimo accesso, ultimo avviso, interruttore, avviso visto; una riga a persona, scritta solo con le funzioni) e le funzioni `registra_accesso`, `imposta_mi_manca`, `avviso_mi_manca_visto` (per l'app) e `mi_manca_da_inviare`, `mi_manca_segna` (solo per `send-reminders`). Notifica "la tua mascotte sente la tua mancanza": una volta per assenza di 2 giorni, alle 18:00 ora di Roma, solo a chi ha le notifiche e ha visto l'avviso; si spegne in Impostazioni. L'eliminazione dell'account porta via la riga. In fondo c'è la query di controllo (ogni colonna deve valere true).

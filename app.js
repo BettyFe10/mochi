@@ -945,7 +945,7 @@ const state = {
   items: [], liste: [], umori: {}, turni: {}, turniImp: { tipi: [], ciclo: [], ciclo_inizio: null, ciclo_fine: null }, tab: "oggi", todoFilter: "tutte", noteFilter: "tutte", cerca: "", fatteTutte: false,
   calMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   calSel: todayStr(), recapMonth: null, synced: true,
-  spese: { voci: [], budget: null }, speseMese: null, stAperti: new Set(), giorni: new Set(), pet: { righe: [] }
+  spese: { voci: [], budget: null }, salv: { mete: [], mov: [] }, speseMese: null, stAperti: new Set(), giorni: new Set(), pet: { righe: [] }
 };
 
 // Il testo accanto al pallino dice la verità: senza rete "offline", con la rete ma senza risposta dal server "non sincronizzato"
@@ -3069,9 +3069,9 @@ function cleanSpesa(r) {
 }
 const cleanBudget = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= MAX_CENT ? n : null; };
 /* Supabase risponde al massimo con 1000 righe per volta: si legge a pagine fino all'ultima (tetto 6000, oltre il limite di 5000 per account) */
-async function leggiPagine(pagina) {
+async function leggiPagine(pagina, max = 6000) {
   const tutte = [];
-  for (let da = 0; da < 6000; da += 1000) {
+  for (let da = 0; da < max; da += 1000) {
     const { data, error } = await pagina(da, da + 999);
     if (error) throw error;
     tutte.push(...(data || []));
@@ -3115,8 +3115,10 @@ const SpeseStore = {
   }
 };
 async function caricaSpese(spento) {
+  const sv = caricaSalvadanaio(spento); // in parallelo, non lancia mai errori
   try { if (spento) throw 0; state.spese = await SpeseStore.carica(); LS.set("mochi.speseCache", state.spese); }
   catch { const c = LS.get("mochi.speseCache", null); state.spese = { voci: (Array.isArray(c?.voci) ? c.voci : []).map(cleanSpesa).filter(Boolean), budget: cleanBudget(c?.budget) }; }
+  await sv;
 }
 const speseDelMese = (m) => { const k = monthKey(m); return state.spese.voci.filter((v) => v.giorno.startsWith(k)); };
 const totaleMese = (m) => speseDelMese(m).reduce((a, v) => a + v.importo_cent, 0);
@@ -3140,6 +3142,7 @@ function viewSpese() {
       <div class="calhead"><button class="iconbtn" data-act="spese-mese" data-v="-1" aria-label="Mese prima">‹</button><h2>${MESI[m.getMonth()]} ${m.getFullYear()}</h2><button class="iconbtn" data-act="spese-mese" data-v="1" aria-label="Mese dopo">›</button></div>
       <div class="sp-tot"><span>${cur ? "Questo mese hai speso" : `A ${MESI[m.getMonth()]} hai speso`}</span><b>${euro(tot)}</b>${barra}</div>
       <button class="btn primary sp-add" data-act="spesa-nuova">+ Aggiungi una spesa</button>
+      ${salvadanaioHtml()}
     </div><div class="col-side">
       <div class="sec"><h2>Per categoria</h2></div>
       ${cats.length ? `<div class="sp-cats">${cats.map(([k, c]) => { const x = catSpesa(k); return `<div class="sp-cat"><span class="sp-e" style="--cc:${x[3]}">${x[1]}</span>
@@ -3227,6 +3230,291 @@ async function chiediBudget() {
   const prima = state.spese.budget; state.spese.budget = cent; render();
   try { await SpeseStore.salvaBudget(cent); if (!ONLINE_MODE) SpeseStore._local(); LS.set("mochi.speseCache", state.spese); toast(cent ? `Budget: ${euro(cent)} al mese` : "Budget tolto"); }
   catch { state.spese.budget = prima; render(); toast("Non sono riuscita a salvarlo"); }
+}
+
+/* =========================================================
+   SALVADANAIO ("Sto conservando per...") - dentro la pagina Spese, ma SEPARATO dalle spese: non entra in nessun totale,
+   categoria o budget. Mete (salvadanai) e registro dei versamenti/prelievi (salvadanaio_mov, 19-salvadanaio.sql).
+   Il registro non si modifica: si aggiunge o si annulla una riga (il server mette data e ora). Il saldo non va sotto zero.
+   Ospite: tutto in localStorage ("mochi.salvadanaio"); online: sul server, con la cache "mochi.salvadanaioCache". Senza rete non c'è coda.
+   ========================================================= */
+const SV_MAX_METE = 10, SV_MAX_MOV = 1000, SV_MAX_CENT = 1000000000;
+const SV_EMOJI = ["🐷", "✈️", "🏠", "🎁", "🐶", "💼", "📚", "🌸", "🍳", "🎉", "🫂", "🛒"];
+const svEmojiOk = (v) => { const s = taglia(str(v).trim(), 16); return s && !/[\u0000-\u001f<>&"]/.test(s) ? s : "🐷"; };
+function cleanMeta(r) {
+  if (!r || typeof r !== "object") return null;
+  const id = typeof r.id === "string" && RE_ID.test(r.id) ? r.id : null, nome = taglia(str(r.nome).trim(), 60), o = Number(r.obiettivo_cent);
+  if (!id || !nome) return null;
+  return { id, nome, emoji: svEmojiOk(r.emoji), nota: taglia(str(r.nota).trim(), 300), obiettivo_cent: Number.isInteger(o) && o >= 1 && o <= SV_MAX_CENT ? o : null, created_at: isIso(r.created_at) ? r.created_at : "" };
+}
+function cleanMov(r) {
+  if (!r || typeof r !== "object") return null;
+  const id = typeof r.id === "string" && RE_ID.test(r.id) ? r.id : null, mid = typeof r.salvadanaio_id === "string" && RE_ID.test(r.salvadanaio_id) ? r.salvadanaio_id : null, c = Number(r.importo_cent);
+  if (!id || !mid || !Number.isInteger(c) || c === 0 || Math.abs(c) > SV_MAX_CENT) return null;
+  const created_at = isIso(r.created_at) ? r.created_at : "";
+  return { id, salvadanaio_id: mid, importo_cent: c, nota: taglia(str(r.nota).trim(), 120), quando: isIso(r.quando) ? r.quando : created_at, created_at };
+}
+// {mete, mov} qualunque (dispositivo, cache, server) -> solo righe valide, senza doppioni, nei limiti
+function cleanSalv(o) {
+  const visti = new Set(), mete = (Array.isArray(o?.mete) ? o.mete : []).map(cleanMeta).filter((x) => x && !visti.has(x.id) && visti.add(x.id)).slice(0, SV_MAX_METE);
+  const ids = new Set(mete.map((x) => x.id)), vm = new Set(), n = {};
+  const mov = (Array.isArray(o?.mov) ? o.mov : []).map(cleanMov).filter((x) => x && ids.has(x.salvadanaio_id) && !vm.has(x.id) && vm.add(x.id) && (n[x.salvadanaio_id] = (n[x.salvadanaio_id] || 0) + 1) <= SV_MAX_MOV);
+  return { mete, mov };
+}
+const svSaldo = (id) => state.salv.mov.reduce((a, x) => a + (x.salvadanaio_id === id ? x.importo_cent : 0), 0);
+// il registro va per "quando" (il più recente in alto), poi per quando è stato scritto
+const svMs = (x) => Date.parse(x) || 0;
+const svOrdine = (a, b) => svMs(b.quando) - svMs(a.quando) || svMs(b.created_at) - svMs(a.created_at);
+const svMovDi = (id) => state.salv.mov.filter((x) => x.salvadanaio_id === id).sort(svOrdine);
+// "quando" scelto dall'utente: data (aaaa-mm-gg) e ora facoltativa. Oggi senza ora = adesso; un altro giorno senza ora = mezzogiorno.
+// Come il server: non oltre 1 giorno nel futuro, non più di 10 anni fa. null = fuori dai limiti
+function svQuandoDa(giorno, ora) {
+  if (!validYmd(giorno)) return null;
+  const adesso = new Date(); let d;
+  if (!ora && giorno === todayStr()) d = adesso;
+  else { const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(ora || ""); if (ora && !m) return null; const [y, mo, g] = giorno.split("-").map(Number); d = new Date(y, mo - 1, g, m ? +m[1] : 12, m ? +m[2] : 0); }
+  const ms = d.getTime(); if (isNaN(ms) || ms > adesso.getTime() + 864e5 || ms < adesso.getTime() - 3650 * 864e5) return null;
+  return d.toISOString();
+}
+const svHHMM = (iso) => new Date(iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+const svPct = (s, o) => (o ? Math.max(0, Math.min(100, Math.round((s / o) * 100))) : 0);
+const svSegno = (c) => `${c > 0 ? "+" : "-"} ${fmtImporto(Math.abs(c))} euro`;
+function svQuando(iso) {
+  if (!isIso(iso)) return "";
+  const d = new Date(iso), g = niceDate(ymd(d));
+  return `${g.charAt(0).toLowerCase() + g.slice(1)} alle ${svHHMM(iso)}`;
+}
+const svErrore = (e) => { const m = String(e?.message || ""); return /1000 movimenti/.test(m) ? "Hai raggiunto il limite di 1000 movimenti per questa meta" : /10 mete/.test(m) ? "Hai raggiunto il limite di 10 mete del salvadanaio" : /prelevare/i.test(m) ? "Non puoi prelevare più di quello che hai messo da parte" : /fetch|network|Failed/i.test(m) ? "Sei offline: riprova tra poco" : "Non sono riuscita a salvare"; };
+const SalvStore = {
+  async carica() {
+    if (!ONLINE_MODE) return cleanSalv(LS.get("mochi.salvadanaio", null));
+    const [m, mov] = await Promise.all([
+      store.sb.from("salvadanai").select("id,nome,emoji,nota,obiettivo_cent,created_at").order("created_at").order("id"),
+      leggiPagine((da, a) => store.sb.from("salvadanaio_mov").select("id,salvadanaio_id,importo_cent,nota,quando,created_at").order("created_at").order("id").range(da, a), SV_MAX_METE * SV_MAX_MOV)
+    ]);
+    if (m.error) throw m.error;
+    return cleanSalv({ mete: (m.data || []).map((r) => ({ ...r, id: String(r.id) })), mov: mov.map((r) => ({ ...r, id: String(r.id), salvadanaio_id: String(r.salvadanaio_id) })) });
+  },
+  // dopo ogni cambiamento: da ospite nel dispositivo (è la vera copia), online solo la cache
+  salva() { LS.set(ONLINE_MODE ? "mochi.salvadanaioCache" : "mochi.salvadanaio", { mete: state.salv.mete, mov: state.salv.mov }); },
+  async creaMeta(m) {
+    if (!ONLINE_MODE) return { ...m, id: uid(), created_at: new Date().toISOString() };
+    const { data, error } = await store.sb.from("salvadanai").insert({ nome: m.nome, emoji: m.emoji, nota: m.nota || null, obiettivo_cent: m.obiettivo_cent }).select("id,created_at").single();
+    if (error) throw error;
+    return { ...m, id: String(data.id), created_at: isIso(data.created_at) ? data.created_at : new Date().toISOString() };
+  },
+  async cambiaMeta(m) {
+    if (!ONLINE_MODE) return;
+    const { error } = await store.sb.from("salvadanai").update({ nome: m.nome, emoji: m.emoji, nota: m.nota || null, obiettivo_cent: m.obiettivo_cent }).eq("id", m.id);
+    if (error) throw error;
+  },
+  async eliminaMeta(id) {
+    if (!ONLINE_MODE) return;
+    const { error } = await store.sb.from("salvadanai").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async aggiungiMov(mv) {
+    if (!ONLINE_MODE) return { ...mv, id: uid(), created_at: new Date().toISOString() };
+    const { data, error } = await store.sb.from("salvadanaio_mov").insert({ salvadanaio_id: mv.salvadanaio_id, importo_cent: mv.importo_cent, nota: mv.nota || null, quando: mv.quando }).select("id,created_at").single();
+    if (error) throw error;
+    return { ...mv, id: String(data.id), created_at: isIso(data.created_at) ? data.created_at : new Date().toISOString() };
+  },
+  // dell'importo non si cambia niente: si correggono solo data e nota
+  async correggiMov(mv) {
+    if (!ONLINE_MODE) return;
+    const { error } = await store.sb.from("salvadanaio_mov").update({ quando: mv.quando, nota: mv.nota || null }).eq("id", mv.id);
+    if (error) throw error;
+  },
+  async eliminaMov(id) {
+    if (!ONLINE_MODE) return;
+    const { error } = await store.sb.from("salvadanaio_mov").delete().eq("id", id);
+    if (error) throw error;
+  }
+};
+async function caricaSalvadanaio(spento) {
+  try { if (spento) throw 0; state.salv = await SalvStore.carica(); if (ONLINE_MODE) LS.set("mochi.salvadanaioCache", state.salv); }
+  catch { state.salv = cleanSalv(LS.get("mochi.salvadanaioCache", null)); }
+}
+// Nel backup: ogni meta con i suoi movimenti (dal più vecchio)
+function svPerExport(s) {
+  return s.mete.map((m) => ({ id: m.id, nome: m.nome, emoji: m.emoji, nota: m.nota || null, obiettivo_cent: m.obiettivo_cent, creata_il: m.created_at || null,
+    movimenti: s.mov.filter((x) => x.salvadanaio_id === m.id).sort((a, b) => -svOrdine(a, b)).map((x) => ({ importo_cent: x.importo_cent, nota: x.nota || null, data_ora: x.quando || null, registrato_il: x.created_at || null })) }));
+}
+// Passaggio da ospite: i limiti si controllano PRIMA di scrivere; se non entra tutto l'errore ferma il passaggio e il dispositivo resta com'è.
+// Quello che c'è già nell'account (stesso id) si salta: ripetere non crea doppioni. Data e ora le rimette il server (quella del passaggio).
+async function portaSalvadanaio(s) {
+  const sb = store.sb, gia = new Set((giu(await sb.from("salvadanai").select("id")).data || []).map((r) => String(r.id)));
+  const nuove = s.mete.filter((m) => !gia.has(m.id));
+  if (gia.size + nuove.length > SV_MAX_METE) throw new Error("limite di mete del salvadanaio");
+  const movGia = gia.size ? await leggiPagine((da, a) => sb.from("salvadanaio_mov").select("id,salvadanaio_id").range(da, a), SV_MAX_METE * SV_MAX_MOV) : [];
+  const idGia = new Set(movGia.map((r) => String(r.id))), conta = {};
+  movGia.forEach((r) => { conta[r.salvadanaio_id] = (conta[r.salvadanaio_id] || 0) + 1; });
+  const daPortare = [...s.mov].reverse().sort((a, b) => svMs(a.created_at) - svMs(b.created_at)).filter((x) => !idGia.has(x.id));
+  daPortare.forEach((x) => { conta[x.salvadanaio_id] = (conta[x.salvadanaio_id] || 0) + 1; });
+  if (Object.values(conta).some((n) => n > SV_MAX_MOV)) throw new Error("limite di movimenti del salvadanaio");
+  if (nuove.length) giu(await sb.from("salvadanai").insert(nuove.map((m) => ({ id: m.id, nome: m.nome, emoji: m.emoji, nota: m.nota || null, obiettivo_cent: m.obiettivo_cent }))));
+  const righe = daPortare.map((x) => ({ id: x.id, salvadanaio_id: x.salvadanaio_id, importo_cent: x.importo_cent, nota: x.nota || null, quando: x.quando || undefined }));
+  await aBlocchi(righe, righe.length <= 100 ? 1 : 25, async (b) => giu(await sb.from("salvadanaio_mov").insert(b)));
+}
+
+function salvadanaioHtml() {
+  const mete = state.salv.mete;
+  const schede = mete.map((m) => {
+    const s = svSaldo(m.id), o = m.obiettivo_cent, pct = svPct(s, o);
+    return `<button class="sp-riga sv-card" data-act="sv-apri" data-id="${esc(m.id)}"><span class="sp-e">${esc(m.emoji)}</span>
+      <span class="sp-t"><b>${esc(m.nome)}</b>${o ? `<small>${s >= o ? "Meta raggiunta" : `${pct}% di ${euro(o)}`}</small><span class="sp-bar" role="img" aria-label="${pct}% della meta"><i style="width:${pct}%"></i></span>` : `<small>Hai messo da parte <strong>${euro(s)}</strong></small>`}</span>${o ? `<b class="sp-i">${euro(s)}</b>` : ""}</button>`;
+  }).join("");
+  return `<div class="sv-blocco"><div class="sec"><h2>Sto conservando per...</h2>${mete.length ? `<span class="count">${mete.length}</span>` : ""}</div>
+    ${mete.length ? `<div class="list">${schede}</div>`
+      : `<div class="empty sv-vuoto">Stai mettendo da parte qualcosa per un viaggio, un regalo o un imprevisto? Crea una meta e segna quanto conservi, un passo alla volta.</div>`}
+    <button class="btn sv-nuova" data-act="sv-nuova">+ Nuova meta</button></div>`;
+}
+let svApertaId = null, svDraft = null, svMovDraft = null, svBusy = false;
+function apriSalv(id) {
+  const m = state.salv.mete.find((x) => x.id === id);
+  if (!m) { closeSheet(); return; }
+  svApertaId = id;
+  const s = svSaldo(id), o = m.obiettivo_cent, pct = svPct(s, o), movs = svMovDi(id);
+  openSheet(`<div class="sv-testa"><span class="sp-e sv-e">${esc(m.emoji)}</span><div class="sv-tt"><h2>${esc(m.nome)}</h2>${m.nota ? `<p class="sv-nota">${esc(m.nota)}</p>` : ""}</div></div>
+    <div class="sv-saldo"><span>Hai messo da parte</span><b>${euro(s)}</b>${o ? `<span class="sp-bar" role="img" aria-label="${pct}% della meta"><i style="width:${pct}%"></i></span><small>${s >= o ? `Meta raggiunta: ${euro(o)}` : `Obiettivo ${euro(o)}, mancano ${euro(o - s)}`}</small>` : ""}</div>
+    <div class="sv-azioni"><button class="btn primary" data-act="sv-versa">+ Aggiungi</button><button class="btn" data-act="sv-preleva">Preleva</button></div>
+    <h3 class="sv-h">Registro</h3>
+    ${movs.length ? `<ul class="sv-reg">${movs.map((x) => `<li class="sv-mov"><div class="sv-mt"><b class="sv-seg ${x.importo_cent > 0 ? "pos" : "neg"}">${svSegno(x.importo_cent)}</b>${svQuando(x.quando) ? `<small>${esc(svQuando(x.quando))}</small>` : ""}${x.nota ? `<span class="sv-mn">${esc(x.nota)}</span>` : ""}</div>
+        <span class="sv-bt"><button class="fbtn sv-x" data-act="sv-mov-mod" data-id="${esc(x.id)}" aria-label="Correggi data e nota di ${esc(svSegno(x.importo_cent))}">✎</button><button class="fbtn sv-x" data-act="sv-mov-del" data-id="${esc(x.id)}" aria-label="Annulla il movimento ${esc(svSegno(x.importo_cent))}">Annulla</button></span></li>`).join("")}</ul>`
+      : `<p class="hint">Ancora nessun movimento. Tocca <b>+ Aggiungi</b> quando metti da parte qualcosa.</p>`}
+    <div class="actions"><button class="btn danger" data-act="sv-elimina">Elimina meta</button><button class="btn" data-act="sv-modifica">Modifica meta</button></div>`);
+}
+function apriSvEditor(m) {
+  svDraft = m ? { id: m.id, nome: m.nome, emoji: m.emoji, nota: m.nota, obiettivo: m.obiettivo_cent ? fmtImporto(m.obiettivo_cent) : "" } : { id: null, nome: "", emoji: "🐷", nota: "", obiettivo: "" };
+  const d = svDraft;
+  openSheet(`<h2><span class="mbox">${mascot()}</span>${d.id ? "Modifica meta" : "Nuova meta"}</h2>
+    <div class="field"><label for="svNome">Per cosa stai mettendo da parte?</label><input class="input big" id="svNome" maxlength="60" placeholder="Es. Viaggio, Regalo, Imprevisti" autocomplete="off" value="${esc(d.nome)}"></div>
+    <div class="field"><label>Simbolo</label><div class="emojis">${SV_EMOJI.map((e) => `<button type="button" class="${d.emoji === e ? "on" : ""}" data-act="sv-emoji" data-v="${e}" aria-label="Simbolo ${e}">${e}</button>`).join("")}</div>
+      <label for="svEmoji" style="margin-top:10px">Aggiungi la tua emoji</label>
+      <input class="input" id="svEmoji" maxlength="8" placeholder="Scrivi una emoji" value="${SV_EMOJI.includes(d.emoji) ? "" : esc(d.emoji)}" autocomplete="off" aria-describedby="svEmojiAiuto">
+      <p class="hint" id="svEmojiAiuto">Una sola emoji, dalla tastiera</p></div>
+    <div class="field"><label for="svObiettivo">Obiettivo in euro, se vuoi</label><input class="input" id="svObiettivo" inputmode="decimal" maxlength="14" placeholder="Es. 800" autocomplete="off" value="${esc(d.obiettivo)}"></div>
+    <div class="field"><label for="svNota">Nota, se vuoi</label><textarea class="input" id="svNota" rows="2" maxlength="300" placeholder="Es. Per l'estate">${esc(d.nota)}</textarea></div>
+    <div class="actions"><button class="btn" data-act="sv-indietro">${d.id ? "Indietro" : "Annulla"}</button><button class="btn primary" data-act="sv-salva">Salva</button></div>`);
+  const ie = $("#svEmoji");
+  ie.addEventListener("input", () => {
+    const e = emojiValida(ie.value);
+    ie.setAttribute("aria-invalid", ie.value.trim() && !e ? "true" : "false");
+    if (!ie.value.trim() && !SV_EMOJI.includes(d.emoji)) { d.emoji = "🐷"; document.querySelector('.emojis [data-v="🐷"]')?.classList.add("on"); }
+    if (!e) return;
+    d.emoji = e; document.querySelectorAll('.emojis [data-act="sv-emoji"]').forEach((b) => b.classList.remove("on"));
+  });
+  $("#svNome").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); salvaSvMeta($("[data-act=sv-salva]")); } });
+  if (!d.id) setTimeout(() => $("#svNome")?.focus(), 250);
+}
+async function salvaSvMeta(btn) {
+  const d = svDraft; if (!d || svBusy) return;
+  const nome = taglia(($("#svNome")?.value || "").trim(), 60), nota = taglia(($("#svNota")?.value || "").trim(), 300), ob = ($("#svObiettivo")?.value || "").trim();
+  if (!nome) { toast("Dai un nome alla meta 🌸"); $("#svNome")?.focus(); return; }
+  const obiettivo = ob ? parseImporto(ob) : null;
+  if (ob && obiettivo === null) { toast("Obiettivo non valido: es. 800 (massimo 999.999,99 €)"); $("#svObiettivo")?.focus(); return; }
+  if (!d.id && state.salv.mete.length >= SV_MAX_METE) { toast("Hai raggiunto il limite di 10 mete del salvadanaio"); return; }
+  svBusy = true; if (btn) btn.disabled = true;
+  try {
+    const m = { id: d.id, nome, emoji: svEmojiOk(d.emoji), nota, obiettivo_cent: obiettivo };
+    if (d.id) {
+      await SalvStore.cambiaMeta(m);
+      state.salv.mete = state.salv.mete.map((x) => (x.id === d.id ? { ...x, ...m } : x));
+    } else {
+      const nuova = await SalvStore.creaMeta(m);
+      state.salv.mete = [...state.salv.mete, nuova];
+    }
+    SalvStore.salva(); render();
+    if (d.id) { apriSalv(d.id); toast("Meta aggiornata"); } else { closeSheet(); toast("Meta creata"); }
+  } catch (e) { if (btn) btn.disabled = false; toast(svErrore(e)); }
+  finally { svBusy = false; }
+}
+// campo "Quando": giorno (oggi di base) e ora facoltativa (vuota = adesso se è oggi, altrimenti mezzogiorno)
+const svQuandoCampi = (giorno, ora) => `<div class="field"><label for="svData">Quando</label><div class="sp-quando">
+  <input class="input" type="date" id="svData" value="${esc(giorno)}" min="${ymd(addDays(new Date(), -3650))}" max="${ymd(addDays(new Date(), 1))}" aria-label="Giorno">
+  <input class="input sv-ora" type="time" id="svOra" value="${esc(ora)}" aria-label="Ora, se vuoi"></div><p class="hint">L'ora è facoltativa. Puoi registrare anche una cosa di prima.</p></div>`;
+const SV_MSG_QUANDO = "Controlla la data: al massimo domani e non oltre 10 anni fa";
+function apriSvMov(segno) {
+  const m = state.salv.mete.find((x) => x.id === svApertaId); if (!m) return;
+  const s = svSaldo(m.id);
+  if (segno < 0 && s <= 0) { toast("Non c'è ancora niente da prelevare"); return; }
+  svMovDraft = { id: m.id, segno };
+  openSheet(`<h2><span class="mbox">${mascot()}</span>${segno > 0 ? "Quanto aggiungi?" : "Quanto prelevi?"}</h2>
+    <div class="field sp-imp"><input class="input big" id="svImporto" inputmode="decimal" enterkeyhint="done" placeholder="0,00" maxlength="14" autocomplete="off" aria-label="Importo in euro"><span class="eur">€</span></div>
+    ${segno < 0 ? `<p class="hint" style="margin-top:-8px">Puoi prelevare al massimo ${euro(s)}</p>` : ""}
+    ${svQuandoCampi(todayStr(), "")}
+    <div class="field"><label for="svMovNota">Nota, se vuoi</label><input class="input" id="svMovNota" maxlength="120" placeholder="${segno > 0 ? "Es. Stipendio di novembre" : "Es. Biglietto del treno"}" autocomplete="off"></div>
+    <div class="actions"><button class="btn" data-act="sv-apri" data-id="${esc(m.id)}">Annulla</button><button class="btn primary" data-act="sv-mov-salva">Salva</button></div>`);
+  const imp = $("#svImporto");
+  imp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); salvaSvMov($("[data-act=sv-mov-salva]")); } });
+  setTimeout(() => imp.focus(), 250);
+}
+async function salvaSvMov(btn) {
+  const d = svMovDraft; if (!d || svBusy) return;
+  const raw = $("#svImporto")?.value, cent = parseImporto(raw);
+  if (cent === null) { toast(/\d/.test(raw || "") ? "Importo non valido: es. 25,00 (massimo 999.999,99 €)" : "Scrivi quanto, es. 25,00"); $("#svImporto")?.focus(); return; }
+  const quando = svQuandoDa($("#svData")?.value || "", $("#svOra")?.value || "");
+  if (!quando) { toast(SV_MSG_QUANDO); return; }
+  const saldo = svSaldo(d.id);
+  if (d.segno < 0 && cent > saldo) { toast(`Hai messo da parte ${euro(saldo)}: non puoi prelevare di più`); $("#svImporto")?.focus(); return; }
+  if (state.salv.mov.filter((x) => x.salvadanaio_id === d.id).length >= SV_MAX_MOV) { toast("Hai raggiunto il limite di 1000 movimenti per questa meta"); return; }
+  svBusy = true; if (btn) btn.disabled = true;
+  try {
+    const nuovo = await SalvStore.aggiungiMov({ salvadanaio_id: d.id, importo_cent: d.segno * cent, nota: taglia(($("#svMovNota")?.value || "").trim(), 120), quando });
+    state.salv.mov = [nuovo, ...state.salv.mov];
+    SalvStore.salva(); render(); apriSalv(d.id);
+    toast(d.segno > 0 ? `${euro(cent)} messi da parte 🐷` : `${euro(cent)} prelevati`);
+  } catch (e) { if (btn) btn.disabled = false; toast(/Data fuori/i.test(e?.message || "") ? SV_MSG_QUANDO : svErrore(e)); }
+  finally { svBusy = false; }
+}
+function apriSvCorreggi(id) {
+  const x = state.salv.mov.find((v) => v.id === id); if (!x) return;
+  svMovDraft = { id: x.salvadanaio_id, mov: x.id };
+  const ref = isIso(x.quando) ? new Date(x.quando) : new Date();
+  openSheet(`<h2><span class="mbox">${mascot()}</span>Correggi il movimento</h2>
+    <p class="sv-nota" style="margin:0 0 var(--s4)">${esc(svSegno(x.importo_cent))}. L'importo non si cambia: se è sbagliato, annulla il movimento e rifallo.</p>
+    ${svQuandoCampi(ymd(ref), isIso(x.quando) ? svHHMM(x.quando) : "")}
+    <div class="field"><label for="svMovNota">Nota, se vuoi</label><input class="input" id="svMovNota" maxlength="120" autocomplete="off" value="${esc(x.nota)}"></div>
+    <div class="actions"><button class="btn" data-act="sv-apri" data-id="${esc(x.salvadanaio_id)}">Annulla</button><button class="btn primary" data-act="sv-mov-corr">Salva</button></div>`);
+}
+async function salvaSvCorrezione(btn) {
+  const d = svMovDraft, x = d && state.salv.mov.find((v) => v.id === d.mov); if (!x || svBusy) return;
+  const quando = svQuandoDa($("#svData")?.value || "", $("#svOra")?.value || "");
+  if (!quando) { toast(SV_MSG_QUANDO); return; }
+  const nuovo = { ...x, quando, nota: taglia(($("#svMovNota")?.value || "").trim(), 120) };
+  svBusy = true; if (btn) btn.disabled = true;
+  try {
+    await SalvStore.correggiMov(nuovo);
+    state.salv.mov = state.salv.mov.map((v) => (v.id === x.id ? nuovo : v));
+    SalvStore.salva(); render(); apriSalv(x.salvadanaio_id); toast("Movimento corretto");
+  } catch (e) { if (btn) btn.disabled = false; toast(/Data fuori/i.test(e?.message || "") ? SV_MSG_QUANDO : svErrore(e)); }
+  finally { svBusy = false; }
+}
+async function annullaSvMov(id) {
+  const x = state.salv.mov.find((v) => v.id === id); if (!x || svBusy) return;
+  if (x.importo_cent > 0 && svSaldo(x.salvadanaio_id) - x.importo_cent < 0) { toast("Prima annulla i prelievi fatti dopo: i soldi non basterebbero"); return; }
+  const si = await ask({ title: "Annullare questo movimento?", text: `${svSegno(x.importo_cent)}${svQuando(x.quando) ? `, ${svQuando(x.quando)}` : ""}. Sparisce dal registro e il saldo torna com'era.`, ok: "Sì, annulla", no: "No, tienilo", danger: true });
+  if (!si) { apriSalv(x.salvadanaio_id); return; }
+  svBusy = true;
+  try {
+    await SalvStore.eliminaMov(id);
+    state.salv.mov = state.salv.mov.filter((v) => v.id !== id);
+    SalvStore.salva(); render(); apriSalv(x.salvadanaio_id); toast("Movimento annullato");
+  } catch (e) { apriSalv(x.salvadanaio_id); toast(/fetch|network|Failed/i.test(e?.message || "") ? "Sei offline: riprova tra poco" : "Non sono riuscita ad annullarlo"); }
+  finally { svBusy = false; }
+}
+async function eliminaSvMeta() {
+  const m = state.salv.mete.find((x) => x.id === svApertaId); if (!m || svBusy) return;
+  const n = state.salv.mov.filter((x) => x.salvadanaio_id === m.id).length;
+  const si = await ask({ title: "Eliminare la meta?", text: `"${m.nome}" sparisce${n ? `, insieme a tutti i suoi ${n === 1 ? "versamenti e prelievi (1 movimento)" : `versamenti e prelievi (${n} movimenti)`}` : ""}. Non si può tornare indietro.`, ok: "Sì, elimina", no: "No, tienila", danger: true });
+  if (!si) { apriSalv(m.id); return; }
+  svBusy = true;
+  try {
+    await SalvStore.eliminaMeta(m.id);
+    state.salv.mete = state.salv.mete.filter((x) => x.id !== m.id); state.salv.mov = state.salv.mov.filter((x) => x.salvadanaio_id !== m.id);
+    svApertaId = null; SalvStore.salva(); render(); toast("Meta eliminata");
+  } catch (e) { apriSalv(m.id); toast(/fetch|network|Failed/i.test(e?.message || "") ? "Sei offline: riprova tra poco" : "Non sono riuscita a eliminarla"); }
+  finally { svBusy = false; }
 }
 
 /* =========================================================
@@ -3426,7 +3714,7 @@ function voceListaHtml(it, max = 0) {
    e SOLO alla fine, se è andato tutto bene, si svuota il dispositivo.
    ========================================================= */
 const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CHIAVI_OSPITE = ["mochi.items", "mochi.umori", "mochi.turni", "mochi.spese", "mochi.giorniAttivi", "mochi.petRegistro", "mochi.ospite.custom"];
+const CHIAVI_OSPITE = ["mochi.items", "mochi.umori", "mochi.turni", "mochi.spese", "mochi.salvadanaio", "mochi.giorniAttivi", "mochi.petRegistro", "mochi.ospite.custom"];
 // Spiegazione prima di entrare come ospite (dalla schermata di accesso)
 function apriOspite() {
   const passaggio = LS.get("mochi.ospite", null) === "passaggio";
@@ -3486,9 +3774,10 @@ function datiOspite() {
   const ga = LS.get("mochi.giorniAttivi", []);
   return { items, umori, turni: { imp: cleanTurniImp(t.imp), giorni: giorniT },
     spese: { voci: (Array.isArray(sp.voci) ? sp.voci : []).map(cleanSpesa).filter(Boolean).slice(0, 5000), budget: cleanBudget(sp.budget) },
+    salv: cleanSalv(LS.get("mochi.salvadanaio", null)),
     giorni: (Array.isArray(ga) ? ga : []).map(str).filter(giornoValido), pet: petDaLS("mochi.petRegistro") };
 }
-const quanteCose = (d) => d.items.length + Object.keys(d.umori).length + Object.keys(d.turni.giorni).length + d.spese.voci.length + (d.pet.length ? 1 : 0);
+const quanteCose = (d) => d.items.length + Object.keys(d.umori).length + Object.keys(d.turni.giorni).length + d.spese.voci.length + d.salv.mete.length + (d.pet.length ? 1 : 0);
 const haDatiOspite = (d) => quanteCose(d) > 0 || d.pet.length > 0 || d.giorni.length > 0 || d.turni.imp.tipi.length > 0 || !!d.spese.budget;
 const plur = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 function elencoCose(d) {
@@ -3498,6 +3787,7 @@ function elencoCose(d) {
   if (Object.keys(d.umori).length) out.push(plur(Object.keys(d.umori).length, "giornata colorata", "giornate colorate"));
   if (Object.keys(d.turni.giorni).length) out.push(plur(Object.keys(d.turni.giorni).length, "turno", "turni"));
   if (d.spese.voci.length) out.push(plur(d.spese.voci.length, "spesa", "spese"));
+  if (d.salv.mete.length) out.push(plur(d.salv.mete.length, "meta del salvadanaio", "mete del salvadanaio"));
   if (d.pet.length) out.push("routine e pesi del tuo pet");
   return out;
 }
@@ -3557,6 +3847,14 @@ function idStabili() {
   const sp = LS.get("mochi.spese", {});
   if (sp && Array.isArray(sp.voci) && sp.voci.some((x) => x && !RE_UUID.test(String(x.id)))) LS.set("mochi.spese", { ...sp, voci: sp.voci.map((x) => (x && typeof x === "object" && !RE_UUID.test(String(x.id)) ? { ...x, id: crypto.randomUUID() } : x)) });
 }
+// anche le mete del salvadanaio e i loro movimenti: id uuid stabili e salvati subito (ripetere il passaggio non crea doppioni)
+function idStabiliSalv() {
+  const sv = LS.get("mochi.salvadanaio", null), fix = (x) => x && typeof x === "object" && !RE_UUID.test(String(x.id));
+  if (!sv || !Array.isArray(sv.mete) || !(sv.mete.some(fix) || (Array.isArray(sv.mov) && sv.mov.some(fix)))) return;
+  const mp = {}, mete = sv.mete.map((x) => { if (!fix(x)) return x; const n = crypto.randomUUID(); mp[x.id] = n; return { ...x, id: n }; });
+  const mov = (Array.isArray(sv.mov) ? sv.mov : []).map((x) => (x && typeof x === "object" ? { ...x, id: fix(x) ? crypto.randomUUID() : x.id, salvadanaio_id: mp[x.salvadanaio_id] || x.salvadanaio_id } : x));
+  LS.set("mochi.salvadanaio", { mete, mov });
+}
 const aBlocchi = async (righe, n, fn) => { for (let i = 0; i < righe.length; i += n) await fn(righe.slice(i, i + n)); };
 const giu = (r) => { if (r.error) throw r.error; return r; };
 // Preferenze: se l'account non ne ha, prende quelle dell'ospite; altrimenti restano quelle dell'account
@@ -3576,7 +3874,7 @@ async function eseguiPassaggio(btn) {
   passaggioInCorso = true; localStorage.removeItem(chiaveRimando()); if (btn) { btn.disabled = true; btn.textContent = "Porto le tue cose..."; }
   const sb = store.sb, me = store.user.id;
   try {
-    idStabili();
+    idStabili(); idStabiliSalv();
     const d = datiOspite(), giaPieno = state.items.length > 0 || state.spese.voci.length > 0;
     // 1) voci (cose da fare, appuntamenti, appunti con sottotask e posizione); quelle già presenti si lasciano come sono
     const righe = d.items.map((it) => ({ ...store.clean({ ...it, lista_id: null }) }));
@@ -3605,6 +3903,8 @@ async function eseguiPassaggio(btn) {
       const b = giu(await sb.from("spese_impostazioni").select("budget_cent").maybeSingle()).data;
       if (!b?.budget_cent) giu(await sb.from("spese_impostazioni").upsert({ user_id: me, budget_cent: d.spese.budget }, { onConflict: "user_id" }));
     }
+    // 4b) salvadanaio: prima si controllano i limiti (se non entra tutto non si carica niente e il dispositivo resta com'è)
+    if (d.salv.mete.length) await portaSalvadanaio(d.salv);
     // 5) giorni attivi della serie
     if (d.giorni.length) await GiorniStore.aggiungi(d.giorni);
     // 5b) routine e pesi del pet (quelli già nell'account restano come sono)
@@ -5475,11 +5775,13 @@ async function preparaBackup() {
   const entro = (p, ripiego) => Promise.race([Promise.resolve(p).catch(() => ripiego), new Promise((ok) => setTimeout(() => ok(ripiego), 5000))]);
   const online = ONLINE_MODE && !!store.user;
   const ric = online ? await entro(store.ricorrenti().then((r) => r.map(cleanRic)), ricorrenti) : [];
+  const sv = online ? await entro(SalvStore.carica(), state.salv) : cleanSalv(LS.get("mochi.salvadanaio", null));
   const msg = online ? await entro(store.mieiConsigli().then((r) => r.filter((m) => m && typeof m.testo === "string")), []) : [];
   // delle liste condivise esporto le mie informazioni, non i nomi né gli id delle altre persone
   const listeMie = state.liste.map((l) => ({ id: l.id, nome: l.nome, emoji: l.emoji, creata_da_me: !!store.user && l.proprietaria === store.user.id, numero_persone: Array.isArray(l.membri) ? l.membri.length : 1 }));
   const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), account: online ? { email: store.user.email || null, nome: NOME || null } : { ospite: true }, preferenze: CUSTOM, voci: state.items, liste: listeMie, ricorrenti: ric, messaggi_inviati: msg, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni },
     spese: { budget_mensile_cent: state.spese.budget, voci: [...state.spese.voci].sort(ordineSpese) },
+    salvadanaio: svPerExport(sv),
     giorni_attivi: [...state.giorni].sort(), concentrazione: serraCarica(),
     ...(usaPet ? { pet: { scheda: CUSTOM.pet, animali: ANIMALI, registro: [...petRighe].sort((a, b) => (a.giorno + a.tipo + a.chiave < b.giorno + b.tipo + b.chiave ? -1 : 1)) } } : {}) }, null, 2)], { type: "application/json" });
   return { blob, nome: `mochi-backup-${todayStr()}.json` };
@@ -5738,6 +6040,20 @@ document.addEventListener("click", async (e) => {
     case "spesa-elimina": eliminaSpesa(); break;
     case "spese-mese": { const g = state.speseMese || new Date(); state.speseMese = new Date(g.getFullYear(), g.getMonth() + (+v), 1); render(); break; }
     case "spese-budget": chiediBudget(); break;
+    // salvadanaio
+    case "sv-nuova": if (state.salv.mete.length >= SV_MAX_METE) toast("Hai raggiunto il limite di 10 mete del salvadanaio"); else apriSvEditor(null); break;
+    case "sv-apri": if (id) apriSalv(id); break;
+    case "sv-versa": apriSvMov(1); break;
+    case "sv-preleva": apriSvMov(-1); break;
+    case "sv-mov-salva": salvaSvMov(el); break;
+    case "sv-mov-del": annullaSvMov(id); break;
+    case "sv-mov-mod": apriSvCorreggi(id); break;
+    case "sv-mov-corr": salvaSvCorrezione(el); break;
+    case "sv-modifica": { const m = state.salv.mete.find((x) => x.id === svApertaId); if (m) apriSvEditor(m); break; }
+    case "sv-elimina": eliminaSvMeta(); break;
+    case "sv-indietro": if (svDraft?.id) apriSalv(svDraft.id); else closeSheet(); break;
+    case "sv-salva": salvaSvMeta(el); break;
+    case "sv-emoji": if (svDraft && SV_EMOJI.includes(v)) { svDraft.emoji = v; document.querySelectorAll('.emojis [data-act="sv-emoji"]').forEach((b) => b.classList.toggle("on", b.dataset.v === v)); const ie = $("#svEmoji"); if (ie) ie.value = ""; } break;
     // ospite
     case "riepilogo-chiudi": LS.set("mochi.riepilogo.chiuso", v || ""); render(); break;
     case "ospite-entra": entraOspite(); break;
@@ -6599,7 +6915,7 @@ async function startOnline() {
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
 let loginMode = "login";
 function clearLocal() {
-  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.focus.sessione", "mochi.benvenuto", "mochi.nome"].forEach((k) => localStorage.removeItem(k));
+  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.salvadanaioCache", "mochi.focus.sessione", "mochi.benvenuto", "mochi.nome"].forEach((k) => localStorage.removeItem(k));
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || k.startsWith("mochi.petCache.") || k.startsWith("mochi.petFesta.") || (k.startsWith("mochi.petDaInviare.") && !(LS.get(k, []) || []).length) || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)

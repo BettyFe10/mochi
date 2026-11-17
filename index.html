@@ -764,6 +764,45 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 .sp-pick button.on{border-color:var(--pink-d);background:var(--pink-l);color:var(--acc-t)}
 .sp-quando{display:flex;gap:8px;align-items:center}
 .sp-quando .input{flex:1;min-width:0;padding:9px 12px}
+/* ---------- Salvadanaio (Spese): "Sto conservando per..." ---------- */
+.sv-blocco{min-width:0}
+.sv-card .sp-e,.sv-e{--cc:var(--pink-l)}
+.sv-card .sp-t small{overflow-wrap:anywhere}
+.sv-card .sp-t strong{color:var(--ink)}
+.sv-card .sp-t .sp-bar{margin-top:6px;height:8px}
+.sv-vuoto{padding:var(--s3) var(--s4);font-size:14.5px}
+.sv-nuova{display:block;width:100%;margin-top:var(--s3)}
+.sv-testa{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s4);min-width:0}
+.sv-e{width:52px;height:52px;font-size:28px;border-radius:16px}
+.sv-tt{flex:1;min-width:0}
+.sv-tt h2{margin:0;overflow-wrap:anywhere}
+.sv-nota{margin:4px 0 0;color:var(--ink2);font-size:14px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-line}
+.sv-saldo{background:var(--bg2);border-radius:var(--r-l);padding:var(--s4);text-align:center;margin-bottom:var(--s4)}
+.sv-saldo>span:first-child{display:block;color:var(--ink2);font-size:13.5px;font-weight:700}
+.sv-saldo>b{display:block;font-family:var(--ft);font-size:32px;color:var(--acc-t);line-height:1.2;overflow-wrap:anywhere}
+.sv-saldo .sp-bar{margin-top:10px;background:var(--card)}
+.sv-saldo small{display:block;margin-top:6px;color:var(--ink2);font-size:13px}
+.sv-azioni{display:flex;gap:var(--s3);margin-bottom:var(--s4)}
+.sv-h{font-family:var(--ft);font-size:17px;margin:var(--s4) 0 var(--s2)}
+.sv-reg{list-style:none;margin:0 0 var(--s4);padding:0}
+.sv-mov{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:10px 0;border-bottom:1px solid var(--line)}
+.sv-mov:last-child{border-bottom:0}
+.sv-mt{flex:1;min-width:0}
+.sv-mt b,.sv-mt small,.sv-mn{display:block;overflow-wrap:anywhere}
+.sv-seg{font-size:15.5px}
+.sv-seg.pos{color:var(--acc-t)}
+.sv-mt small{color:var(--ink2);font-size:13px}
+.sv-mn{font-size:14px;margin-top:2px}
+.sv-x{padding:6px 12px;font-size:13px}
+.sv-bt{display:flex;gap:var(--s2);flex:none}
+.sv-ora{flex:0 0 118px;width:118px}
+.sp-quando .sv-ora{flex:0 0 118px}
+:root[data-stile="quaderno"] .sv-saldo{border-radius:var(--r-paper);border:1.5px solid var(--ink-a)}
+:root[data-stile="quaderno"] .sv-saldo>b{font-family:var(--fh);font-weight:400;font-size:38px}
+:root[data-stile="quaderno"][data-font] .sv-saldo>b{font-weight:700;font-size:32px}
+:root[data-stile="cartone"] .sv-saldo{border:2px solid var(--tratto-l);background:var(--sole)}
+:root[data-stile="cartone"] .sv-saldo>b,:root[data-stile="cartone"] .sv-saldo>span:first-child,:root[data-stile="cartone"] .sv-saldo small{color:var(--ink)}
+:root[data-stile="sobrio"] .sv-saldo{border:1px solid var(--line);border-radius:var(--r-m)}
 /* telefono: totale, categorie, elenco. Computer: totale ed elenco a sinistra, categorie a destra */
 @media (min-width:1024px){ .split.spese{grid-template-columns:minmax(0,1.2fr) minmax(320px,1fr);grid-template-areas:"top side" "lista side";grid-template-rows:auto 1fr} .split.spese .sp-top{grid-area:top} .split.spese .sp-lista{grid-area:lista} .split.spese .col-side{grid-area:side} .split.spese .col-side>.sec:first-child{margin-top:0} }
 :root[data-stile="quaderno"] :is(.sp-tot,.sp-riga,.sp-cats){border-radius:var(--r-paper);box-shadow:var(--edge);border:1.5px solid var(--ink-a)}

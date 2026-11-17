@@ -50,6 +50,23 @@ async function mandaConRetry(invio: () => Promise<unknown>, pausa = 1000, puoiRi
 // (nessuna iscrizione, iscrizioni scadute o rifiutate). Con soli errori passeggeri resta da inviare: il giro dopo (ogni minuto)
 // riprova, e il database lo scarta da solo dopo 2 ore.
 function daSegnareInviato(e: Esito) { return e.ok > 0 || e.passeggeri === 0; }
+// "La tua mascotte sente la tua mancanza": il nome è quello scelto dalla persona (ripulito) oppure quello della mascotte
+const NOMI_MASCOTTE: Record<string, string> = { mochi: "Mochi", nigi: "Nigi", bolla: "Bolla", miso: "Miso", bambu: "Bambù", daifuku: "Daifuku", tamago: "Tamago", kame: "Kame", saltello: "Saltello", castagna: "Castagna", yuzu: "Yuzu", marimo: "Marimo", sakura: "Sakura", nori: "Nori", zucchero: "Zucchero" };
+function nomeMascotte(scelto?: string | null, chiave?: string | null): string {
+  const n = String(scelto ?? "").replace(/[<>&"'`\u0000-\u001f\u007f]/g, "").trim().slice(0, 16);
+  return n || NOMI_MASCOTTE[String(chiave ?? "")] || "Mochi";
+}
+// Frasi senza genere (va bene per chiunque); la variante cambia da persona a persona e da giorno a giorno
+const CORPI_MI_MANCA = [
+  "Sono passati un paio di giorni: quando vuoi, le tue cose sono qui ad aspettarti.",
+  "Un saluto veloce? Le tue cose sono al sicuro, come le hai lasciate 🍡",
+  "Nessuna fretta: quando torni trovi tutto al suo posto.",
+  "Ti basta un minuto per dare un'occhiata a come va oggi 🌸",
+];
+function fraseMiManca(nome: string, userId: string, giorno: number): { title: string; body: string } {
+  let h = giorno; for (const c of userId) h = (h * 31 + c.charCodeAt(0)) % 100003;
+  return { title: `${nome} sente la tua mancanza 🌸`.slice(0, 60), body: CORPI_MI_MANCA[h % CORPI_MI_MANCA.length] };
+}
 // --- fine helper
 
 const KIND_EMOJI: Record<string, string> = { todo: "✅", event: "📅", note: "📝" };
@@ -81,9 +98,14 @@ Deno.serve(async (req) => {
   const { data: ric } = await sb.rpc("ricorrenti_da_inviare");
   const ricorrenti = (ric ?? []) as { id: string; user_id: string; titolo: string; emoji: string; ogni_minuti: number }[];
 
-  if (!due.length && !attivita.length && !ricorrenti.length) return Response.json({ sent: 0 });
+  // Chi non apre l'app da 2 giorni (una volta per assenza, alle 18:00 ora di Roma, solo con avviso visto e interruttore acceso).
+  // Se l'aggiornamento del database non è ancora stato lanciato la funzione non esiste: si salta senza errori.
+  const { data: mm } = await sb.rpc("mi_manca_da_inviare");
+  const mancanti = (Array.isArray(mm) ? mm : []) as { user_id: string; nome_mascotte: string | null; mascotte: string | null }[];
 
-  const userIds = [...new Set([...due.flatMap((d: { destinatari: string[] }) => d.destinatari), ...attivita.map((a) => a.destinatario), ...ricorrenti.map((r) => r.user_id)])];
+  if (!due.length && !attivita.length && !ricorrenti.length && !mancanti.length) return Response.json({ sent: 0 });
+
+  const userIds = [...new Set([...due.flatMap((d: { destinatari: string[] }) => d.destinatari), ...attivita.map((a) => a.destinatario), ...ricorrenti.map((r) => r.user_id), ...mancanti.map((m) => m.user_id)])];
   const { data: subs } = await sb.from("push_subscriptions").select("*").in("user_id", userIds);
 
   const inizio = Date.now(); // il giro dura al massimo un minuto: dopo 30 secondi non faccio più attese per i nuovi tentativi
@@ -128,5 +150,15 @@ Deno.serve(async (req) => {
     }));
   }
 
-  return Response.json({ sent, ritentati, items: due.length, attivita: attivita.length, ricorrenti: ricorrenti.length });
+  // Mi manchi: si segna "avvisato" solo se è arrivato (o non c'è modo di consegnarlo), con la stessa regola dei promemoria
+  const giornoAnno = Math.floor(Date.now() / 864e5);
+  const avvisati: string[] = [];
+  for (const m of mancanti) {
+    const f = fraseMiManca(nomeMascotte(m.nome_mascotte, m.mascotte), m.user_id, giornoAnno);
+    const esito = await invia([m.user_id], JSON.stringify({ id: `mm-${m.user_id}`, title: f.title, body: f.body }));
+    if (daSegnareInviato(esito)) avvisati.push(m.user_id); else ritentati++;
+  }
+  if (avvisati.length) await sb.rpc("mi_manca_segna", { p_ids: avvisati });
+
+  return Response.json({ sent, ritentati, mi_manca: avvisati.length, items: due.length, attivita: attivita.length, ricorrenti: ricorrenti.length });
 });

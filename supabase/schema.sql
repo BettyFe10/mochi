@@ -1646,3 +1646,224 @@ grant execute on function public.elimina_il_mio_account() to authenticated;
 --    (Se fosse più di 0, "convalidato" qui sopra è false: quelle schede non si salvano finché la routine non viene accorciata.)
 --   select count(*) from public.pet_animali where routine is not null and octet_length(routine::text) > 4000;
 -- =========================================================
+
+-- =========================================================
+-- 26) Salvadanaio ("Sto conservando per..."): mete e registro dei versamenti, separati dalle spese.
+--     Limiti: 10 mete a persona, 1000 movimenti a meta, il saldo non va sotto zero.
+--     Di ogni movimento si cambiano solo la data (quando) e la nota; created_at lo mette il server.
+-- =========================================================
+create table if not exists public.salvadanai (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  nome           text not null,
+  emoji          text not null default '🐷',
+  nota           text,
+  obiettivo_cent bigint,                          -- facoltativo: senza, la meta e' solo un contatore
+  created_at     timestamptz not null default now()
+);
+create index if not exists salvadanai_user_idx on public.salvadanai (user_id, created_at);
+alter table public.salvadanai drop constraint if exists salvadanai_ok;
+alter table public.salvadanai add constraint salvadanai_ok check (
+  char_length(btrim(nome)) between 1 and 60
+  and char_length(emoji) between 1 and 16 and emoji !~ '[\x00-\x1f<>&"]'
+  and (nota is null or char_length(nota) <= 300)
+  and (obiettivo_cent is null or obiettivo_cent between 1 and 1000000000)
+);
+
+create table if not exists public.salvadanaio_mov (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  salvadanaio_id uuid not null references public.salvadanai(id) on delete cascade,
+  importo_cent   bigint not null,                 -- positivo = versamento, negativo = prelievo
+  nota           text,
+  quando         timestamptz not null default now(),  -- data e ora del versamento: si puo' scegliere e correggere
+  created_at     timestamptz not null default now()   -- quando e' stato scritto: lo mette il server
+);
+alter table public.salvadanaio_mov add column if not exists quando timestamptz not null default now();
+create index if not exists salvadanaio_mov_meta_idx on public.salvadanaio_mov (salvadanaio_id, quando);
+create index if not exists salvadanaio_mov_user_idx on public.salvadanaio_mov (user_id);
+alter table public.salvadanaio_mov drop constraint if exists salvadanaio_mov_ok;
+alter table public.salvadanaio_mov add constraint salvadanaio_mov_ok check (
+  importo_cent <> 0 and importo_cent between -1000000000 and 1000000000
+  and (nota is null or char_length(nota) <= 120)
+  and quando between timestamptz '2000-01-01' and timestamptz '2100-12-31'
+);
+
+-- Mete: chi scrive e' sempre chi e' collegato; id e data non si cambiano; al massimo 10 mete a testa.
+-- Niente security definer: la conta vede solo le righe di chi scrive (RLS).
+create or replace function public.salvadanai_controlli() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null then new.user_id := auth.uid(); end if;
+    new.created_at := now();
+    if (select count(*) from public.salvadanai where user_id = new.user_id) >= 10 then
+      raise exception 'Hai raggiunto il limite di 10 mete del salvadanaio';
+    end if;
+  else
+    new.user_id := old.user_id;
+    new.id := old.id;
+    new.created_at := old.created_at;
+  end if;
+  new.nome := btrim(new.nome);
+  return new;
+end $$;
+revoke all on function public.salvadanai_controlli() from public, anon, authenticated;
+drop trigger if exists salvadanai_controlli on public.salvadanai;
+create trigger salvadanai_controlli before insert or update on public.salvadanai for each row execute function public.salvadanai_controlli();
+
+-- Movimenti: la meta deve essere di chi scrive; created_at lo mette il server; "quando" e' scelto da chi scrive ma non
+-- puo' stare piu' di un giorno nel futuro ne' piu' di 10 anni nel passato; dopo, si possono cambiare solo "quando" e la nota;
+-- al massimo 1000 movimenti a meta; il saldo non va sotto zero (la riga della meta si blocca un attimo
+-- per non farsi sorpassare da due prelievi nello stesso istante).
+create or replace function public.salvadanaio_mov_controlli() returns trigger
+language plpgsql set search_path = public as $$
+declare saldo bigint;
+begin
+  if tg_op = 'UPDATE' then
+    -- cambiano solo la data e la nota: tutto il resto resta com'era
+    new.id := old.id; new.user_id := old.user_id; new.salvadanaio_id := old.salvadanaio_id;
+    new.importo_cent := old.importo_cent; new.created_at := old.created_at;
+    if new.quando is null then new.quando := old.quando; end if;
+    if new.quando > now() + interval '1 day' or new.quando < now() - interval '10 years' then
+      raise exception 'Data fuori dai limiti';
+    end if;
+    return new;
+  end if;
+  if auth.uid() is not null then new.user_id := auth.uid(); end if;
+  new.created_at := now();
+  if new.quando is null then new.quando := now(); end if;
+  if new.quando > now() + interval '1 day' or new.quando < now() - interval '10 years' then
+    raise exception 'Data fuori dai limiti';
+  end if;
+  perform 1 from public.salvadanai where id = new.salvadanaio_id and user_id = new.user_id for update;
+  if not found then raise exception 'Meta non valida'; end if;
+  if (select count(*) from public.salvadanaio_mov where salvadanaio_id = new.salvadanaio_id) >= 1000 then
+    raise exception 'Hai raggiunto il limite di 1000 movimenti per questa meta';
+  end if;
+  select coalesce(sum(importo_cent), 0) into saldo from public.salvadanaio_mov where salvadanaio_id = new.salvadanaio_id;
+  if saldo + new.importo_cent < 0 then raise exception 'Non puoi prelevare piu'' di quello che hai messo da parte'; end if;
+  return new;
+end $$;
+revoke all on function public.salvadanaio_mov_controlli() from public, anon, authenticated;
+drop trigger if exists salvadanaio_mov_controlli on public.salvadanaio_mov;
+create trigger salvadanaio_mov_controlli before insert or update on public.salvadanaio_mov for each row execute function public.salvadanaio_mov_controlli();
+
+alter table public.salvadanai enable row level security;
+alter table public.salvadanaio_mov enable row level security;
+drop policy if exists "salv_select" on public.salvadanai;
+drop policy if exists "salv_insert" on public.salvadanai;
+drop policy if exists "salv_update" on public.salvadanai;
+drop policy if exists "salv_delete" on public.salvadanai;
+create policy "salv_select" on public.salvadanai for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.origine_consentita()));
+create policy "salv_insert" on public.salvadanai for insert to authenticated
+  with check (user_id = (select auth.uid()) and (select public.origine_consentita()));
+create policy "salv_update" on public.salvadanai for update to authenticated
+  using (user_id = (select auth.uid()) and (select public.origine_consentita()))
+  with check (user_id = (select auth.uid()) and (select public.origine_consentita()));
+create policy "salv_delete" on public.salvadanai for delete to authenticated
+  using (user_id = (select auth.uid()) and (select public.origine_consentita()));
+drop policy if exists "smov_select" on public.salvadanaio_mov;
+drop policy if exists "smov_insert" on public.salvadanaio_mov;
+drop policy if exists "smov_update" on public.salvadanaio_mov;
+drop policy if exists "smov_delete" on public.salvadanaio_mov;
+create policy "smov_select" on public.salvadanaio_mov for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.origine_consentita()));
+create policy "smov_insert" on public.salvadanaio_mov for insert to authenticated
+  with check (user_id = (select auth.uid()) and (select public.origine_consentita())
+              and exists (select 1 from public.salvadanai s where s.id = salvadanaio_id and s.user_id = (select auth.uid())));
+create policy "smov_update" on public.salvadanaio_mov for update to authenticated
+  using (user_id = (select auth.uid()) and (select public.origine_consentita()))
+  with check (user_id = (select auth.uid()) and (select public.origine_consentita()));
+create policy "smov_delete" on public.salvadanaio_mov for delete to authenticated
+  using (user_id = (select auth.uid()) and (select public.origine_consentita()));
+revoke all on public.salvadanai, public.salvadanaio_mov from public, anon;
+revoke truncate, references, trigger on public.salvadanai, public.salvadanaio_mov from authenticated;
+revoke update on public.salvadanaio_mov from authenticated;
+grant update (quando, nota) on public.salvadanaio_mov to authenticated;   -- del movimento si cambiano solo data e nota
+grant select, insert, update, delete on public.salvadanai to authenticated;
+grant select, insert, delete on public.salvadanaio_mov to authenticated;
+
+-- =========================================================
+-- 27) "La tua mascotte sente la tua mancanza": ultimo accesso e notifica dopo 2 giorni senza aprire l'app.
+--     Una volta per assenza, alle 18:00 ora di Roma, solo a chi ha le notifiche attive e ha visto l'avviso.
+-- =========================================================
+create table if not exists public.attivita_utente (
+  user_id        uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  ultimo_accesso timestamptz not null default now(),
+  ultimo_avviso  timestamptz,
+  mi_manca       boolean not null default true,
+  avviso_visto   boolean not null default false
+);
+alter table public.attivita_utente enable row level security;
+drop policy if exists "attivita_select" on public.attivita_utente;
+create policy "attivita_select" on public.attivita_utente for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.origine_consentita()));
+revoke all on public.attivita_utente from public, anon;
+revoke all on public.attivita_utente from authenticated;
+grant select on public.attivita_utente to authenticated;   -- scrivere solo con le funzioni
+
+-- L'app la chiama quando si apre (al massimo una volta all'ora): aggiorna l'ultimo accesso (al massimo una scrittura al minuto)
+-- e dice se mostrare l'avviso e com'e' l'interruttore.
+create or replace function public.registra_accesso() returns table (mi_manca boolean, avviso_visto boolean)
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null or not public.origine_consentita() then raise exception 'Non autorizzato'; end if;
+  insert into public.attivita_utente as a (user_id, ultimo_accesso) values (uid, now())
+    on conflict (user_id) do update set ultimo_accesso = now() where a.ultimo_accesso < now() - interval '1 minute';
+  return query select a.mi_manca, a.avviso_visto from public.attivita_utente a where a.user_id = uid;
+end $$;
+revoke all on function public.registra_accesso() from public, anon;
+grant execute on function public.registra_accesso() to authenticated;
+
+-- Interruttore in Impostazioni (e "Spegni" dell'avviso). Scegliere, in un senso o nell'altro, vale come avviso visto.
+create or replace function public.imposta_mi_manca(p_attivo boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null or not public.origine_consentita() then raise exception 'Non autorizzato'; end if;
+  if p_attivo is null then raise exception 'Valore non valido'; end if;
+  insert into public.attivita_utente as a (user_id, mi_manca, avviso_visto) values (uid, p_attivo, true)
+    on conflict (user_id) do update set mi_manca = p_attivo, avviso_visto = true;
+end $$;
+revoke all on function public.imposta_mi_manca(boolean) from public, anon;
+grant execute on function public.imposta_mi_manca(boolean) to authenticated;
+
+-- "Ok" sull'avviso: l'avviso e' stato visto e l'interruttore resta com'e'.
+create or replace function public.avviso_mi_manca_visto() returns void
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null or not public.origine_consentita() then raise exception 'Non autorizzato'; end if;
+  insert into public.attivita_utente as a (user_id, avviso_visto) values (uid, true)
+    on conflict (user_id) do update set avviso_visto = true;
+end $$;
+revoke all on function public.avviso_mi_manca_visto() from public, anon;
+grant execute on function public.avviso_mi_manca_visto() to authenticated;
+
+-- Solo per la funzione "send-reminders" (chiave server): chi va avvisato adesso. p_ora = l'ora di Roma in cui si scrive
+-- (18 di default; -1 = qualsiasi ora, serve solo ai test). Non segna niente: lo fa mi_manca_segna dopo l'invio.
+create or replace function public.mi_manca_da_inviare(p_ora int default 18) returns table (user_id uuid, nome_mascotte text, mascotte text)
+language sql stable security definer set search_path = public, auth as $$
+  select a.user_id, nullif(btrim(u.raw_user_meta_data->>'nome_mascotte'), ''), u.raw_user_meta_data->>'mascotte'
+    from public.attivita_utente a join auth.users u on u.id = a.user_id
+   where a.mi_manca and a.avviso_visto
+     and a.ultimo_accesso < now() - interval '2 days'
+     and a.ultimo_accesso > now() - interval '30 days'
+     and (a.ultimo_avviso is null or a.ultimo_avviso < a.ultimo_accesso)
+     and (p_ora < 0 or extract(hour from now() at time zone 'Europe/Rome') = p_ora)
+     and exists (select 1 from public.push_subscriptions p where p.user_id = a.user_id)
+   order by a.ultimo_accesso
+   limit 500;
+$$;
+revoke all on function public.mi_manca_da_inviare(int) from public, anon, authenticated;
+grant execute on function public.mi_manca_da_inviare(int) to service_role;
+
+create or replace function public.mi_manca_segna(p_ids uuid[]) returns void
+language sql security definer set search_path = public as $$
+  update public.attivita_utente set ultimo_avviso = now() where user_id = any(p_ids);
+$$;
+revoke all on function public.mi_manca_segna(uuid[]) from public, anon, authenticated;
+grant execute on function public.mi_manca_segna(uuid[]) to service_role;
