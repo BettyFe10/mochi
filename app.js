@@ -1712,6 +1712,7 @@ function listaHtml(it) {
         <div class="pet-dt">${[["oggi", "Oggi"], ["domani", "Domani"], ["nessuna", "Senza data"]].map(([k, n]) => `<button type="button" class="fbtn ${(k === "oggi" && it.due_date === todayStr()) || (k === "domani" && it.due_date === ymd(addDays(new Date(), 1))) || (k === "nessuna" && !it.due_date) ? "on" : ""}" data-act="ls-data" data-v="${k}">${n}</button>`).join("")}</div>
         <input class="input" type="date" id="lsData" aria-label="Scegli un'altra data" value="${it.due_date || ""}" min="2000-01-01" max="2100-12-31"></div>`}
       <button class="pin-toggle mini-t ${it.pinned ? "on" : ""}" data-act="ls-pin" aria-pressed="${!!it.pinned}"><span><b>Fissa in alto</b></span><span class="sw2"></span></button>
+      <button type="button" class="btn danger ls-elimina" data-act="ls-elimina" aria-label="Elimina la lista">🗑 Elimina la lista</button>
     </div>` : ""}
   </div>
   <div class="ls-corpo">${righe || `<p class="hint">Ancora niente: scrivi qui sotto la prima cosa da comprare.</p>`}</div>
@@ -5669,6 +5670,14 @@ document.addEventListener("click", async (e) => {
     case "ls-data": if (["oggi", "domani", "nessuna"].includes(v)) listaData(v === "oggi" ? todayStr() : v === "domani" ? ymd(addDays(new Date(), 1)) : ""); break;
     case "ls-pin": { const it = listaItem(); if (it) { listaSalva({ pinned: !it.pinned }); listaRedraw(); } break; }
     case "ls-menu": listaMenu = !listaMenu; listaRedraw(); break;
+    case "ls-elimina": {
+      const orig = listaItem(); if (!orig) break;
+      if (semOn() && !(await ask({ title: "Eliminare la lista?", text: "Sparisce con tutte le sue voci.", ok: "Sì, elimina" }))) break;
+      closeSheet(); state.items = state.items.filter((x) => x.id !== orig.id);
+      render(); await store.remove(orig.id);
+      if (!semOn()) toastAnnulla("Lista eliminata", () => { if (state.items.some((x) => x.id === orig.id)) return; state.items.push(orig); render(); Promise.resolve(store.save(orig)).catch(() => toast("Non sono riuscita a rimetterla")); });
+      break;
+    }
     case "st-del": if (draft) { draft.sottotask = draft.sottotask.filter((s) => s.id !== v); drawSt(); } break;
     case "st-su": { const a = draft?.sottotask, i = a ? a.findIndex((s) => s.id === v) : -1; if (i > 0) { [a[i - 1], a[i]] = [a[i], a[i - 1]]; drawSt(); } break; }
     // spese
