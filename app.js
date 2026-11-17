@@ -312,16 +312,24 @@ const SupaStore = {
   queue(op) { const q = LS.get("mochi.outbox", []); q.push(op); LS.set("mochi.outbox", q); },
   async flush() {
     const q = LS.get("mochi.outbox", []); if (!q.length) return;
-    const rest = [];
+    const rest = []; let scartate = 0;
     for (const op of q) {
       try {
         if (op.t === "save" && this.noSub) delete op.it.sottotask;
         let r = op.t === "save" ? await this.sb.from("items").upsert(op.it) : await this.sb.from("items").delete().eq("id", op.id);
         if (r.error && op.t === "save" && this.manca(r.error)) { delete op.it.sottotask; r = await this.sb.from("items").upsert(op.it); }
         if (r.error) throw r.error;
-      } catch { rest.push(op); }
+      } catch (e) {
+        // Senza rete (o errore passeggero) la modifica resta in coda. Se il server la rifiuta davvero (dato non valido, limite, nessun accesso)
+        // riprovare non serve: si scarta, altrimenti resterebbe in coda per sempre. Un errore strano si ritenta al massimo 10 volte.
+        const m = String(e?.message || e || ""), cod = String(e?.code || "");
+        const rete = !!e?.network || /fetch|network|Failed|timeout|offline/i.test(m);
+        const definitivo = !rete && (/^(22|23|42501|P0001)/.test(cod) || /limite|spazio massimo|violates|row-level|policy/i.test(m));
+        if (definitivo || (!rete && (op.n || 0) >= 9)) scartate++; else rest.push(rete ? op : { ...op, n: (op.n || 0) + 1 });
+      }
     }
     LS.set("mochi.outbox", rest);
+    if (scartate) { toast("Qualche modifica fatta senza rete non è stata accettata: ho ricaricato le tue cose 🍱"); }
   },
   // Esito: "ok" (arrivato al server), "coda" (senza rete: resta sul dispositivo e parte da solo), "rifiutato" (il server ha detto no: chi chiama non deve festeggiare)
   async save(it) {

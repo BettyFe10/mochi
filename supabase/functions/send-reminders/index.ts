@@ -29,6 +29,29 @@ function safeEqual(a: string, b: string) {
   return r === 0;
 }
 
+// --- inizio helper (provati da ~/Desktop/mochi-test/t_v66_reminders.mjs)
+type Esito = { ok: number; passeggeri: number };
+// Una notifica: se il servizio push risponde con un errore passeggero (rete, 429, 5xx) riprovo una volta dopo un secondo
+async function mandaConRetry(invio: () => Promise<unknown>, pausa = 1000, puoiRiprovare = true): Promise<"ok" | "scaduta" | "passeggero" | "rifiutata"> {
+  for (let tentativo = 0; tentativo < 2; tentativo++) {
+    try { await invio(); return "ok"; }
+    catch (e) {
+      const code = (e as { statusCode?: number }).statusCode;
+      if (code === 404 || code === 410) return "scaduta";
+      const passeggero = code === undefined || code === 429 || code >= 500;
+      if (!passeggero) return "rifiutata"; // 400/401/403/413: riprovare non cambia nulla
+      if (!puoiRiprovare) return "passeggero"; // giro quasi al limite di tempo: niente attese, ci pensa il giro dopo
+      if (tentativo === 0) await new Promise((r) => setTimeout(r, pausa));
+    }
+  }
+  return "passeggero";
+}
+// Il promemoria si segna "inviato" solo se è arrivato ad almeno un dispositivo oppure non c'è modo di consegnarlo
+// (nessuna iscrizione, iscrizioni scadute o rifiutate). Con soli errori passeggeri resta da inviare: il giro dopo (ogni minuto)
+// riprova, e il database lo scarta da solo dopo 2 ore.
+function daSegnareInviato(e: Esito) { return e.ok > 0 || e.passeggeri === 0; }
+// --- fine helper
+
 const KIND_EMOJI: Record<string, string> = { todo: "✅", event: "📅", note: "📝" };
 
 Deno.serve(async (req) => {
@@ -63,28 +86,29 @@ Deno.serve(async (req) => {
   const userIds = [...new Set([...due.flatMap((d: { destinatari: string[] }) => d.destinatari), ...attivita.map((a) => a.destinatario), ...ricorrenti.map((r) => r.user_id)])];
   const { data: subs } = await sb.from("push_subscriptions").select("*").in("user_id", userIds);
 
-  let sent = 0;
-  async function invia(utenti: string[], payload: string) {
+  const inizio = Date.now(); // il giro dura al massimo un minuto: dopo 30 secondi non faccio più attese per i nuovi tentativi
+  let sent = 0, ritentati = 0;
+  async function invia(utenti: string[], payload: string): Promise<Esito> {
+    const esito: Esito = { ok: 0, passeggeri: 0 };
     for (const s of (subs ?? []).filter((x) => utenti.includes(x.user_id))) {
-      try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 });
-        sent++;
-      } catch (e) {
-        // Iscrizione scaduta (es. app disinstallata): la rimuovo
-        const code = (e as { statusCode?: number }).statusCode;
-        if (code === 404 || code === 410) await sb.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
-      }
+      const r = await mandaConRetry(() => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 }), 1000, Date.now() - inizio < 30000);
+      if (r === "ok") { sent++; esito.ok++; }
+      else if (r === "passeggero") esito.passeggeri++;
+      // Iscrizione scaduta (es. app disinstallata): la rimuovo
+      else if (r === "scaduta") await sb.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
     }
+    return esito;
   }
 
   for (const item of due) {
     const when = item.due_time ? `alle ${item.due_time}` : "oggi";
-    await invia(item.destinatari, JSON.stringify({
+    const esito = await invia(item.destinatari, JSON.stringify({
       id: item.id,
       title: `${KIND_EMOJI[item.kind] ?? "🍣"} ${String(item.title).slice(0, 120)}`,
       body: item.kind === "event" ? `Appuntamento ${when}. Te lo ricordo io 🌸` : `Da fare ${when}. Ce la fai! 💪`,
     }));
-    await sb.from("items").update({ reminded: true }).eq("id", item.id);
+    if (daSegnareInviato(esito)) await sb.from("items").update({ reminded: true }).eq("id", item.id);
+    else ritentati++; // errore passeggero del servizio push: lo riprovo al giro dopo
   }
 
   for (const a of attivita) {
@@ -104,5 +128,5 @@ Deno.serve(async (req) => {
     }));
   }
 
-  return Response.json({ sent, items: due.length, attivita: attivita.length, ricorrenti: ricorrenti.length });
+  return Response.json({ sent, ritentati, items: due.length, attivita: attivita.length, ricorrenti: ricorrenti.length });
 });
