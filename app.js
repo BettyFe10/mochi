@@ -4843,7 +4843,6 @@ const DISEGNI_MOBILI = {
     ${sh("circle", { cx: 36, cy: 242, r: 9.5, fill: "#9fd4ef", stroke: "#6fb0d6", "stroke-width": 2 })}${sh("path", { d: "M29 238 q7 1 12 10 M33 234 q8 4 8 13", stroke: "#6fb0d6", "stroke-width": 1.4, fill: "none" })}${sh("path", { d: "M40 230 L48 252 M46 228 L44 252", stroke: "#c4955a", "stroke-width": 2, "stroke-linecap": "round" })}
     ${sh("path", { d: "M6 248 L50 248 L46 270 Q45 274 41 274 L15 274 Q11 274 10 270 Z", fill: "#e8c08a", stroke: "#c4955a", "stroke-width": 2.2 })}${sh("path", { d: "M9 256 H47 M10 264 H46 M18 249 V273 M28 249 V274 M38 249 V273", stroke: "#cf9f62", "stroke-width": 1.4 })}`] }
 };
-const STRATI = ["parete", "dietro", "tappeto", "davanti"];
 
 let casaN = 0;
 // La scena intera: stanza, finestra, oggetti fissi, mobili accesi, luci di sera, mascotte appoggiata a terra
@@ -6318,15 +6317,12 @@ document.addEventListener("click", async (e) => {
     case "d-kind": draft.kind = v; draft._kindManual = true; if (v === "note") advanced = true;
       if (draft._autoRemind && !draft._remindManual && v !== "note" && draft.remind !== "auto") draft.remind = defaultRemind(draft);
       drawEditor(); break;
-    case "d-area": draft.area = v; drawEditor(); break;
     case "d-cat": catScegli(v); break;
     case "d-nuova-lista": if (!draft) break; { const t = $("#fTitle"); if (t) draft.title = t.value; } listaDopo = draft; openListaEditor(null); break;
-    case "d-lista":
     case "d-more": advanced = true;
       if (draft._new && draft.title) { const p = parseQuick(draft.title); draft.due_date = p.date && draft._dateDefault ? p.date : (draft.due_date || p.date); draft.due_time = draft.due_time || p.time; }
       if (draft.remind === "auto") draft.remind = defaultRemind(draft);
       drawEditor();
-      if (act === "d-lista") setTimeout(() => { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "center" }); } }, 60);
       break;
     case "d-color": draft.color = +v; drawEditor(); break;
     case "d-pin": draft.pinned = !draft.pinned; drawEditor(); break;
