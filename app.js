@@ -1930,7 +1930,7 @@ const SG_FINE = `</div></section>`;
 function riassuntoProfilo() { const p = PRONOMI.find((x) => x[0] === CUSTOM.pronomi); return esc(CUSTOM.nome_app) + ", " + esc(MN()) + (CUSTOM.pronomi && p ? ", " + esc(p[1].toLowerCase()) : ""); }
 function riassuntoUsare() { const l = MODULI.filter((m) => !m[5] || ONLINE_MODE); const n = l.filter((m) => mod(m[0])).length; return n === l.length ? `Tutto acceso (${n})` : `${n} su ${l.length} accesi`; }
 function riassuntoAspetto() { const st = STILI.find((x) => x[0] === CUSTOM.stile), co = PALETTE.find((x) => x[0] === CUSTOM.colore), fo = FONTI.find((x) => x[0] === CUSTOM.font); return `Stile ${esc(st ? st[1] : "")}, colori ${esc(co ? co[1] : "")}, carattere ${esc(fo ? fo[1].replace(/^Dello/, "dello") : "")}`; }
-function riassuntoDati() { return ONLINE_MODE ? "Riepilogo del mese, backup, privacy, account" : OSPITE ? "Riepilogo del mese, backup, privacy, esci" : "Riepilogo del mese e backup"; }
+function riassuntoDati() { return ONLINE_MODE ? "Backup, privacy, account" : OSPITE ? "Backup, privacy, esci" : "Backup"; }
 function sgToggle(id) {
   sgAperto = sgAperto === id ? null : id;
   document.querySelectorAll("#sheet .sgrp").forEach((g) => { const o = g.dataset.g === sgAperto; g.classList.toggle("open", o); g.querySelector(".sgrp-h").setAttribute("aria-expanded", String(o)); g.querySelector(".sgrp-b").hidden = !o; });
@@ -1941,7 +1941,7 @@ function openSettings(gruppo) {
   const perm = "Notification" in window ? Notification.permission : "unsupported";
   const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
   const theme = document.documentElement.dataset.theme || "auto";
-  const rName = ONLINE_MODE ? `<div class="setrow"><div><b>Il tuo nome</b><small>${esc(NOME || "Non impostato")} · ${esc(store.user?.email || "")}</small></div><button class="fbtn" data-act="set-name">Cambia</button></div>` : "";
+  const rName = ONLINE_MODE ? `<div class="setrow"><div><b>Il tuo nome ed email</b><small>${esc(NOME || "Non impostato")} · ${esc(store.user?.email || "")}</small></div><button class="fbtn" data-act="set-name">Cambia</button></div>` : "";
   const rDati = ONLINE_MODE ? `<div class="setrow"><div><b>Esci</b><small>Su questo dispositivo</small></div><button class="fbtn" data-act="logout">Esci</button></div>
     <div class="setrow"><div><b>Privacy</b><small>Come vengono trattati i tuoi dati</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
     <div class="setrow"><div><b style="color:var(--danger)">Elimina account</b><small>Elimina per sempre account e dati</small></div><button class="fbtn" style="color:var(--danger)" data-act="delete-account">Elimina</button></div>` : OSPITE ? `<div class="setrow"><div><b>Privacy</b><small>Come ospite le tue cose restano su questo dispositivo</small></div><a class="fbtn" style="text-decoration:none" href="privacy.html">Leggi</a></div>
@@ -1949,12 +1949,11 @@ function openSettings(gruppo) {
   openSheet(`
     <h2><span class="mbox">${mascot()}</span>Impostazioni</h2>
     ${OSPITE ? schedaOspite() : ""}${ONLINE_MODE ? rigaPassaggio() : ""}
-    <div class="setrow" id="pushRow">${pushRowHtml(!ONLINE_MODE ? "offline" : !PUSH_READY ? "soon" : perm === "unsupported" ? (!standalone && /iPhone|iPad/.test(navigator.userAgent) ? "home" : "unsupported") : perm === "denied" ? "denied" : "checking")}</div>
     ${sgApri("profilo", "👤", "Profilo", riassuntoProfilo())}
-    <div class="setrow"><div><b>Nome e mascotte</b><small>${esc(CUSTOM.nome_app)} · ${esc(MN())}</small></div><button class="fbtn on" data-act="open-custom">Cambia</button></div>
-    <div class="setrow col" id="setPron"><div><b>I tuoi pronomi</b><small>Facoltativo. Servono solo ad adattare i testi dell'app a te (ad esempio "orgogliosa" o "orgoglioso"). Restano privati: non li vede nessun altro e non cambiano nient'altro. Se non scegli, uso parole neutre. Li cambi o li togli quando vuoi${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}.</small></div>
+    <div class="setrow"><div><b>Nome e mascotte dell'app</b><small>${esc(CUSTOM.nome_app)} · ${esc(MN())}</small></div><button class="fbtn on" data-act="open-custom">Cambia</button></div>
+    <div class="setrow col" id="setPron"><div><b>I tuoi pronomi</b><small>Facoltativo: adatta i testi a te. Restano privati${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="filters" style="flex-wrap:wrap" role="group" aria-label="I tuoi pronomi">${PRONOMI.map(([k, n]) => `<button class="fbtn ${CUSTOM.pronomi === k ? "on" : ""}" data-act="pick-pronomi" data-v="${k || "non"}" aria-pressed="${CUSTOM.pronomi === k}">${n}</button>`).join("")}</div></div>
-    ${mod("feste") ? `<div class="setrow col" id="setCompl"><div><b>Il tuo compleanno</b><small>Facoltativo: solo giorno e mese, niente anno. Quel giorno ${esc(MN())} ti fa gli auguri${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
+    ${mod("feste") ? `<div class="setrow col" id="setCompl"><div><b>Il tuo compleanno</b><small>Facoltativo: giorno e mese. ${esc(MN())} ti fa gli auguri${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="compl">${(() => { const [mm, gg] = CUSTOM.compleanno ? CUSTOM.compleanno.split("-").map(Number) : [0, 0];
         return `<select class="input" id="cGiorno" aria-label="Giorno del compleanno"><option value="">Giorno</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}" ${gg === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select>
         <select class="input" id="cMese" aria-label="Mese del compleanno"><option value="">Mese</option>${MESI.map((n, i) => `<option value="${i + 1}" ${mm === i + 1 ? "selected" : ""}>${n.replace(/^./, (c) => c.toUpperCase())}</option>`).join("")}</select>`; })()}
@@ -1962,7 +1961,7 @@ function openSettings(gruppo) {
     ${rName}
     ${SG_FINE}
     ${sgApri("usare", "🧩", "Cosa vuoi usare", riassuntoUsare())}
-    <div class="setrow" id="setSemplice"><div><b>Modo semplice</b><small>Mostra solo Cose da fare, Agenda e Spesa, con scritte e pulsanti molto più grandi. Non cancella niente: le altre funzioni restano dove sono e le ritrovi quando torni all'app completa.</small></div><button class="fbtn ${semOn() ? "on" : ""}" data-act="semplice-apri" aria-pressed="${semOn()}">${semOn() ? "Acceso" : "Spento"}</button></div>
+    <div class="setrow" id="setSemplice"><div><b>Modo semplice</b><small>Solo Cose da fare, Agenda e Spesa, con scritte grandi. Non cancella niente</small></div><button class="fbtn ${semOn() ? "on" : ""}" data-act="semplice-apri" aria-pressed="${semOn()}">${semOn() ? "Acceso" : "Spento"}</button></div>
     <div class="setrow col" id="setModuli"><div><b>Cosa vuoi usare</b><small>Quello che spegni sparisce dappertutto, ma i dati restano${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="moduli">${[["Funzioni", ["turni", "spese", "pet", "focus", "ricorrenti", "liste", "riepilogo", "tempo"]], ["Atmosfera e gioco", ["serie", "umore", "casa", "pancino", "biscotto", "feste", "stagioni"]]].map(([tit, ids]) => `<h3 class="msec">${tit}</h3>` + ids.map((id) => MODULI.find((m) => m[0] === id)).filter((m) => m && (!m[5] || ONLINE_MODE)).map(([k, e, n, d]) => `<button class="pin-toggle ${mod(k) ? "on" : ""}" data-act="modulo" data-v="${k}" aria-pressed="${mod(k)}"><span class="e">${e}</span><span><b>${n}</b><small>${d}</small></span><span class="sw2"></span></button>`).join("")).join("")}</div>
       ${mod("stagioni") ? `<div class="stag-scelta"><small>Che tempo fa sullo sfondo?</small><div class="filters" style="flex-wrap:wrap">${STAGIONI.map(([k, e, n]) => `<button class="fbtn ${CUSTOM.stagione === k ? "on" : ""}" data-act="pick-stagione" data-v="${k}">${e} ${n}</button>`).join("")}</div>${menoMoto() ? `<small>Il tuo dispositivo chiede meno animazioni: l'effetto resta fermo.</small>` : ""}</div>` : ""}</div>
@@ -1981,14 +1980,14 @@ function openSettings(gruppo) {
     <div class="setrow col mob-only" id="setBarra"><div><b>Barra in basso</b><small>Oggi, + e Menu restano dove sono. Scegli le due scorciatoie accanto al +${ONLINE_MODE ? " · su tutti i tuoi dispositivi" : ""}</small></div>
       <div class="barra-sel">${[0, 1].map((i) => { const sel = slotBarra()[i]; return `<select class="input" id="cBarra${i}" aria-label="Scorciatoia ${i + 1}">${BARRA_OK.filter((id) => barraDisp(id) || id === sel).map((id) => `<option value="${id}" ${id === sel ? "selected" : ""}>${esc(barraNomeScelta(id))}</option>`).join("")}</select>`; }).join("")}</div>
       ${slotBarra().join() !== BARRA_DEF.join() ? `<div class="more-row"><button class="more" data-act="barra-ripristina">Ripristina (Da fare e Agenda)</button></div>` : ""}</div>
-    <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Quando arriva un promemoria ad app aperta, quando spunti una cosa fatta e quando apri il biscotto. Tocca per sentirli.</small></div>
+    <div class="setrow col" id="setSuoni"><div><b>Suoni</b><small>Promemoria, cosa fatta e biscotto. Tocca per sentirli</small></div>
       <div class="suoni">${SUONI.map(([k, e, n]) => `<button class="${CUSTOM.suono === k ? "on" : ""}" data-act="pick-suono" data-v="${k}" aria-pressed="${CUSTOM.suono === k}"><span class="sw">${e}</span><small>${n}</small></button>`).join("")}</div></div>
     ${SG_FINE}
     ${sgApri("dati", "🗂️", "I tuoi dati", riassuntoDati())}
-    <div class="setrow"><div><b>Riepilogo del mese</b><small>Il riassunto del mese con ${MN()}</small></div><button class="fbtn" data-act="open-recap">Apri</button></div>
     <div class="setrow"><div><b>Backup</b><small>Scarica tutte le tue cose in un file</small></div><button class="fbtn" data-act="export">Scarica</button></div>
     ${rDati}
     ${SG_FINE}
+    <div class="setrow" id="pushRow">${pushRowHtml(!ONLINE_MODE ? "offline" : !PUSH_READY ? "soon" : perm === "unsupported" ? (!standalone && /iPhone|iPad/.test(navigator.userAgent) ? "home" : "unsupported") : perm === "denied" ? "denied" : "checking")}</div>
     <div class="actions"><button class="btn" data-act="close">Chiudi</button></div>`);
   $("#themeSel").addEventListener("change", (e) => setTheme(e.target.value));
   [0, 1].forEach((i) => $("#cBarra" + i)?.addEventListener("change", (e) => {
