@@ -9,7 +9,7 @@ const CONFIG_ONLINE = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
    "mochi.ospite" nel dispositivo: "si" = si usa come ospite; "passaggio" = l'ospite sta creando un account o entrando
    (le sue cose restano sul dispositivo finché non le porta nell'account). Si decide all'avvio: cambiare modo ricarica la pagina.
    ONLINE_MODE (= "in linea") vale quindi: collegata a Supabase E non ospite. */
-const PRIVACY_VERSIONE = "2026-11-13"; // versione dell'informativa accettata alla registrazione
+const PRIVACY_VERSIONE = "2026-11-18"; // versione dell'informativa accettata alla registrazione
 const OSPITE = CONFIG_ONLINE && (() => { try { return JSON.parse(localStorage.getItem("mochi.ospite")) === "si"; } catch { return false; } })();
 const ONLINE_MODE = CONFIG_ONLINE && !OSPITE;
 // Le notifiche push si attivano solo quando è configurata la chiave pubblica VAPID
@@ -389,8 +389,18 @@ const SupaStore = {
     const j = sub.toJSON();
     const { error } = await this.sb.rpc("registra_dispositivo", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
     if (error) throw error;
+  },
+  // "La mascotte sente la tua mancanza": se il database non ha ancora queste funzioni si ignora in silenzio (risposta null)
+  async registraAccesso() { const { data, error } = await this.sb.rpc("registra_accesso"); if (error) { if (funzioneAssente(error)) return null; throw error; } return Array.isArray(data) ? (data[0] || null) : (data || null); },
+  async impostaMiManca(attivo) { const { error } = await this.sb.rpc("imposta_mi_manca", { p_attivo: !!attivo }); if (error) { if (funzioneAssente(error)) return false; throw error; } return true; },
+  async avvisoMiMancaVisto() { const { error } = await this.sb.rpc("avviso_mi_manca_visto"); if (error) { if (funzioneAssente(error)) return false; throw error; } return true; },
+  async leggiAttivita() {
+    const { data, error } = await this.sb.from("attivita_utente").select("ultimo_accesso,mi_manca,avviso_visto").maybeSingle();
+    if (error) { if (funzioneAssente(error)) return null; throw error; }
+    return data || null;
   }
 };
+const funzioneAssente = (e) => !!e && (["PGRST202", "PGRST205", "42883", "42P01"].includes(e.code) || /Could not find the (function|table)|does not exist/i.test(e.message || ""));
 
 const store = ONLINE_MODE ? SupaStore : LocalStore;
 
@@ -1996,6 +2006,61 @@ function openSettings(gruppo) {
   if (PUSH_READY && (perm === "granted" || perm === "default")) refreshPushRow();
 }
 
+/* "Fai sentire la mancanza": notifica dopo 2 giorni senza aprire l'app. Stato = { on, visto } (null se non noto) */
+let miManca = null, accessoInCorso = false;
+const ACCESSO_TS = "mochi.accesso.ts";
+const mmPossibile = () => ONLINE_MODE && !OSPITE && !!store.user && PUSH_READY;
+async function registraAccesso(forza) {
+  if (!mmPossibile() || accessoInCorso) return;
+  if (!forza && Date.now() - LS.get(ACCESSO_TS, 0) < 36e5) return;
+  accessoInCorso = true;
+  try {
+    if (!(await pushActive())) return;
+    const r = await store.registraAccesso();
+    if (!r) return;
+    miManca = { on: r.mi_manca !== false, visto: r.avviso_visto === true };
+    LS.set(ACCESSO_TS, Date.now());
+  } catch { return; } finally { accessoInCorso = false; }
+  if (miManca && !miManca.visto && !semOn()) setTimeout(() => whenSheetFree(avvisoMiManca), 1500);
+}
+function avvisoMiManca() {
+  if (!miManca || miManca.visto || !mmPossibile() || $("#sheet").classList.contains("on")) return;
+  openSheet(`<h2><span class="mbox">${mascot()}</span>${esc(MN())} ti pensa</h2>
+    <p style="margin:0 0 16px;color:var(--ink2)">${esc(MN())} sente la tua mancanza se sparisci per 2 giorni: ti mando una sola notifica, poi più niente finché non torni. La spegni quando vuoi da Impostazioni.</p>
+    <div class="actions"><button class="btn" data-act="mm-spegni">Spegni</button><button class="btn primary" data-act="mm-ok">Ok</button></div>`);
+}
+async function mmScegli(spegni) {
+  closeSheet();
+  try {
+    const ok = spegni ? await store.impostaMiManca(false) : await store.avvisoMiMancaVisto();
+    if (ok && miManca) { miManca.visto = true; if (spegni) miManca.on = false; }
+    if (spegni && ok) toast("Fatto, niente notifica quando manchi 🌙");
+  } catch { toast("Non sono riuscita a salvarlo"); }
+}
+function mmRowHtml() {
+  const on = !!miManca?.on;
+  return `<div><b>Fai sentire la mancanza di ${esc(MN())}</b><small>Dopo 2 giorni senza aprire l'app ti arriva una sola notifica</small></div><button class="fbtn ${on ? "on" : ""}" data-act="mm-toggle" aria-pressed="${on}">${on ? "Acceso" : "Spento"}</button>`;
+}
+async function mmToggle() {
+  if (!miManca) return;
+  const nuovo = !miManca.on;
+  try {
+    if (!(await store.impostaMiManca(nuovo))) return;
+    miManca.on = nuovo; miManca.visto = true;
+    const row = $("#mmRow"); if (row) row.innerHTML = mmRowHtml();
+  } catch { toast("Non sono riuscita a salvarlo"); }
+}
+async function mmRefreshRow(pushOn) {
+  const row = $("#mmRow");
+  if (!pushOn || !mmPossibile()) { row?.remove(); return; }
+  if (!miManca) {
+    try { const r = await store.leggiAttivita(); if (r) miManca = { on: r.mi_manca !== false, visto: r.avviso_visto === true }; } catch {}
+  }
+  if (!miManca || !$("#pushRow")) { row?.remove(); return; }
+  if (row) row.innerHTML = mmRowHtml();
+  else $("#pushRow").insertAdjacentHTML("afterend", `<div class="setrow" id="mmRow">${mmRowHtml()}</div>`);
+}
+
 /* Stato dei promemoria su QUESTO dispositivo.
    Conta l'iscrizione alle notifiche, non il permesso del browser: il permesso
    un sito non può toglierlo da solo, l'iscrizione sì (ed è quella che usa il server). */
@@ -2024,6 +2089,7 @@ async function refreshPushRow() {
   const on = await pushActive();
   const row = $("#pushRow");
   if (row) row.innerHTML = pushRowHtml(on ? "on" : "off");
+  mmRefreshRow(on);
 }
 // All'avvio: se questo dispositivo ha già le notifiche attive, riconferma l'iscrizione al server.
 // Ripara i casi in cui il database l'ha persa (es. account cambiato, pulizia delle iscrizioni scadute).
@@ -2072,6 +2138,7 @@ async function enablePush() {
     await store.savePush(sub);
     toast("Notifiche attive 🔔");
     closeSheet();
+    registraAccesso(true);
   } catch (e) { console.error(e); toast("Non sono riuscita ad attivarli: " + (e.message || e)); }
 }
 /* iPhone: Safari non permette ai siti di installarsi da soli (su Mac/Android sì).
@@ -5812,12 +5879,13 @@ async function preparaBackup() {
   const online = ONLINE_MODE && !!store.user;
   const ric = online ? await entro(store.ricorrenti().then((r) => r.map(cleanRic)), ricorrenti) : [];
   const sv = online ? await entro(SalvStore.carica(), state.salv) : cleanSalv(LS.get("mochi.salvadanaio", null));
+  const att = online ? await entro(store.leggiAttivita().then((r) => r ? { ultimo_accesso: r.ultimo_accesso, mi_manca: r.mi_manca, avviso_visto: r.avviso_visto } : null), null) : null;
   const msg = online ? await entro(store.mieiConsigli().then((r) => r.filter((m) => m && typeof m.testo === "string")), []) : [];
   // delle liste condivise esporto le mie informazioni, non i nomi né gli id delle altre persone
   const listeMie = state.liste.map((l) => ({ id: l.id, nome: l.nome, emoji: l.emoji, creata_da_me: !!store.user && l.proprietaria === store.user.id, numero_persone: Array.isArray(l.membri) ? l.membri.length : 1 }));
   const blob = new Blob([JSON.stringify({ esportato_il: new Date().toISOString(), account: online ? { email: store.user.email || null, nome: NOME || null } : { ospite: true }, preferenze: CUSTOM, voci: state.items, liste: listeMie, ricorrenti: ric, messaggi_inviati: msg, umori: state.umori, turni: { impostazioni: state.turniImp, giorni: state.turni },
     spese: { budget_mensile_cent: state.spese.budget, voci: [...state.spese.voci].sort(ordineSpese) },
-    salvadanaio: svPerExport(sv),
+    salvadanaio: svPerExport(sv), attivita: att,
     giorni_attivi: [...state.giorni].sort(), concentrazione: serraCarica(),
     ...(usaPet ? { pet: { scheda: CUSTOM.pet, animali: ANIMALI, registro: [...petRighe].sort((a, b) => (a.giorno + a.tipo + a.chiave < b.giorno + b.tipo + b.chiave ? -1 : 1)) } } : {}) }, null, 2)], { type: "application/json" });
   return { blob, nome: `mochi-backup-${todayStr()}.json` };
@@ -6290,6 +6358,9 @@ document.addEventListener("click", async (e) => {
     case "sg-toggle": sgToggle(v); break;
     case "open-settings": openSettings(); break;
     case "enable-push": enablePush(); break;
+    case "mm-ok": mmScegli(false); break;
+    case "mm-spegni": mmScegli(true); break;
+    case "mm-toggle": mmToggle(); break;
     case "disable-push": disablePush(); break;
     case "export": toast("Preparo il backup…"); exportData(); break;
     case "logout": {
@@ -6933,6 +7004,7 @@ async function startOnline() {
     proponiPassaggio();
   }
   resyncPush();
+  registraAccesso();
   checkAdmin();
   if (!semOn()) { controllaRisposte(); invitoInSospeso(); }
   store.subscribe((p) => {
@@ -6943,7 +7015,7 @@ async function startOnline() {
     checkListeSconosciute();
   });
   // Quando l'app torna in primo piano (es. da iPhone dopo ore) ricarica i dati
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadAndRender(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { loadAndRender(); registraAccesso(); } });
   window.addEventListener("online", () => loadAndRender(true));
   window.addEventListener("offline", () => setSync(false)); // la rete è caduta: lo dico subito, senza aspettare il prossimo salvataggio
 }
@@ -6951,11 +7023,12 @@ async function startOnline() {
 /* ---------------- schermata di accesso: entra / crea account / password dimenticata / nuova password ---------------- */
 let loginMode = "login";
 function clearLocal() {
-  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.salvadanaioCache", "mochi.focus.sessione", "mochi.benvenuto", "mochi.nome"].forEach((k) => localStorage.removeItem(k));
+  ["mochi.spesaOff", "mochi.cache", "mochi.outbox", "mochi.recapSeen", "mochi.askedPush", "mochi.liste", "mochi.umoriCache", "mochi.turniCache", "mochi.speseCache", "mochi.salvadanaioCache", "mochi.focus.sessione", "mochi.benvenuto", "mochi.nome", "mochi.accesso.ts"].forEach((k) => localStorage.removeItem(k));
   // la cache dei giorni si cancella; la coda "da inviare" è per utente e resta finché non è vuota (riparte al suo prossimo accesso)
   Object.keys(localStorage).filter((k) => k.startsWith("mochi.giorniCache.") || k.startsWith("mochi.petCache.") || k.startsWith("mochi.petFesta.") || (k.startsWith("mochi.petDaInviare.") && !(LS.get(k, []) || []).length) || (k.startsWith("mochi.giorniDaInviare.") && !(LS.get(k, []) || []).length)).forEach((k) => localStorage.removeItem(k));
   // gli sblocchi della casetta sono di chi esce: chi entra dopo su questo dispositivo non li eredita (i suoi tornano dall'account)
   const c = LS.get("mochi.custom", null); if (c && typeof c === "object") { c.casa = CASA_VUOTA; c.ricordi = []; c.compleanno = ""; c.fiori = cleanFiori(null); c.pronomi = ""; c.pet = cleanPet(null); c.barra = [...BARRA_DEF]; c.semplice = false; c.calColori = {}; LS.set("mochi.custom", c); }
+  miManca = null;
   state.pet.righe = [];
   CUSTOM = cleanCustom({ ...CUSTOM, casa: CASA_VUOTA, ricordi: [], compleanno: "", fiori: null, pronomi: "", pet: null, barra: null, semplice: false, calColori: null });
 }
