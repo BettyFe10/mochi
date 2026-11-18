@@ -3284,7 +3284,7 @@ function svQuando(iso) {
   const d = new Date(iso), g = niceDate(ymd(d));
   return `${g.charAt(0).toLowerCase() + g.slice(1)} alle ${svHHMM(iso)}`;
 }
-const svErrore = (e) => { const m = String(e?.message || ""); return /1000 movimenti/.test(m) ? "Hai raggiunto il limite di 1000 movimenti per questa meta" : /10 mete/.test(m) ? "Hai raggiunto il limite di 10 mete del salvadanaio" : /prelevare/i.test(m) ? "Non puoi prelevare più di quello che hai messo da parte" : /fetch|network|Failed/i.test(m) ? "Sei offline: riprova tra poco" : "Non sono riuscita a salvare"; };
+const svErrore = (e) => { const m = String(e?.message || ""); return /1000 movimenti/.test(m) ? "Hai raggiunto il limite di 1000 movimenti per questo obiettivo" : /10 mete/.test(m) ? "Hai raggiunto il limite di 10 obiettivi" : /prelevare/i.test(m) ? "Non puoi prelevare più di quello che hai messo da parte" : /fetch|network|Failed/i.test(m) ? "Sei offline: riprova tra poco" : "Non sono riuscita a salvare"; };
 const SalvStore = {
   async carica() {
     if (!ONLINE_MODE) return cleanSalv(LS.get("mochi.salvadanaio", null));
@@ -3362,32 +3362,66 @@ function salvadanaioHtml() {
   const schede = mete.map((m) => {
     const s = svSaldo(m.id), o = m.obiettivo_cent, pct = svPct(s, o);
     return `<button class="sp-riga sv-card" data-act="sv-apri" data-id="${esc(m.id)}"><span class="sp-e">${esc(m.emoji)}</span>
-      <span class="sp-t"><b>${esc(m.nome)}</b>${o ? `<small>${s >= o ? "Meta raggiunta" : `${pct}% di ${euro(o)}`}</small><span class="sp-bar" role="img" aria-label="${pct}% della meta"><i style="width:${pct}%"></i></span>` : `<small>Hai messo da parte <strong>${euro(s)}</strong></small>`}</span>${o ? `<b class="sp-i">${euro(s)}</b>` : ""}</button>`;
+      <span class="sp-t"><b>${esc(m.nome)}</b>${o ? `<small>${s >= o ? "Obiettivo raggiunto" : `${pct}% di ${euro(o)}`}</small><span class="sp-bar" role="img" aria-label="${pct}% dell'obiettivo"><i style="width:${pct}%"></i></span>` : `<small>Hai messo da parte <strong>${euro(s)}</strong></small>`}</span>${o ? `<b class="sp-i">${euro(s)}</b>` : ""}</button>`;
   }).join("");
-  return `<div class="sv-blocco"><div class="sec"><h2>Sto conservando per...</h2>${mete.length ? `<span class="count">${mete.length}</span>` : ""}</div>
+  return `<div class="sv-blocco"><div class="sec"><h2>I miei obiettivi</h2>${mete.length ? `<span class="count">${mete.length}</span>` : ""}</div>
     ${mete.length ? `<div class="list">${schede}</div>`
-      : `<div class="empty sv-vuoto">Stai mettendo da parte qualcosa per un viaggio, un regalo o un imprevisto? Crea una meta e segna quanto conservi, un passo alla volta.</div>`}
-    <button class="btn sv-nuova" data-act="sv-nuova">+ Nuova meta</button></div>`;
+      : `<div class="empty sv-vuoto">Stai mettendo da parte qualcosa per un viaggio, un regalo o un imprevisto? Crea un obiettivo e metti la prima monetina nel salvadanaio.</div>`}
+    <button class="btn sv-nuova" data-act="sv-nuova">+ Nuovo obiettivo</button></div>`;
 }
-let svApertaId = null, svDraft = null, svMovDraft = null, svBusy = false;
+let svApertaId = null, svDraft = null, svMovDraft = null, svBusy = false, svAnim = null;
+// Il salvadanaio disegnato: la monetina sta dietro il corpo, cosi' cadendo "entra" nella fessura. tipo: "in" (versamento), "out" (prelievo)
+const svRidotto = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+function svPorcellino(tipo, fest) {
+  return `<svg class="sv-porc${tipo ? " " + tipo : ""}${fest ? " fest" : ""}" viewBox="0 0 200 130" aria-hidden="true" focusable="false">
+    <g class="sv-moneta"><circle cx="100" cy="30" r="14" class="sv-m1"/><circle cx="100" cy="30" r="9.5" class="sv-m2"/><path d="M100 24v12M96 27.5h6.5M96 32.5h6.5" class="sv-m3"/></g>
+    <g class="sv-corpo">
+      <ellipse cx="62" cy="108" rx="11" ry="12" class="sv-pz"/><ellipse cx="132" cy="108" rx="11" ry="12" class="sv-pz"/>
+      <path d="M150 74q22-6 18 8q-2 8-14 3" class="sv-coda"/>
+      <ellipse cx="100" cy="76" rx="64" ry="42" class="sv-pc"/>
+      <path d="M62 44l-6-16l20 8z M122 40l10-16l8 18z" class="sv-pc"/>
+      <ellipse cx="44" cy="82" rx="16" ry="14" class="sv-pm"/>
+      <circle cx="39" cy="82" r="2.4" class="sv-pn"/><circle cx="49" cy="82" r="2.4" class="sv-pn"/>
+      <circle cx="68" cy="66" r="4.2" class="sv-pn sv-occhio"/>
+      <ellipse cx="82" cy="78" rx="7" ry="4.5" class="sv-pg"/>
+      <rect x="82" y="34.5" width="36" height="6.5" rx="3.25" class="sv-fessura"/>
+    </g>
+    <g class="sv-sc"><path d="M60 22l2 5 5 2-5 2-2 5-2-5-5-2 5-2z M146 16l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z M168 46l1.4 3.4 3.4 1.4-3.4 1.4-1.4 3.4-1.4-3.4-3.4-1.4 3.4-1.4z"/></g>
+  </svg>`;
+}
 function apriSalv(id) {
   const m = state.salv.mete.find((x) => x.id === id);
   if (!m) { closeSheet(); return; }
   svApertaId = id;
+  const an = svAnim && !svRidotto() ? svAnim : null; svAnim = null;
   const s = svSaldo(id), o = m.obiettivo_cent, pct = svPct(s, o), movs = svMovDi(id);
   openSheet(`<div class="sv-testa"><span class="sp-e sv-e">${esc(m.emoji)}</span><div class="sv-tt"><h2>${esc(m.nome)}</h2>${m.nota ? `<p class="sv-nota">${esc(m.nota)}</p>` : ""}</div></div>
-    <div class="sv-saldo"><span>Hai messo da parte</span><b>${euro(s)}</b>${o ? `<span class="sp-bar" role="img" aria-label="${pct}% della meta"><i style="width:${pct}%"></i></span><small>${s >= o ? `Meta raggiunta: ${euro(o)}` : `Obiettivo ${euro(o)}, mancano ${euro(o - s)}`}</small>` : ""}</div>
+    <div class="sv-saldo">${svPorcellino(an?.tipo || "", an?.fest)}<span>Hai messo da parte</span><b>${euro(s)}</b>${o ? `<span class="sp-bar" role="img" aria-label="${pct}% dell'obiettivo"><i style="width:${pct}%"></i></span><small>${s >= o ? `Obiettivo raggiunto: ${euro(o)}` : `Obiettivo ${euro(o)}, mancano ${euro(o - s)}`}</small>` : ""}</div>
     <div class="sv-azioni"><button class="btn primary" data-act="sv-versa">+ Aggiungi</button><button class="btn" data-act="sv-preleva">Preleva</button></div>
     <h3 class="sv-h">Registro</h3>
     ${movs.length ? `<ul class="sv-reg">${movs.map((x) => `<li class="sv-mov"><div class="sv-mt"><b class="sv-seg ${x.importo_cent > 0 ? "pos" : "neg"}">${svSegno(x.importo_cent)}</b>${svQuando(x.quando) ? `<small>${esc(svQuando(x.quando))}</small>` : ""}${x.nota ? `<span class="sv-mn">${esc(x.nota)}</span>` : ""}</div>
         <span class="sv-bt"><button class="fbtn sv-x" data-act="sv-mov-mod" data-id="${esc(x.id)}" aria-label="Correggi data e nota di ${esc(svSegno(x.importo_cent))}">✎</button><button class="fbtn sv-x" data-act="sv-mov-del" data-id="${esc(x.id)}" aria-label="Annulla il movimento ${esc(svSegno(x.importo_cent))}">Annulla</button></span></li>`).join("")}</ul>`
       : `<p class="hint">Ancora nessun movimento. Tocca <b>+ Aggiungi</b> quando metti da parte qualcosa.</p>`}
-    <div class="actions"><button class="btn danger" data-act="sv-elimina">Elimina meta</button><button class="btn" data-act="sv-modifica">Modifica meta</button></div>`);
+    <div class="actions"><button class="btn danger" data-act="sv-elimina">Elimina obiettivo</button><button class="btn" data-act="sv-modifica">Modifica obiettivo</button></div>`);  if (an) svAnimaSaldo(an, s, o);
+}
+// il saldo "sale" (o scende) dopo che la monetina e' caduta; la barra dell'obiettivo lo segue
+function svAnimaSaldo(an, fine, o) {
+  const b = document.querySelector(".sv-saldo>b"), bar = document.querySelector(".sv-saldo .sp-bar i");
+  if (!b) return;
+  b.textContent = euro(an.da); if (bar) bar.style.width = svPct(an.da, o) + "%";
+  const t0 = performance.now() + (an.tipo === "in" ? 750 : 350), dur = 700;
+  const passo = (t) => {
+    if (!b.isConnected) return;
+    const k = Math.min(1, Math.max(0, (t - t0) / dur)), e = 1 - Math.pow(1 - k, 3), v = an.da + (fine - an.da) * e;
+    b.textContent = euro(Math.round(v)); if (bar) bar.style.width = svPct(v, o) + "%";
+    if (k < 1) requestAnimationFrame(passo); else b.classList.add("sv-pop");
+  };
+  requestAnimationFrame(passo);
 }
 function apriSvEditor(m) {
   svDraft = m ? { id: m.id, nome: m.nome, emoji: m.emoji, nota: m.nota, obiettivo: m.obiettivo_cent ? fmtImporto(m.obiettivo_cent) : "" } : { id: null, nome: "", emoji: "🐷", nota: "", obiettivo: "" };
   const d = svDraft;
-  openSheet(`<h2><span class="mbox">${mascot()}</span>${d.id ? "Modifica meta" : "Nuova meta"}</h2>
+  openSheet(`<h2><span class="mbox">${mascot()}</span>${d.id ? "Modifica obiettivo" : "Nuovo obiettivo"}</h2>
     <div class="field"><label for="svNome">Per cosa stai mettendo da parte?</label><input class="input big" id="svNome" maxlength="60" placeholder="Es. Viaggio, Regalo, Imprevisti" autocomplete="off" value="${esc(d.nome)}"></div>
     <div class="field"><label>Simbolo</label><div class="emojis">${SV_EMOJI.map((e) => `<button type="button" class="${d.emoji === e ? "on" : ""}" data-act="sv-emoji" data-v="${e}" aria-label="Simbolo ${e}">${e}</button>`).join("")}</div>
       <label for="svEmoji" style="margin-top:10px">Aggiungi la tua emoji</label>
@@ -3410,10 +3444,10 @@ function apriSvEditor(m) {
 async function salvaSvMeta(btn) {
   const d = svDraft; if (!d || svBusy) return;
   const nome = taglia(($("#svNome")?.value || "").trim(), 60), nota = taglia(($("#svNota")?.value || "").trim(), 300), ob = ($("#svObiettivo")?.value || "").trim();
-  if (!nome) { toast("Dai un nome alla meta 🌸"); $("#svNome")?.focus(); return; }
+  if (!nome) { toast("Dai un nome all'obiettivo 🌸"); $("#svNome")?.focus(); return; }
   const obiettivo = ob ? parseImporto(ob) : null;
   if (ob && obiettivo === null) { toast("Obiettivo non valido: es. 800 (massimo 999.999,99 €)"); $("#svObiettivo")?.focus(); return; }
-  if (!d.id && state.salv.mete.length >= SV_MAX_METE) { toast("Hai raggiunto il limite di 10 mete del salvadanaio"); return; }
+  if (!d.id && state.salv.mete.length >= SV_MAX_METE) { toast("Hai raggiunto il limite di 10 obiettivi"); return; }
   svBusy = true; if (btn) btn.disabled = true;
   try {
     const m = { id: d.id, nome, emoji: svEmojiOk(d.emoji), nota, obiettivo_cent: obiettivo };
@@ -3425,7 +3459,7 @@ async function salvaSvMeta(btn) {
       state.salv.mete = [...state.salv.mete, nuova];
     }
     SalvStore.salva(); render();
-    if (d.id) { apriSalv(d.id); toast("Meta aggiornata"); } else { closeSheet(); toast("Meta creata"); }
+    if (d.id) { apriSalv(d.id); toast("Obiettivo aggiornato"); } else { closeSheet(); toast("Obiettivo creato"); }
   } catch (e) { if (btn) btn.disabled = false; toast(svErrore(e)); }
   finally { svBusy = false; }
 }
@@ -3457,13 +3491,15 @@ async function salvaSvMov(btn) {
   if (!quando) { toast(SV_MSG_QUANDO); return; }
   const saldo = svSaldo(d.id);
   if (d.segno < 0 && cent > saldo) { toast(`Hai messo da parte ${euro(saldo)}: non puoi prelevare di più`); $("#svImporto")?.focus(); return; }
-  if (state.salv.mov.filter((x) => x.salvadanaio_id === d.id).length >= SV_MAX_MOV) { toast("Hai raggiunto il limite di 1000 movimenti per questa meta"); return; }
+  if (state.salv.mov.filter((x) => x.salvadanaio_id === d.id).length >= SV_MAX_MOV) { toast("Hai raggiunto il limite di 1000 movimenti per questo obiettivo"); return; }
   svBusy = true; if (btn) btn.disabled = true;
   try {
     const nuovo = await SalvStore.aggiungiMov({ salvadanaio_id: d.id, importo_cent: d.segno * cent, nota: taglia(($("#svMovNota")?.value || "").trim(), 120), quando });
     state.salv.mov = [nuovo, ...state.salv.mov];
+    const ob = state.salv.mete.find((x) => x.id === d.id)?.obiettivo_cent, fest = d.segno > 0 && !!ob && saldo < ob && saldo + cent >= ob;
+    svAnim = { tipo: d.segno > 0 ? "in" : "out", da: saldo, fest };
     SalvStore.salva(); render(); apriSalv(d.id);
-    toast(d.segno > 0 ? `${euro(cent)} messi da parte 🐷` : `${euro(cent)} prelevati`);
+    toast(fest ? "Obiettivo raggiunto! 🎉" : d.segno > 0 ? `${euro(cent)} messi da parte 🐷` : `${euro(cent)} prelevati`);
   } catch (e) { if (btn) btn.disabled = false; toast(/Data fuori/i.test(e?.message || "") ? SV_MSG_QUANDO : svErrore(e)); }
   finally { svBusy = false; }
 }
@@ -3506,13 +3542,13 @@ async function annullaSvMov(id) {
 async function eliminaSvMeta() {
   const m = state.salv.mete.find((x) => x.id === svApertaId); if (!m || svBusy) return;
   const n = state.salv.mov.filter((x) => x.salvadanaio_id === m.id).length;
-  const si = await ask({ title: "Eliminare la meta?", text: `"${m.nome}" sparisce${n ? `, insieme a tutti i suoi ${n === 1 ? "versamenti e prelievi (1 movimento)" : `versamenti e prelievi (${n} movimenti)`}` : ""}. Non si può tornare indietro.`, ok: "Sì, elimina", no: "No, tienila", danger: true });
+  const si = await ask({ title: "Eliminare l'obiettivo?", text: `"${m.nome}" sparisce${n ? `, insieme a tutti i suoi ${n === 1 ? "versamenti e prelievi (1 movimento)" : `versamenti e prelievi (${n} movimenti)`}` : ""}. Non si può tornare indietro.`, ok: "Sì, elimina", no: "No, tienilo", danger: true });
   if (!si) { apriSalv(m.id); return; }
   svBusy = true;
   try {
     await SalvStore.eliminaMeta(m.id);
     state.salv.mete = state.salv.mete.filter((x) => x.id !== m.id); state.salv.mov = state.salv.mov.filter((x) => x.salvadanaio_id !== m.id);
-    svApertaId = null; SalvStore.salva(); render(); toast("Meta eliminata");
+    svApertaId = null; SalvStore.salva(); render(); toast("Obiettivo eliminato");
   } catch (e) { apriSalv(m.id); toast(/fetch|network|Failed/i.test(e?.message || "") ? "Sei offline: riprova tra poco" : "Non sono riuscita a eliminarla"); }
   finally { svBusy = false; }
 }
@@ -3787,7 +3823,7 @@ function elencoCose(d) {
   if (Object.keys(d.umori).length) out.push(plur(Object.keys(d.umori).length, "giornata colorata", "giornate colorate"));
   if (Object.keys(d.turni.giorni).length) out.push(plur(Object.keys(d.turni.giorni).length, "turno", "turni"));
   if (d.spese.voci.length) out.push(plur(d.spese.voci.length, "spesa", "spese"));
-  if (d.salv.mete.length) out.push(plur(d.salv.mete.length, "meta del salvadanaio", "mete del salvadanaio"));
+  if (d.salv.mete.length) out.push(plur(d.salv.mete.length, "obiettivo del salvadanaio", "obiettivi del salvadanaio"));
   if (d.pet.length) out.push("routine e pesi del tuo pet");
   return out;
 }
@@ -6041,7 +6077,7 @@ document.addEventListener("click", async (e) => {
     case "spese-mese": { const g = state.speseMese || new Date(); state.speseMese = new Date(g.getFullYear(), g.getMonth() + (+v), 1); render(); break; }
     case "spese-budget": chiediBudget(); break;
     // salvadanaio
-    case "sv-nuova": if (state.salv.mete.length >= SV_MAX_METE) toast("Hai raggiunto il limite di 10 mete del salvadanaio"); else apriSvEditor(null); break;
+    case "sv-nuova": if (state.salv.mete.length >= SV_MAX_METE) toast("Hai raggiunto il limite di 10 obiettivi"); else apriSvEditor(null); break;
     case "sv-apri": if (id) apriSalv(id); break;
     case "sv-versa": apriSvMov(1); break;
     case "sv-preleva": apriSvMov(-1); break;
