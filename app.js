@@ -2039,7 +2039,7 @@ async function mmScegli(spegni) {
 }
 function mmRowHtml() {
   const on = !!miManca?.on;
-  return `<div><b>Fai sentire la mancanza di ${esc(MN())}</b><small>Dopo 2 giorni senza aprire l'app ti arriva una sola notifica</small></div><button class="fbtn ${on ? "on" : ""}" data-act="mm-toggle" aria-pressed="${on}">${on ? "Acceso" : "Spento"}</button>`;
+  return `<button class="pin-toggle ${on ? "on" : ""}" data-act="mm-toggle" aria-pressed="${on}"><span class="e">💌</span><span><b>Fai sentire la mancanza di ${esc(MN())}</b><small>${on ? "Acceso: " : "Spento: "}dopo 2 giorni senza aprire l'app ti arriva una sola notifica</small></span><span class="sw2"></span></button>`;
 }
 async function mmToggle() {
   if (!miManca) return;
@@ -2058,7 +2058,7 @@ async function mmRefreshRow(pushOn) {
   }
   if (!miManca || !$("#pushRow")) { row?.remove(); return; }
   if (row) row.innerHTML = mmRowHtml();
-  else $("#pushRow").insertAdjacentHTML("afterend", `<div class="setrow" id="mmRow">${mmRowHtml()}</div>`);
+  else $("#pushRow").insertAdjacentHTML("afterend", `<div class="field" id="mmRow" style="margin:8px 0">${mmRowHtml()}</div>`);
 }
 
 /* Stato dei promemoria su QUESTO dispositivo.
