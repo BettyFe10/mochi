@@ -4496,7 +4496,7 @@ async function salvaPet() {
   await saveCustom({ pet }); await animaleSincronizza(pet); closeSheet(); toast("Scheda salvata 🐾");
 }
 async function rimuoviPet() {
-  const ok = await ask({ title: "Eliminare il pet?", text: `Elimino la scheda${CUSTOM.pet.nome ? " di " + esc(CUSTOM.pet.nome) : ""}, le sue spunte e i suoi pesi. Non si può annullare.`, ok: "Elimina", danger: true });
+  const ok = await ask({ title: "Eliminare il pet?", text: `Elimino la scheda${CUSTOM.pet.nome ? " di " + CUSTOM.pet.nome : ""}, le sue spunte e i suoi pesi. Non si può annullare.`, ok: "Elimina", danger: true });
   if (!ok) { apriPet(); return; }
   // prima l'animale (il server rifiuta se ce ne sono altri: così il registro degli altri non si perde); poi le righe del pet
   try {

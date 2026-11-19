@@ -1867,3 +1867,37 @@ language sql security definer set search_path = public as $$
 $$;
 revoke all on function public.mi_manca_segna(uuid[]) from public, anon, authenticated;
 grant execute on function public.mi_manca_segna(uuid[]) to service_role;
+
+-- =========================================================
+-- 28) Eliminazione account: le voci lasciate in liste da cui sei uscita/o restano a chi rimane
+--     (come aggiornamento separato: aggiornamenti/21-eredita-voci.sql). Sostituisce la funzione dei punti 11 e 25.
+-- =========================================================
+create or replace function public.elimina_il_mio_account() returns void
+language plpgsql security definer set search_path = public, auth as $$
+declare uid uuid := auth.uid(); l record; erede uuid;
+begin
+  if uid is null then raise exception 'Non autenticato'; end if;
+  if not public.origine_consentita() then raise exception 'Origine non consentita'; end if;
+  for l in select lista_id from public.liste_membri where user_id = uid loop
+    select user_id into erede from public.liste_membri where lista_id = l.lista_id and user_id <> uid order by entrata_at, user_id limit 1;
+    if erede is not null then
+      update public.items set user_id = erede, animale_id = null where lista_id = l.lista_id and user_id = uid;
+      update public.liste set proprietaria = erede where id = l.lista_id and proprietaria = uid;
+    end if;
+  end loop;
+  -- Voci create in liste da cui sei GIA' uscita/o (esci_dalla_lista le lascia a chi resta): passano al membro piu' anziano
+  -- di ogni lista, altrimenti sparirebbero con l'account (items.user_id e' on delete cascade).
+  -- Il passaggio e' un UPDATE di user_id: non scattano items_limite (solo insert) ne' items_spazio (solo se cambia body/sottotask),
+  -- quindi non puo' far fallire l'eliminazione. Se l'erede ha gia' molti dati puo' superare i tetti: non perde niente, e
+  -- finche' non libera spazio non puo' aggiungere voci nuove (eliminare e accorciare passano sempre).
+  -- Una lista senza piu' membri non esiste piu' (l'ultima persona che esce la cancella con le sue voci): niente da fare.
+  update public.items i
+     set user_id = (select m.user_id from public.liste_membri m where m.lista_id = i.lista_id order by m.entrata_at, m.user_id limit 1),
+         animale_id = null
+   where i.user_id = uid and i.lista_id is not null
+     and not exists (select 1 from public.liste_membri m where m.lista_id = i.lista_id and m.user_id = uid)
+     and exists (select 1 from public.liste_membri m where m.lista_id = i.lista_id);
+  delete from auth.users where id = uid;
+end $$;
+revoke all on function public.elimina_il_mio_account() from public, anon;
+grant execute on function public.elimina_il_mio_account() to authenticated;

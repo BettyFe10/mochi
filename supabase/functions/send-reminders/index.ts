@@ -106,13 +106,20 @@ Deno.serve(async (req) => {
   if (!due.length && !attivita.length && !ricorrenti.length && !mancanti.length) return Response.json({ sent: 0 });
 
   const userIds = [...new Set([...due.flatMap((d: { destinatari: string[] }) => d.destinatari), ...attivita.map((a) => a.destinatario), ...ricorrenti.map((r) => r.user_id), ...mancanti.map((m) => m.user_id)])];
-  const { data: subs } = await sb.from("push_subscriptions").select("*").in("user_id", userIds);
+  // Le iscrizioni si leggono a blocchi di 100 persone (l'elenco finisce nell'URL) e, se una lettura fallisce, non si segna NIENTE
+  // come inviato: senza questo controllo un errore passeggero farebbe passare per "nessun dispositivo" e perdere i promemoria.
+  const subs: { user_id: string; endpoint: string; p256dh: string; auth: string }[] = [];
+  for (let i = 0; i < userIds.length; i += 100) {
+    const { data: blocco, error: errSubs } = await sb.from("push_subscriptions").select("*").in("user_id", userIds.slice(i, i + 100));
+    if (errSubs) return new Response("Iscrizioni non leggibili", { status: 500 });
+    subs.push(...(blocco ?? []));
+  }
 
   const inizio = Date.now(); // il giro dura al massimo un minuto: dopo 30 secondi non faccio più attese per i nuovi tentativi
   let sent = 0, ritentati = 0;
   async function invia(utenti: string[], payload: string): Promise<Esito> {
     const esito: Esito = { ok: 0, passeggeri: 0 };
-    for (const s of (subs ?? []).filter((x) => utenti.includes(x.user_id))) {
+    for (const s of subs.filter((x) => utenti.includes(x.user_id))) {
       const r = await mandaConRetry(() => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 }), 1000, Date.now() - inizio < 30000);
       if (r === "ok") { sent++; esito.ok++; }
       else if (r === "passeggero") esito.passeggeri++;
