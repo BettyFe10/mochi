@@ -1630,6 +1630,8 @@ input.input[type=date]::-webkit-date-and-time-value,input.input[type=time]::-web
   #view .msec{margin:14px 4px 6px}
   #view .msec:first-of-type{margin-top:2px}
 }
+/* Telefoni stretti (340px): la descrizione va a capo invece di tagliarsi */
+@media (max-width:359px){#view .mtile small{white-space:normal}}
 /* ---- Il mio pet ---- */
 .pet-card{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);border-radius:var(--r-l);background:var(--card);box-shadow:var(--shadow);margin-bottom:var(--s3)}
 .pet-ico{position:relative;flex:none;width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:var(--pink-l);font-size:30px;line-height:1;color:var(--pink-d)}

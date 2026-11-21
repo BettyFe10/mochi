@@ -1190,7 +1190,7 @@ function bachecaStile(id) {
 const GRUPPI_MENU = [["q", "Quotidiano"], ["t", "Per te"], ["a", "Altro"]];
 const VOCI_MENU = [
   { g: "q", at: 'data-tab="todo"', e: "✅", ic: "i-todo", t: "Da fare", s: () => "Con le scadenze", soloMenu: 1 },
-  { g: "q", at: 'data-tab="agenda"', e: "📅", ic: "i-agenda", t: "Agenda", s: () => "Gli appuntamenti", soloMenu: 1 },
+  { g: "q", at: 'data-tab="agenda"', e: "📅", ic: "i-agenda", t: "Agenda", s: () => "Il calendario", soloMenu: 1 },
   { g: "q", at: 'data-tab="appunti"', e: "📝", ic: "i-appunti", t: "Appunti", s: () => "Idee e liste", soloMenu: 1 },
   { g: "q", m: "liste", at: 'data-act="open-liste"', atD: 'data-tab="liste"', e: "👭", ic: "i-liste", t: "Le mie liste", s: () => (state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") },
   { g: "q", m: "ricorrenti", at: 'data-act="open-ricorrenti"', atD: 'data-act="open-ricorrenti" data-tab="ricorrenti"', e: "🔁", ic: "i-ricorrenti", t: "Ricorrenti", s: () => "Bevi acqua, fai una pausa..." },
@@ -2705,7 +2705,7 @@ const PRESET_RIC = [
   { emoji: "🚶", titolo: "Fai due passi", ogni_minuti: 180, dalle: "10:00", alle: "19:00", giorni: [1, 2, 3, 4, 5, 6, 7] },
   { emoji: "🌿", titolo: "Annaffia le piante", ogni_minuti: 1440, dalle: "19:00", alle: "23:59", giorni: [1, 4] }
 ];
-let ricorrenti = [], ricDraft = null;
+let ricorrenti = [], ricDraft = null, ricEmojiAperti = false;
 const descrOgni = (r) => r.ogni_minuti >= 1440 ? `Ogni giorno alle ${r.dalle}` : `${(OGNI_OPZ.find((o) => o[0] === r.ogni_minuti) || [0, `Ogni ${r.ogni_minuti} min`])[1]}, ${r.dalle}-${r.alle}`;
 const descrGiorni = (g) => g.length === 7 ? "tutti i giorni" : g.join() === "1,2,3,4,5" ? "dal lunedì al venerdì" : g.join() === "6,7" ? "nel weekend" : g.map((d) => ["lun", "mar", "mer", "gio", "ven", "sab", "dom"][d - 1]).join(", ");
 function cleanRic(r) {
@@ -2752,13 +2752,16 @@ function viewRicorrenti() {
 function editRicorrente(r) {
   ricDraft = cleanRic(r || { titolo: "", emoji: "💧", ogni_minuti: 120, dalle: "09:00", alle: "21:00", giorni: [1, 2, 3, 4, 5, 6, 7] });
   if (!r) ricDraft.titolo = "";
+  ricEmojiAperti = false;
   drawRicorrente();
 }
 function drawRicorrente() {
   const d = ricDraft, giorno = d.ogni_minuti >= 1440;
+  // 12 simboli e "Altri simboli"; se quello scelto è tra gli altri, restano tutti visibili
+  const tutti = ricEmojiAperti || EMOJI_RIC.indexOf(d.emoji) >= 12, simboli = tutti ? EMOJI_RIC : EMOJI_RIC.slice(0, 12);
   openSheet(`<h2><span class="mbox">${mascot()}</span>${d.id ? "Modifica promemoria" : "Nuovo promemoria"}</h2>
     <div class="field"><label>Cosa ti ricordo</label><input class="input big" id="rTitolo" aria-label="Titolo" maxlength="80" placeholder="Bevi un bicchiere d'acqua" value="${esc(d.titolo)}" autocomplete="off"></div>
-    <div class="field"><label>Simbolo</label><div class="emojis">${EMOJI_RIC.map((e) => `<button class="${d.emoji === e ? "on" : ""}" data-act="ric-emoji" data-v="${e}">${e}</button>`).join("")}</div></div>
+    <div class="field"><label>Simbolo</label><div class="emojis">${simboli.map((e) => `<button class="${d.emoji === e ? "on" : ""}" data-act="ric-emoji" data-v="${e}">${e}</button>`).join("")}</div>${tutti ? "" : `<div class="more-row"><button class="more" data-act="ric-altri">+ Altri simboli</button></div>`}</div>
     <div class="field"><label>Quanto spesso</label><select class="input" id="rOgni" aria-label="Ogni quanto">${OGNI_OPZ.map(([v, l]) => `<option value="${v}" ${d.ogni_minuti === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="row">
       <div class="field"><label>${giorno ? "Alle" : "Dalle"}</label><input class="input" type="time" id="rDalle" aria-label="Dalle" value="${d.dalle}"></div>
@@ -6272,6 +6275,7 @@ document.addEventListener("click", async (e) => {
     case "ric-nuovo": editRicorrente(null); break;
     case "ric-preset": { const p = PRESET_RIC[+v]; if (p) { ricDraft = cleanRic({ ...p }); drawRicorrente(); } break; }
     case "ric-modifica": editRicorrente(ricorrenti.find((x) => x.id === id)); break;
+    case "ric-altri": ricEmojiAperti = true; drawRicorrente(); break;
     case "ric-emoji": ricDraft.emoji = EMOJI_RIC.includes(v) ? v : "💧"; drawRicorrente(); break;
     case "ric-giorno": { const g = +v; ricDraft.giorni = ricDraft.giorni.includes(g) ? ricDraft.giorni.filter((x) => x !== g) : [...ricDraft.giorni, g].sort(); drawRicorrente(); break; }
     case "ric-indietro": closeSheet(); break;
