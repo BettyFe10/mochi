@@ -1588,7 +1588,7 @@ function drawEditor() {
       <div class="field" id="fRemindF" ${remindNascosto(d) ? "hidden" : ""}><label>Promemoria 🔔</label><select class="input" id="fRemind" aria-label="Promemoria">${REMIND_OPTS.map(([v, l]) => `<option value="${v}" ${String(d.remind) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>` : `
       <div class="field"><label>Colore</label><div class="colors">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((c) => `<button class="note c${c} ${+d.color === c ? "on" : ""}" data-act="d-color" data-v="${c}" aria-label="Colore ${c}"></button>`).join("")}</div></div>
       <div class="field"><button class="pin-toggle ${d.pinned ? "on" : ""}" data-act="d-pin"><span class="e">📌</span><span><b>${d.pinned ? "Fissato in alto" : "Fissa in alto"}</b><small>Resta sempre in cima agli appunti</small></span><span class="sw2"></span></button></div>`}
-      <div class="field"><label>Voci da spuntare</label><div class="st-ed" id="stBox">${stEditorHtml()}</div></div>
+      ${stVisibile(d) ? stCampoHtml() : `<div class="field" id="stLink"><button type="button" class="more" data-act="d-st">+ Voci da spuntare</button></div>`}
       <div class="field"><label>${isNote ? "Testo" : "Note"}</label><textarea class="input" id="fBody" aria-label="Note" maxlength="20000" placeholder="${isNote ? "Scrivi qui..." : "Dettagli, indirizzo, cosa portare..."}">${esc(d.body || "")}</textarea></div>
     `}
     <div class="actions">
@@ -1614,8 +1614,16 @@ function drawEditor() {
       if (id === "fBody") draft.body = el.value;
     });
   });
+  stBind();
+  previewParse();
+}
+/* Voci da spuntare: dietro un link finché la voce non ne ha (o non è una lista della spesa) */
+const stVisibile = (d) => !!(d && ((d.sottotask || []).length || d._spesa || d._stAperto));
+const stCampoHtml = () => `<div class="field" id="stField"><label>Voci da spuntare</label><div class="st-ed" id="stBox">${stEditorHtml()}</div></div>`;
+function stBind() {
   const box = $("#stBox");
-  if (box) {
+  if (box && !box.dataset.legato) {
+    box.dataset.legato = "1";
     // rinominare una voce: si scrive direttamente nella riga
     box.addEventListener("input", (e) => {
       if (e.target.id === "stNew") { aggiornaSuggerimenti(e.target.value); return; } // lista della spesa: cose già scritte in passato
@@ -1626,7 +1634,12 @@ function drawEditor() {
       else if (e.target.matches(".st-in[data-sid]")) { e.preventDefault(); $("#stNew")?.focus(); }
     });
   }
-  previewParse();
+}
+// Il link diventa il campo senza ridisegnare la finestra (il cursore nel titolo non si sposta)
+function stMostra(focusNew = false) {
+  const l = $("#stLink"); if (!l || !draft) return;
+  l.outerHTML = stCampoHtml(); stBind();
+  if (focusNew) { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "nearest" }); } }
 }
 /* Lista da spuntare nell'editor: si ridisegna solo lei (la finestra non salta e il cursore resta dov'è) */
 // Dopo un cambio di "lista della spesa" (chip o titolo): si ridisegnano solo chip, frase, voci e promemoria
@@ -1653,7 +1666,9 @@ function stEditorHtml() {
     ${st.length ? `<div class="st-prog">${fatti}/${st.length} fatte</div>` : ""}`;
 }
 function drawSt(focusNew = false) {
-  const box = $("#stBox"); if (!box || !draft) return;
+  if (!draft) return;
+  if (!$("#stBox") && stVisibile(draft)) { stMostra(focusNew); return; }
+  const box = $("#stBox"); if (!box) return;
   box.innerHTML = stEditorHtml();
   if (focusNew) { const n = $("#stNew"); if (n) { n.focus(); n.scrollIntoView({ block: "nearest" }); } }
 }
@@ -6333,6 +6348,7 @@ document.addEventListener("click", async (e) => {
       if (draft.remind === "auto") draft.remind = defaultRemind(draft);
       drawEditor();
       break;
+    case "d-st": draft._stAperto = true; stMostra(true); break;
     case "d-color": draft.color = +v; drawEditor(); break;
     case "d-pin": draft.pinned = !draft.pinned; drawEditor(); break;
     case "d-save": saveDraft(); break;
