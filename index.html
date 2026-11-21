@@ -135,6 +135,10 @@ h1,h2,h3,.fred{font-family:var(--ft);font-weight:600;margin:0}
   :root[data-stile="quaderno"] .top .hello h1{font-size:clamp(26px,7.6vw,31px)}
 }
 @keyframes motto{from{opacity:0;transform:translateY(4px)}}
+/* Fuori da Oggi niente saluto e frase: resta la data; il titolo h1 resta per i lettori di schermo */
+.top.compatto .hello h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.top.compatto .motto{display:none}
+@media (max-width:1023px){.top.compatto .mascot{display:none}}
 .iconbtn{width:44px;height:44px;border-radius:var(--r-m);background:var(--card);box-shadow:var(--shadow);display:grid;place-items:center;font-size:20px;flex:none}
 .bubble{background:var(--card);border-radius:var(--r-l);padding:var(--s3) var(--s4);box-shadow:var(--shadow);font-size:15px;line-height:1.45;margin-bottom:var(--s5);position:relative;border:2px solid var(--pink-l)}
 .bubble b{color:var(--acc-t)}

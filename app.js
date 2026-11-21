@@ -1051,7 +1051,7 @@ function viewOggi() {
   if (late.length) h += `<div class="sec"><h2>Rimaste indietro</h2><span class="count">${late.length}</span></div><div class="list">${late.map(itemRow).join("")}</div>`;
   if (ev.length) h += `<div class="sec"><h2>Appuntamenti di oggi</h2></div><div class="list">${ev.map(itemRow).join("")}</div>`;
   if (todo.length) h += `<div class="sec"><h2>Da fare oggi</h2></div><div class="list">${todo.map(itemRow).join("")}</div>`;
-  if (!ev.length && !todo.length) h += `<div class="sec"><h2>Oggi</h2></div><div class="empty" style="padding:10px">${late.length ? "Nient'altro in programma oggi" : "Niente in programma oggi"}${DECO("✨")}${state.items.length ? "" : `<div class="actions ospite-azioni"><button class="btn primary" data-act="new">Scrivi la prima cosa</button></div>`}</div>`;
+  if (!ev.length && !todo.length) h += `<div class="sec"><h2>Oggi</h2></div><div class="empty" style="padding:10px">${late.length ? "Nient'altro in programma oggi" : "Niente in programma oggi"}${state.items.length ? "" : `<div class="actions ospite-azioni"><button class="btn primary" data-act="new">Scrivi la prima cosa</button></div>`}</div>`;
   if (mod("serie")) h += serieCard();
   if (mod("umore")) h += umoreCard();
   if (mod("pancino")) h += pancinoCard();
@@ -1060,7 +1060,7 @@ function viewOggi() {
   const now = new Date(), cm = new Date(now.getFullYear(), now.getMonth(), 1);
   let side = `<div class="desk-only"><div class="cal mini">${ANELLI}<div class="calhead"><h2>${MESI[cm.getMonth()]}</h2></div>${monthGrid(cm, itemsByDay(), "", "cal-jump")}</div></div>`;
   side += `<div class="sec"><h2>Nei prossimi giorni</h2></div>`;
-  side += soon.length ? `<div class="list">${soon.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Settimana tranquilla 🍃</div>`;
+  side += soon.length ? `<div class="list">${soon.map(itemRow).join("")}</div>` : `<div class="empty" style="padding:10px">Niente nei prossimi giorni</div>`;
   return `<div class="split"><div class="col-main">${h}</div><div class="col-side">${side}</div></div>`;
 }
 
@@ -1166,7 +1166,7 @@ function viewAgenda() {
       <div class="sec"><h2>${GIORNI[sd.getDay()].replace(/^./, (c) => c.toUpperCase())} ${sd.getDate()} ${MESI[sd.getMonth()]}</h2>
         <button class="fbtn" data-act="new-on-day">+ Aggiungi</button></div>
       ${rigaTurno(state.calSel)}
-      ${sel.length ? `<div class="list">${sel.map((i) => itemRow(i, true)).join("")}</div>` : `<div class="empty" style="padding:12px">${(() => { const tu = turnoDi(state.calSel); return tu && tu.inizio ? "Nient'altro in programma" : "Giornata libera 🌤️"; })()}</div>`}
+      ${sel.length ? `<div class="list">${sel.map((i) => itemRow(i, true)).join("")}</div>` : `<div class="empty" style="padding:12px">${(() => { const tu = turnoDi(state.calSel); return tu && tu.inizio ? "Nient'altro in programma" : "Giornata libera"; })()}</div>`}
       ${!mod("umore") ? "" : state.calSel <= todayStr() ? (state.umori[state.calSel]
         ? `<button class="umore-riga" data-act="umore-apri" data-v="${state.calSel}">${faccina(state.umori[state.calSel].livello, 30)}<span><b>${UMORI[state.umori[state.calSel].livello].nome}</b>${state.umori[state.calSel].nota ? `<small>${esc(state.umori[state.calSel].nota)}</small>` : ""}</span></button>`
         : `<button class="umore-riga vuota" data-act="umore-apri" data-v="${state.calSel}"><span class="pallino"></span><span><b>Com'è andata?</b><small>Tocca per colorare questo giorno</small></span></button>`) : ""}
@@ -1189,20 +1189,20 @@ function bachecaStile(id) {
    s() = sottotitolo del Menu; em()/tm() = emoji e titolo del Menu quando cambiano (pet, pancino); soloMenu = sul computer c'è già nella barra in alto */
 const GRUPPI_MENU = [["q", "Quotidiano"], ["t", "Per te"], ["a", "Altro"]];
 const VOCI_MENU = [
-  { g: "q", at: 'data-tab="todo"', e: "✅", ic: "i-todo", t: "Da fare", s: () => "Le cose da fare, con le scadenze", soloMenu: 1 },
-  { g: "q", at: 'data-tab="agenda"', e: "📅", ic: "i-agenda", t: "Agenda", s: () => "Il calendario con gli appuntamenti", soloMenu: 1 },
-  { g: "q", at: 'data-tab="appunti"', e: "📝", ic: "i-appunti", t: "Appunti", s: () => "Idee, liste, cose da tenere", soloMenu: 1 },
+  { g: "q", at: 'data-tab="todo"', e: "✅", ic: "i-todo", t: "Da fare", s: () => "Con le scadenze", soloMenu: 1 },
+  { g: "q", at: 'data-tab="agenda"', e: "📅", ic: "i-agenda", t: "Agenda", s: () => "Gli appuntamenti", soloMenu: 1 },
+  { g: "q", at: 'data-tab="appunti"', e: "📝", ic: "i-appunti", t: "Appunti", s: () => "Idee e liste", soloMenu: 1 },
   { g: "q", m: "liste", at: 'data-act="open-liste"', atD: 'data-tab="liste"', e: "👭", ic: "i-liste", t: "Le mie liste", s: () => (state.liste.length ? state.liste.map((l) => esc(l.emoji)).join(" ") : "Da usare insieme") },
   { g: "q", m: "ricorrenti", at: 'data-act="open-ricorrenti"', atD: 'data-act="open-ricorrenti" data-tab="ricorrenti"', e: "🔁", ic: "i-ricorrenti", t: "Ricorrenti", s: () => "Bevi acqua, fai una pausa..." },
-  { g: "q", m: "turni", at: 'data-tab="turni"', e: "💼", ic: "i-turni", t: "Turni di lavoro", s: () => (turniAttivi() ? `${fmtOre(oreMese(new Date()).min)} questo mese` : "Il calendario del lavoro") },
-  { g: "q", m: "spese", at: 'data-tab="spese"', e: "👛", ic: "i-spese", t: "Spese", s: () => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi nel mese"; } },
-  { g: "t", m: "focus", at: 'data-tab="focus"', e: "🪴", ic: "i-focus", t: "Timer", s: () => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Un timer con la piantina"; } },
-  { g: "t", m: "umore", at: 'data-act="giardino-apri"', e: "🌷", ic: "i-fiore", t: "Il giardino del mese", s: () => "Le tue giornate in fiori" },
+  { g: "q", m: "turni", at: 'data-tab="turni"', e: "💼", ic: "i-turni", t: "Turni di lavoro", s: () => (turniAttivi() ? `${fmtOre(oreMese(new Date()).min)} questo mese` : "Le tue ore") },
+  { g: "q", m: "spese", at: 'data-tab="spese"', e: "👛", ic: "i-spese", t: "Spese", s: () => { const t = totaleMese(new Date()); return t ? `${euro(t)} questo mese` : "Quanto spendi"; } },
+  { g: "t", m: "focus", at: 'data-tab="focus"', e: "🪴", ic: "i-focus", t: "Timer", s: () => { const n = serraDi(todayStr()).length; return n ? `${n} ${n === 1 ? "piantina" : "piantine"} oggi` : "Con la piantina"; } },
+  { g: "t", m: "umore", at: 'data-act="giardino-apri"', e: "🌷", ic: "i-fiore", t: "Il giardino del mese", s: () => "Giornate in fiori" },
   { g: "t", m: "biscotto", at: 'data-act="open-biscotto"', e: "🥠", ic: "i-biscotto", t: "Biscotto del giorno", s: () => "La frase di oggi" },
   { g: "t", m: "pancino", at: 'data-act="open-pancino"', e: "🍣", ic: "i-pancino", t: "Il pancino", tm: () => `Il pancino di ${esc(MN())}`, s: () => "Bocconcini e regali" },
   { g: "t", m: "casa", at: 'data-tab="casa"', e: "🏡", ic: "i-casa", t: "La casetta", s: () => { const n = mobiliAvuti().length; return n ? `${n} ${n === 1 ? "mobile" : "mobili"} in regalo` : "La casa di " + esc(MN()); } },
   { g: "t", m: "pet", at: 'data-tab="pet"', e: "🐾", ic: "i-pet-altro", t: "Il mio pet", pet: 1, em: () => petSp(CUSTOM.pet.specie)[2], tm: () => esc(petTitolo()), s: () => { if (!petPresente(CUSTOM.pet)) return "Scheda, routine e pesi"; const v = petVoci(); return v.length ? `Fatto oggi ${v.filter((x) => petFatte(todayStr()).has(x.id)).length}/${v.length}` : "Scheda, routine e pesi"; } },
-  { g: "t", at: 'data-act="open-recap"', e: "🎀", ic: "i-recap", t: "Riepilogo del mese", s: () => "Com'è andato il mese" },
+  { g: "t", at: 'data-act="open-recap"', e: "🎀", ic: "i-recap", t: "Riepilogo del mese", s: () => "Com'è andato" },
   { g: "a", on: 1, at: 'data-act="open-consiglio"', e: "💌", ic: "i-consiglia", t: "Consiglia", s: () => "Scrivi alla sviluppatrice" },
   { g: "a", admin: 1, at: 'data-act="open-inbox"', e: "📬", ic: "i-messaggi", t: "Messaggi ricevuti", s: () => (adminUnread ? `${adminUnread} da leggere` : "Tutti letti") },
   { g: "a", at: 'data-act="open-settings"', e: "⚙️", ic: "i-impostazioni", t: "Impostazioni", s: () => "Colori, cosa usare, suoni" }
@@ -1394,6 +1394,7 @@ window.addEventListener("popstate", async (e) => {
 function render() {
   applyCustom();
   headerUpdate();
+  { const tp = $(".top"); if (tp) tp.classList.toggle("compatto", state.tab !== "oggi"); }
   // modo semplice: solo le sue pagine; spento, le sue pagine non esistono (si torna a Oggi)
   if (semOn()) { if (!SEM_TABS.includes(state.tab)) state.tab = "s-todo"; } else if (/^s-/.test(state.tab)) state.tab = "oggi";
   if (PAGINA_MODULO[state.tab] && !mod(PAGINA_MODULO[state.tab])) state.tab = "oggi";
