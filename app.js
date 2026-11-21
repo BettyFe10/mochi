@@ -2285,24 +2285,27 @@ function viewListe() {
     <div class="actions" style="margin-top:14px"><button class="btn" data-act="l-codice">Ho un codice</button><button class="btn primary" data-act="l-nuova">+ Nuova lista</button></div>${calRipristinaHtml()}`;
 }
 let listaDopo = null; // modulo di una cosa lasciato aperto per creare una lista: dopo il salvataggio ci si torna con la lista scelta
-let listaDraft = { id: null, nome: "", emoji: "🏠", colore: null };
+let listaDraft = { id: null, nome: "", emoji: "🏠", colore: null }, listaEmojiAperta = false;
 function openListaEditor(l) {
   listaDraft = l ? { id: l.id, nome: l.nome, emoji: l.emoji, colore: calId("l:" + l.id) } : { id: null, nome: "", emoji: "🏠", colore: null };
+  listaEmojiAperta = false;
   drawListaEditor();
 }
 function drawListaEditor() {
+  // La emoji personale sta dietro "+ La tua emoji"; si vede già se la lista ne ha una sua o se l'hai aperta
+  const miaAperta = listaEmojiAperta || !EMOJI_LISTE.includes(listaDraft.emoji);
   openSheet(`<h2><span class="mbox">${mascot()}</span>${listaDraft.id ? "Modifica lista" : "Nuova lista"}</h2>
     <div class="field"><label>Nome</label><input class="input big" id="lsNome" aria-label="Nome della lista" maxlength="40" placeholder="Casa, Spesa, Vacanze..." value="${esc(listaDraft.nome)}" autocomplete="off"></div>
     <div class="field"><label>Simbolo</label><div class="emojis">${EMOJI_LISTE.map((e) => `<button class="${listaDraft.emoji === e ? "on" : ""}" data-act="l-emoji" data-v="${e}">${e}</button>`).join("")}</div>
-      <label for="lsEmoji" style="margin-top:10px">Aggiungi la tua emoji</label>
+      ${miaAperta ? `      <label for="lsEmoji" style="margin-top:10px">Aggiungi la tua emoji</label>
       <input class="input" id="lsEmoji" maxlength="8" placeholder="Scrivi una emoji" value="${EMOJI_LISTE.includes(listaDraft.emoji) ? "" : esc(listaDraft.emoji)}" autocomplete="off" aria-describedby="lsEmojiAiuto">
-      <p class="hint" id="lsEmojiAiuto">Una sola emoji, dalla tastiera</p></div>
+      <p class="hint" id="lsEmojiAiuto">Una sola emoji, dalla tastiera</p>` : `<div class="more-row"><button class="more" data-act="l-emoji-mia">+ La tua emoji</button></div>`}</div>
     <div class="field"><label>Colore nel calendario</label><div class="calcol-pal" role="group" aria-label="Colore nel calendario">${CAL_COLORI.map(([id, nome, hex]) => `<button type="button" class="calcol-p${listaDraft.colore === id ? " on" : ""}" style="--cc:${hex}" data-act="l-colore" data-v="${id}" aria-label="${nome}" aria-pressed="${listaDraft.colore === id}"><span aria-hidden="true">${listaDraft.colore === id ? "✓" : ""}</span></button>`).join("")}</div>
       <p class="hint">Lo vedi solo tu: chi è nella lista sceglie il suo.</p></div>
     <div class="actions"><button class="btn" data-act="l-indietro">Indietro</button><button class="btn primary" data-act="l-salva">Salva</button></div>`);
   const i = $("#lsNome"); i.addEventListener("input", () => { listaDraft.nome = i.value; });
   const ie = $("#lsEmoji");
-  ie.addEventListener("input", () => {
+  ie?.addEventListener("input", () => {
     const e = emojiValida(ie.value);
     ie.setAttribute("aria-invalid", ie.value.trim() && !e ? "true" : "false");
     if (!ie.value.trim() && !EMOJI_LISTE.includes(listaDraft.emoji)) { // campo svuotato: torna al simbolo di base
@@ -6285,6 +6288,7 @@ document.addEventListener("click", async (e) => {
     case "l-nuova": listaDopo = null; openListaEditor(null); break;
     case "l-modifica": openListaEditor(listaById(id)); break;
     case "l-colore": if (CAL_COLORI.some((x) => x[0] === v)) { listaDraft.colore = v; drawListaEditor(); } break;
+    case "l-emoji-mia": listaEmojiAperta = true; drawListaEditor(); $("#lsEmoji")?.focus(); break;
     case "l-emoji": listaDraft.emoji = EMOJI_LISTE.includes(v) ? v : "🏠"; drawListaEditor(); break;
     case "l-indietro": closeSheet(); break;
     case "l-salva": salvaLista(el); break;
