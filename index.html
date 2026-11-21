@@ -1096,6 +1096,8 @@ body.trascinando,body.trascinando *{cursor:grabbing!important}
 :root[data-stile="morbido"] .mtile{ border-radius:20px }
 :root[data-stile="morbido"] .sgrp{ border-radius:20px; border-color:transparent; box-shadow:var(--sh1,none) }
 :root[data-stile="morbido"] .umore-card{ border-radius:18px }
+/* Morbido: la domanda sull'umore (non ancora risposta) sta sulla pagina, senza scatola: meno card bianche in fila */
+:root[data-stile="morbido"] .umore-card:not(.fatto){background:none;box-shadow:none;padding-left:0;padding-right:0}
 :root[data-stile="morbido"] :is(.pancino,.sp-tot){ border-radius:20px }
 :root[data-stile="morbido"] .ore-mese{ border-radius:18px }
 :root[data-stile="morbido"] .scrim{ backdrop-filter:blur(2px) }
